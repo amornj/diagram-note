@@ -1,0 +1,334 @@
+import { PanelRightClose, Plus, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useEditorStore } from '../lib/store';
+import {
+  getGroupMemberKeys,
+  getRelatedMemberKeys,
+  normalizeTagInput,
+  parseMemberKey,
+} from '../lib/workspace';
+import type { Primitive } from '../types';
+import { ColorPicker, TagEditor } from './sharedControls';
+import NoteCards from './NoteCards';
+
+const KIND_LABELS: Record<Primitive['kind'], string> = {
+  rectangle: 'Study box',
+  polygon: 'Region',
+  customline: 'Polyline',
+  group: 'Group',
+};
+
+export default function PrimitiveDetailPanel({ primitive }: { primitive: Primitive }) {
+  const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
+  const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
+  const updatePrimitive = useEditorStore((s) => s.updatePrimitive);
+  const deletePrimitive = useEditorStore((s) => s.deletePrimitive);
+  const editorMode = useEditorStore((s) => s.editorMode);
+  const workspace = useEditorStore((s) => s.workspace);
+  const pendingNameFocusId = useEditorStore((s) => s.pendingNameFocusId);
+  const clearPendingNameFocus = useEditorStore((s) => s.clearPendingNameFocus);
+  const startNeighborPick = useEditorStore((s) => s.startNeighborPick);
+  const cancelNeighborPick = useEditorStore((s) => s.cancelNeighborPick);
+  const removeNeighborMember = useEditorStore((s) => s.removeNeighborMember);
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(primitive.name);
+  const aliasInput = useMemo(() => (primitive.aliases ?? []).join(', '), [primitive.aliases]);
+
+  const relatedMembers = useMemo(
+    () =>
+      getRelatedMemberKeys(primitive)
+        .map((key) => {
+          const member = parseMemberKey(key);
+          if (!member) return null;
+          const memberPrim = workspace.primitives.find((p) => p.id === member.id);
+          if (!memberPrim) return null;
+          return {
+            key,
+            label: memberPrim.name,
+            onClick: () => setSelectedPrimitiveId(member.id),
+          };
+        })
+        .filter((m): m is NonNullable<typeof m> => m !== null),
+    [primitive, workspace.primitives, setSelectedPrimitiveId]
+  );
+
+  const isPickingRelated = editorMode === 'overlayNeighborPick';
+
+  // Reset state when switching primitives
+  useEffect(() => {
+    setNameDraft(primitive.name);
+    setEditingName(false);
+    setConfirmDelete(false);
+  }, [primitive.id, primitive.name]);
+
+  // Auto-focus name input on freshly-created primitives
+  useEffect(() => {
+    if (pendingNameFocusId !== primitive.id) return;
+    setNameDraft(primitive.name);
+    setEditingName(true);
+    clearPendingNameFocus();
+  }, [pendingNameFocusId, primitive.id, primitive.name, clearPendingNameFocus]);
+
+  const saveName = () => {
+    const trimmed = nameDraft.trim();
+    if (trimmed && trimmed !== primitive.name) {
+      updatePrimitive(primitive.id, { name: trimmed });
+    } else {
+      setNameDraft(primitive.name);
+    }
+    setEditingName(false);
+  };
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden border-l border-gray-200 bg-white">
+      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        {editingName ? (
+          <input
+            value={nameDraft}
+            onChange={(event) => setNameDraft(event.target.value)}
+            onBlur={saveName}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                saveName();
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setNameDraft(primitive.name);
+                setEditingName(false);
+              }
+            }}
+            autoFocus
+            className="w-full rounded-md border border-gray-200 px-2 py-1 text-lg font-bold text-gray-900 outline-none focus:border-sky-300"
+          />
+        ) : (
+          <button
+            onDoubleClick={() => {
+              setNameDraft(primitive.name);
+              setEditingName(true);
+            }}
+            onClick={() => {
+              setNameDraft(primitive.name);
+              setEditingName(true);
+            }}
+            className="truncate text-left text-lg font-bold text-gray-900"
+            title="Click to edit name"
+          >
+            {primitive.name}
+          </button>
+        )}
+        <button
+          onClick={toggleRightPane}
+          className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100"
+          title="Hide right pane (2)"
+        >
+          <PanelRightClose size={18} />
+        </button>
+      </div>
+
+      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          {KIND_LABELS[primitive.kind]}
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Aliases
+          </label>
+          <input
+            value={aliasInput}
+            onChange={(event) =>
+              updatePrimitive(primitive.id, {
+                aliases: normalizeTagInput(event.target.value),
+              })
+            }
+            placeholder="Other names or abbreviations, separated by commas"
+            className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none transition focus:border-sky-300"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Tags
+          </label>
+          <div className="mt-2">
+            <TagEditor
+              userTags={primitive.tags ?? []}
+              onChange={(tags) => updatePrimitive(primitive.id, { tags })}
+            />
+          </div>
+        </div>
+
+        {primitive.kind !== 'group' && (
+          <div className="space-y-2">
+            <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={primitive.showLabel === true}
+                onChange={(event) =>
+                  updatePrimitive(primitive.id, { showLabel: event.target.checked })
+                }
+                className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+              />
+              Show label
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={primitive.showOnLoad === true}
+                onChange={(event) =>
+                  updatePrimitive(primitive.id, { showOnLoad: event.target.checked })
+                }
+                className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+              />
+              Show on load
+            </label>
+          </div>
+        )}
+
+        {primitive.kind === 'group' && (
+          <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              checked={primitive.showMemberNumbers === true}
+              onChange={(event) =>
+                updatePrimitive(primitive.id, {
+                  showMemberNumbers: event.target.checked,
+                })
+              }
+              className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+            />
+            Show member numbers on map
+          </label>
+        )}
+
+        <NoteCards
+          notes={primitive.notes ?? []}
+          onChange={(notes) => updatePrimitive(primitive.id, { notes })}
+          placeholder="Write a note for this item."
+        />
+
+        {primitive.kind !== 'group' && (
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Backlinks
+              </div>
+              <button
+                onClick={() =>
+                  isPickingRelated
+                    ? cancelNeighborPick()
+                    : startNeighborPick(primitive.id)
+                }
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                  isPickingRelated
+                    ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {isPickingRelated ? <X size={12} /> : <Plus size={12} />}
+                {isPickingRelated ? 'Cancel pick' : 'Add'}
+              </button>
+            </div>
+            {isPickingRelated && (
+              <div className="mt-1 text-xs text-gray-500">
+                Click a primitive on the map to backlink it.
+              </div>
+            )}
+            {relatedMembers.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {relatedMembers.map((member) => (
+                  <div
+                    key={member.key}
+                    className="group inline-flex items-center rounded-full border border-gray-200 bg-gray-50 pl-2.5 pr-1 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-100"
+                  >
+                    <button onClick={member.onClick} className="mr-1">
+                      {member.label}
+                    </button>
+                    <button
+                      onClick={() => removeNeighborMember(primitive.id, member.key)}
+                      className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                      aria-label={`Remove ${member.label}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 text-xs text-gray-400">No backlinks added yet.</div>
+            )}
+          </div>
+        )}
+
+        {primitive.kind === 'group' && (
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Group items
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {getGroupMemberKeys(primitive).map((memberKey) => {
+                const member = parseMemberKey(memberKey);
+                if (!member) return null;
+                const memberPrim = workspace.primitives.find((p) => p.id === member.id);
+                if (!memberPrim) return null;
+                return (
+                  <button
+                    key={memberKey}
+                    onClick={() => setSelectedPrimitiveId(member.id)}
+                    className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-100"
+                  >
+                    {memberPrim.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Color
+          </label>
+          <div className="mt-2">
+            <ColorPicker
+              value={primitive.color}
+              onChange={(color) => updatePrimitive(primitive.id, { color })}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-3">
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              <Trash2 size={12} />
+              Delete {KIND_LABELS[primitive.kind].toLowerCase()}
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => deletePrimitive(primitive.id)}
+                className="inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
+              >
+                <Trash2 size={12} />
+                Confirm
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700"
+              >
+                <X size={12} />
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

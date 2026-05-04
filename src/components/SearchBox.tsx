@@ -1,0 +1,179 @@
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { Search, X } from 'lucide-react';
+import { useEditorStore } from '../lib/store';
+import { getPrimitiveBounds } from '../lib/workspace';
+import type { Primitive } from '../types';
+
+interface SearchBoxProps {
+  autoFocus?: boolean;
+  floating?: boolean;
+  onRequestClose?: () => void;
+}
+
+const KIND_LABELS: Record<Primitive['kind'], string> = {
+  rectangle: 'study box',
+  polygon: 'region',
+  customline: 'polyline',
+  group: 'group',
+};
+
+export default function SearchBox({
+  autoFocus = false,
+  floating = false,
+  onRequestClose,
+}: SearchBoxProps = {}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+
+  const workspace = useEditorStore((s) => s.workspace);
+  const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
+  const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
+
+  const primitivesById = useMemo(
+    () => new Map(workspace.primitives.map((p) => [p.id, p])),
+    [workspace.primitives]
+  );
+
+  const results = useMemo(() => {
+    const q = deferredQuery.trim().toLowerCase();
+    if (!q) return [];
+    return workspace.primitives
+      .filter((p) => {
+        const haystack = [
+          p.name,
+          ...(p.aliases ?? []),
+          ...(p.tags ?? []),
+          ...(p.notes?.map((n) => `${n.name} ${n.content}`) ?? []),
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      })
+      .slice(0, 20);
+  }, [deferredQuery, workspace.primitives]);
+
+  const handleSelect = (primitive: Primitive) => {
+    setSelectedPrimitiveId(primitive.id);
+    const bbox = getPrimitiveBounds(primitive, primitivesById);
+    if (bbox) setZoomTarget({ bbox, immediate: false });
+  };
+
+  const clearQuery = () => {
+    setQuery('');
+    setSelectedPrimitiveId(null);
+  };
+
+  useEffect(() => {
+    const focusSearch = () => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const editing =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable;
+      if (event.key === '/' && !editing) {
+        event.preventDefault();
+        focusSearch();
+        return;
+      }
+      if (event.key === 'Escape' && onRequestClose) {
+        event.preventDefault();
+        onRequestClose();
+      }
+    };
+    const handleSearchFocus = () => focusSearch();
+    const handleSearchClear = () => clearQuery();
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('map-search-focus', handleSearchFocus as EventListener);
+    window.addEventListener('map-search-clear', handleSearchClear as EventListener);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener(
+        'map-search-focus',
+        handleSearchFocus as EventListener
+      );
+      window.removeEventListener(
+        'map-search-clear',
+        handleSearchClear as EventListener
+      );
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRequestClose]);
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [autoFocus]);
+
+  return (
+    <div
+      className={
+        floating
+          ? 'w-80 rounded-2xl border border-gray-200 bg-white p-3 shadow-lg'
+          : 'border-b border-gray-200 bg-white px-3 py-3'
+      }
+    >
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search primitives, tags, notes…"
+          className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-9 text-sm text-gray-900 outline-none transition focus:border-sky-300 focus:bg-white"
+        />
+        {query && (
+          <button
+            onClick={clearQuery}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-600"
+            aria-label="Clear search"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {results.length > 0 && (
+        <div className="mt-2 max-h-80 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
+          {results.map((primitive) => (
+            <button
+              key={primitive.id}
+              onClick={() => handleSelect(primitive)}
+              className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-3 w-3 rounded-full"
+                  style={{ backgroundColor: primitive.color }}
+                />
+                <span className="truncate text-sm font-medium text-gray-900">
+                  {primitive.name}
+                </span>
+                <span className="ml-auto text-[11px] text-gray-400">
+                  {KIND_LABELS[primitive.kind]}
+                </span>
+              </div>
+              {primitive.tags && primitive.tags.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {primitive.tags.slice(0, 4).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

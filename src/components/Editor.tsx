@@ -1,0 +1,420 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import OpenSeadragon from 'openseadragon';
+import { Home, Lock, Minus, Plus, Unlock } from 'lucide-react';
+import HotspotLayer from './HotspotLayer';
+import SearchBox from './SearchBox';
+import DrawTools from './DrawTools';
+import { useEditorStore } from '../lib/store';
+import { useMapStore } from '../lib/mapStore';
+import { fitBBox, type SourceDims } from '../lib/coords';
+
+interface EditorProps {
+  rasterUrl: string;
+  dims: SourceDims;
+}
+
+export default function Editor({ rasterUrl, dims }: EditorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
+  const [viewer, setViewer] = useState<OpenSeadragon.Viewer | null>(null);
+  const [viewerReady, setViewerReady] = useState(false);
+  const [mapDragActive, setMapDragActive] = useState(false);
+  const [spaceDragActive, setSpaceDragActive] = useState(false);
+  const [showQuickSearch, setShowQuickSearch] = useState(false);
+  const [showFloatingGroupBuilder, setShowFloatingGroupBuilder] = useState(false);
+  const [showFloatingDrawTools, setShowFloatingDrawTools] = useState(false);
+  const [groupBuilderFocusSignal, setGroupBuilderFocusSignal] = useState(0);
+  const [zoomPercent, setZoomPercent] = useState(100);
+  const spaceHeldRef = useRef(false);
+
+  const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
+  const zoomTarget = useEditorStore((s) => s.zoomTarget);
+  const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
+  const zoomLocked = useEditorStore((s) => s.zoomLocked);
+  const toggleZoomLock = useEditorStore((s) => s.toggleZoomLock);
+  const toggleLeftSidebar = useEditorStore((s) => s.toggleLeftSidebar);
+  const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
+  const cycleSelection = useEditorStore((s) => s.cycleSelection);
+  const setSpacePanActive = useEditorStore((s) => s.setSpacePanActive);
+  const editorMode = useEditorStore((s) => s.editorMode);
+  const clearDraftGroup = useEditorStore((s) => s.clearDraftGroup);
+  const clearDraftPolygon = useEditorStore((s) => s.clearDraftPolygon);
+  const setEditorMode = useEditorStore((s) => s.setEditorMode);
+  const activeMapId = useMapStore((s) => s.activeMapId);
+
+  // Initialize viewer (rebuild whenever the raster URL changes — i.e. map switch)
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const viewer = OpenSeadragon({
+      element: containerRef.current,
+      tileSources: { type: 'image', url: rasterUrl },
+      prefixUrl: '',
+      mouseNavEnabled: true,
+      showNavigationControl: false,
+      minZoomLevel: 0.1,
+      maxZoomLevel: 12,
+      defaultZoomLevel: 0,
+      visibilityRatio: 0.5,
+      constrainDuringPan: true,
+      crossOriginPolicy: 'Anonymous',
+    });
+
+    viewerRef.current = viewer;
+    setViewer(viewer);
+
+    viewer.addHandler('open', () => {
+      setViewerReady(true);
+      viewer.viewport.goHome();
+    });
+
+    viewer.addHandler('canvas-click', (event: OpenSeadragon.CanvasClickEvent) => {
+      if (!event.quick) return;
+      const target = event.originalTarget as HTMLElement | null;
+      if (target && target.closest('[data-hotspot]')) return;
+      setSelectedPrimitiveId(null);
+    });
+
+    return () => {
+      viewer.destroy();
+      viewerRef.current = null;
+      setViewer(null);
+      setViewerReady(false);
+    };
+  }, [rasterUrl, setSelectedPrimitiveId]);
+
+  // Reset transient UI when map switches
+  useEffect(() => {
+    setShowQuickSearch(false);
+    setShowFloatingGroupBuilder(false);
+    setShowFloatingDrawTools(false);
+  }, [activeMapId]);
+
+  useEffect(() => {
+    if (!viewer || !zoomTarget) return;
+    fitBBox(viewer, zoomTarget.bbox, dims, {
+      immediate: zoomTarget.immediate ?? false,
+      locked: zoomTarget.lockZoom ?? zoomLocked,
+    });
+    setZoomTarget(null);
+  }, [viewer, zoomTarget, setZoomTarget, zoomLocked, dims]);
+
+  const zoomIn = useCallback(() => viewer?.viewport.zoomBy(1.5), [viewer]);
+  const zoomOut = useCallback(() => viewer?.viewport.zoomBy(0.667), [viewer]);
+  const goHome = useCallback(() => viewer?.viewport.goHome(), [viewer]);
+
+  const handleWheelZoom = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      if (!viewer) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const pixel = new OpenSeadragon.Point(
+        event.clientX - bounds.left,
+        event.clientY - bounds.top
+      );
+      const refPoint = viewer.viewport.pointFromPixel(pixel, true);
+      const factor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
+      viewer.viewport.zoomBy(factor, refPoint);
+      viewer.viewport.applyConstraints();
+    },
+    [viewer]
+  );
+
+  // Hotkeys
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !viewer) return;
+    container.setAttribute('tabindex', '0');
+
+    const updateZoomPercent = () => {
+      const zoom = viewer.viewport.getZoom(true);
+      setZoomPercent(Math.round(zoom * 100));
+    };
+
+    const handleCanvasDrag = () => setMapDragActive(true);
+    const handleCanvasRelease = () => setMapDragActive(false);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const editing =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable;
+
+      if (event.key === ' ' && !editing) {
+        event.preventDefault();
+        spaceHeldRef.current = true;
+        setSpacePanActive(true);
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        setShowQuickSearch(false);
+        setShowFloatingGroupBuilder(false);
+        setShowFloatingDrawTools(false);
+        if (editorMode === 'rectangle' || editorMode === 'polygon') {
+          event.preventDefault();
+          if (editorMode === 'polygon') clearDraftPolygon();
+          setEditorMode('none');
+          return;
+        }
+        if (editorMode === 'groupCollect') {
+          event.preventDefault();
+          clearDraftGroup();
+          setEditorMode('none');
+          return;
+        }
+      }
+
+      if (editing) return;
+
+      const panSpeed = 0.08;
+      let handled = true;
+      switch (event.key) {
+        case '+':
+        case '=':
+          viewer.viewport.zoomBy(1.3);
+          break;
+        case '-':
+        case '_':
+          viewer.viewport.zoomBy(0.77);
+          break;
+        case '1':
+          toggleLeftSidebar();
+          break;
+        case '2':
+          toggleRightPane();
+          break;
+        case '3':
+          handled = cycleSelection(-1);
+          break;
+        case '4':
+          handled = cycleSelection(1);
+          break;
+        case '5':
+          setShowFloatingGroupBuilder(false);
+          setShowFloatingDrawTools(false);
+          setShowQuickSearch(true);
+          window.dispatchEvent(new Event('map-search-focus'));
+          break;
+        case '6':
+          setShowQuickSearch(false);
+          setShowFloatingGroupBuilder(false);
+          setShowFloatingDrawTools(false);
+          setSelectedPrimitiveId(null);
+          setEditorMode('rectangle');
+          window.dispatchEvent(new Event('map-search-clear'));
+          container.focus({ preventScroll: true });
+          break;
+        case '7':
+          setShowQuickSearch(false);
+          setShowFloatingDrawTools(false);
+          setShowFloatingGroupBuilder(true);
+          setGroupBuilderFocusSignal((value) => value + 1);
+          break;
+        case '8':
+          setShowQuickSearch(false);
+          setShowFloatingGroupBuilder(false);
+          setShowFloatingDrawTools(true);
+          setSelectedPrimitiveId(null);
+          setEditorMode('polygon');
+          window.dispatchEvent(new Event('map-search-clear'));
+          container.focus({ preventScroll: true });
+          break;
+        case '9':
+          toggleZoomLock();
+          break;
+        case 'ArrowUp':
+          viewer.viewport.panBy(new OpenSeadragon.Point(0, -panSpeed));
+          break;
+        case 'ArrowDown':
+          viewer.viewport.panBy(new OpenSeadragon.Point(0, panSpeed));
+          break;
+        case 'ArrowLeft':
+          viewer.viewport.panBy(new OpenSeadragon.Point(-panSpeed, 0));
+          break;
+        case 'ArrowRight':
+          viewer.viewport.panBy(new OpenSeadragon.Point(panSpeed, 0));
+          break;
+        case '0':
+        case 'Home':
+          viewer.viewport.goHome();
+          break;
+        default:
+          handled = false;
+      }
+      if (handled) event.preventDefault();
+    };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === ' ') {
+        spaceHeldRef.current = false;
+        setSpacePanActive(false);
+      }
+    };
+
+    const onClick = () => container?.focus({ preventScroll: true });
+    const onPointerDown = () => {
+      if (!spaceHeldRef.current) return;
+      setSpaceDragActive(true);
+    };
+    const onPointerUp = () => {
+      if (!spaceHeldRef.current) return;
+      setSpaceDragActive(false);
+    };
+
+    viewer.addHandler('animation', updateZoomPercent);
+    viewer.addHandler('open', updateZoomPercent);
+    viewer.addHandler('zoom', updateZoomPercent);
+    viewer.addHandler('canvas-drag', handleCanvasDrag);
+    viewer.addHandler('canvas-release', handleCanvasRelease);
+    viewer.addHandler('canvas-drag-end', handleCanvasRelease);
+    updateZoomPercent();
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    container.addEventListener('click', onClick);
+    container.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointerup', onPointerUp);
+
+    return () => {
+      spaceHeldRef.current = false;
+      setSpacePanActive(false);
+      setMapDragActive(false);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      container.removeEventListener('click', onClick);
+      container.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      viewer.removeHandler('animation', updateZoomPercent);
+      viewer.removeHandler('open', updateZoomPercent);
+      viewer.removeHandler('zoom', updateZoomPercent);
+      viewer.removeHandler('canvas-drag', handleCanvasDrag);
+      viewer.removeHandler('canvas-release', handleCanvasRelease);
+      viewer.removeHandler('canvas-drag-end', handleCanvasRelease);
+    };
+  }, [
+    viewer,
+    setSelectedPrimitiveId,
+    toggleLeftSidebar,
+    toggleRightPane,
+    cycleSelection,
+    toggleZoomLock,
+    setSpacePanActive,
+    editorMode,
+    clearDraftGroup,
+    clearDraftPolygon,
+    setEditorMode,
+  ]);
+
+  return (
+    <div
+      className="relative h-full w-full overflow-hidden bg-gray-900"
+      onWheel={handleWheelZoom}
+      style={{
+        cursor:
+          editorMode === 'none' ||
+          editorMode === 'groupCollect' ||
+          editorMode === 'overlayNeighborPick'
+            ? mapDragActive || spaceDragActive
+              ? 'grabbing'
+              : 'grab'
+            : 'crosshair',
+      }}
+    >
+      <div ref={containerRef} className="absolute inset-0" />
+
+      {!viewerReady && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_top,#1e293b,#020617)] text-white">
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-center backdrop-blur">
+            <div className="mx-auto h-10 w-10 animate-pulse rounded-full border border-white/20 bg-white/10" />
+            <div className="mt-4 text-sm font-medium tracking-wide text-white/90">
+              Loading map
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewerReady && viewer && (
+        <HotspotLayer
+          viewer={viewer}
+          dims={dims}
+          mapDragActive={mapDragActive || spaceDragActive}
+          onMapDragActiveChange={setMapDragActive}
+        />
+      )}
+
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-1">
+        <button
+          onClick={zoomIn}
+          className="w-8 h-8 bg-white/90 hover:bg-white rounded shadow flex items-center justify-center text-gray-700"
+          title="Zoom in (+)"
+        >
+          <Plus size={17} />
+        </button>
+        <button
+          onClick={zoomOut}
+          className="w-8 h-8 bg-white/90 hover:bg-white rounded shadow flex items-center justify-center text-gray-700"
+          title="Zoom out (-)"
+        >
+          <Minus size={17} />
+        </button>
+        <button
+          onClick={toggleZoomLock}
+          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+            zoomLocked
+              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+              : 'bg-white/90 text-gray-700 hover:bg-white'
+          }`}
+          title={
+            zoomLocked
+              ? `Zoom locked at ${zoomPercent}%`
+              : 'Lock zoom (apply to focus & search)'
+          }
+        >
+          {zoomLocked ? <Lock size={15} /> : <Unlock size={15} />}
+        </button>
+        <button
+          onClick={goHome}
+          className="w-8 h-8 bg-white/90 hover:bg-white rounded shadow flex items-center justify-center text-gray-700"
+          title="Reset view (0)"
+        >
+          <Home size={16} />
+        </button>
+      </div>
+
+      {showQuickSearch && (
+        <div className="absolute left-14 top-4 z-20 origin-left transition-all duration-300">
+          <SearchBox
+            floating
+            autoFocus
+            onRequestClose={() => setShowQuickSearch(false)}
+          />
+        </div>
+      )}
+
+      {showFloatingGroupBuilder && (
+        <div className="absolute left-14 top-20 z-20 w-80 max-w-[calc(100vw-5rem)]">
+          <DrawTools
+            mode="group"
+            groupBuilderFocusSignal={groupBuilderFocusSignal}
+            onRequestClose={() => setShowFloatingGroupBuilder(false)}
+          />
+        </div>
+      )}
+
+      {showFloatingDrawTools && (
+        <div className="absolute left-14 top-20 z-20 w-80 max-w-[calc(100vw-5rem)]">
+          <DrawTools
+            mode="draw"
+            onRequestClose={() => setShowFloatingDrawTools(false)}
+          />
+        </div>
+      )}
+
+      <div className="absolute bottom-4 left-4 z-10 rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
+        1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · -/+ zoom · space pan
+      </div>
+    </div>
+  );
+}
