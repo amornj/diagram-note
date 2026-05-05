@@ -1,14 +1,16 @@
 # diagram-note
 
-Drop a PDF diagram, draw study primitives on top, attach notes/tags/aliases, export the whole bundle as a portable file. Re-import on another machine and keep working.
+Diagram overlay editor for PDFs and images. Draw study primitives on top, attach notes/tags/aliases/backlinks, and export the whole bundle as a portable `.dnote`.
 
 ## What it does
 
-1. **Upload a PDF** — any complex diagram. Renders client-side via pdf.js.
-2. **Draw primitives on top** — study boxes (rectangles), polylines, regions (polygons), and groups.
-3. **Edit each primitive** — name, aliases, tags, notes, color, backlinks.
-4. **Switch maps** — multiple PDFs coexist; overlays follow the active map.
-5. **Export / import** — single `.dnote` bundle (PDF + workspace) or workspace JSON only.
+1. **Starts in the editor immediately** — first launch seeds a bundled `FullSubwayMap_V1023_Web.pdf` so you do not land on an empty front page.
+2. **Load maps from PDF, PNG, or JPEG** — renders client-side and stores the original source file with the map.
+3. **Draw primitives on top** — study boxes (rectangles), polylines, regions (polygons), and groups.
+4. **Edit each primitive** — name, aliases, tags, notes, color, visibility, group membership, and backlinks.
+5. **Use multiple maps** — rename, reorder, switch, and delete maps from the left pane.
+6. **Work across PDF pages** — multipage PDFs keep per-page overlays, and backlinks can point across pages.
+7. **Export / import** — single `.dnote` bundle (source file + workspace) or workspace JSON only.
 
 ## Run locally
 
@@ -28,7 +30,7 @@ npm run build    # production build → dist/
 | `5` | Search |
 | `6` | New study box (rectangle) |
 | `7` | Group builder |
-| `8` | New polyline / region |
+| `8` | New polyline / shape |
 | `9` | Lock zoom |
 | `0` / `Home` | Reset view |
 | `+` `-` `wheel` | Zoom |
@@ -40,15 +42,21 @@ npm run build    # production build → dist/
 
 A `.dnote` is a zip archive with three entries:
 
-- `manifest.json` — `{ format: "dnote", version: 1, map: { id, name, pdfHash, pageIndex, sourceWidth, sourceHeight, renderScale, createdAt, updatedAt } }`
-- `map.pdf` — original PDF bytes
-- `workspace.json` — `MapWorkspace` (primitives + their notes/tags/aliases)
+- `manifest.json` — map metadata including active page, render scale, source type, and timestamps
+- `map.file` — original source file bytes (`.pdf`, `.png`, `.jpg`, etc.)
+- `workspace.json` — per-page `MapWorkspace` data
 
-Round-trippable: export → import → identical state (`updatedAt` aside).
+Legacy `map.pdf` entries still import for backward compatibility.
 
 ## Persistence
 
 All maps live in the browser's IndexedDB (`diagram-note` database). Workspace edits debounce-save to the active map every 200 ms. Use **Export .dnote** before clearing your browser data.
+
+## Notes
+
+- The bundled default subway map ships in `public/FullSubwayMap_V1023_Web.pdf`.
+- The original source file is stored with each map, so re-exported `.dnote` files preserve the imported PDF/image.
+- Cross-page backlinks are supported for multipage PDFs.
 
 ## Architecture
 
