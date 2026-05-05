@@ -53,6 +53,10 @@ export interface DiagramMap {
   id: string;
   name: string;
   pdfHash: string;
+  sourceType?: 'pdf' | 'image';
+  sourceName?: string;
+  sourceMimeType?: string;
+  sortOrder?: number;
   /** Currently-active page index (0-based). */
   pageIndex: number;
   /** Total number of pages in the source PDF. */

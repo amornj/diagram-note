@@ -43,15 +43,21 @@ export default function DropOverlay({ onError }: DropOverlayProps) {
       const isPdf =
         file.type === 'application/pdf' ||
         file.name.toLowerCase().endsWith('.pdf');
+      const isImage =
+        file.type === 'image/png' ||
+        file.type === 'image/jpeg' ||
+        file.name.toLowerCase().endsWith('.png') ||
+        file.name.toLowerCase().endsWith('.jpg') ||
+        file.name.toLowerCase().endsWith('.jpeg');
       setBusy(true);
       try {
         if (isDnote) {
           const result = await importDnote(file);
-          await importDnoteMap(result);
-        } else if (isPdf) {
+          await importDnoteMap({ map: result.map, sourceBlob: result.sourceBlob });
+        } else if (isPdf || isImage) {
           await createMapFromPdf(file, { scale: 2 });
         } else {
-          onError?.('Unsupported file. Drop a .pdf or .dnote.');
+          onError?.('Unsupported file. Drop a PDF, PNG, JPEG, or .dnote.');
         }
       } catch (err) {
         onError?.((err as Error).message ?? 'Failed to load file');
@@ -78,10 +84,10 @@ export default function DropOverlay({ onError }: DropOverlayProps) {
       <div className="rounded-3xl border-2 border-dashed border-sky-400 bg-white px-10 py-8 text-center shadow-2xl">
         <Upload className="mx-auto h-10 w-10 text-sky-500" />
         <div className="mt-4 text-sm font-bold text-slate-900">
-          {busy ? 'Loading…' : 'Drop PDF or .dnote'}
+          {busy ? 'Loading…' : 'Drop map or .dnote'}
         </div>
         <div className="mt-1 text-xs text-slate-500">
-          {busy ? 'Rendering page…' : 'Release to open in the editor'}
+          {busy ? 'Preparing editor…' : 'Release to open in the editor'}
         </div>
       </div>
     </div>

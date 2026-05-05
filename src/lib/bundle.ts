@@ -27,7 +27,7 @@ function isMapWorkspace(value: unknown): value is MapWorkspace {
 
 export async function exportDnote(
   map: DiagramMap,
-  pdfBlob: Blob
+  sourceBlob: Blob
 ): Promise<{ blob: Blob; filename: string }> {
   const manifest: DnoteManifest = {
     format: 'dnote',
@@ -36,6 +36,10 @@ export async function exportDnote(
       id: map.id,
       name: map.name,
       pdfHash: map.pdfHash,
+      sourceType: map.sourceType,
+      sourceName: map.sourceName,
+      sourceMimeType: map.sourceMimeType,
+      sortOrder: map.sortOrder,
       pageIndex: map.pageIndex,
       pageCount: map.pageCount,
       sourceWidth: map.sourceWidth,
@@ -54,11 +58,11 @@ export async function exportDnote(
   }
   const workspaceFile: WorkspaceFile = { pages };
 
-  const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
+  const sourceBytes = new Uint8Array(await sourceBlob.arrayBuffer());
   const zipped = zipSync({
     'manifest.json': strToU8(JSON.stringify(manifest, null, 2)),
     'workspace.json': strToU8(JSON.stringify(workspaceFile, null, 2)),
-    'map.pdf': pdfBytes,
+    'map.file': sourceBytes,
   });
 
   const zipBuf = new ArrayBuffer(zipped.length);
@@ -72,13 +76,13 @@ export async function exportDnote(
 
 export async function importDnote(
   file: File | Blob
-): Promise<{ map: DiagramMap; pdfBlob: Blob }> {
+): Promise<{ map: DiagramMap; sourceBlob: Blob }> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const entries = unzipSync(bytes);
   const manifestBytes = entries['manifest.json'];
   const workspaceBytes = entries['workspace.json'];
-  const pdfBytes = entries['map.pdf'];
-  if (!manifestBytes || !workspaceBytes || !pdfBytes) {
+  const sourceBytes = entries['map.file'] ?? entries['map.pdf'];
+  if (!manifestBytes || !workspaceBytes || !sourceBytes) {
     throw new Error('Not a valid .dnote file');
   }
   const manifest = JSON.parse(strFromU8(manifestBytes)) as DnoteManifest;
@@ -116,10 +120,12 @@ export async function importDnote(
   };
 
   // copy bytes into a fresh buffer so the Blob owns its own memory
-  const fresh = new Uint8Array(pdfBytes.length);
-  fresh.set(pdfBytes);
-  const pdfBlob = new Blob([fresh], { type: 'application/pdf' });
-  return { map, pdfBlob };
+  const fresh = new Uint8Array(sourceBytes.length);
+  fresh.set(sourceBytes);
+  const sourceBlob = new Blob([fresh], {
+    type: map.sourceMimeType ?? (map.sourceType === 'image' ? 'image/png' : 'application/pdf'),
+  });
+  return { map, sourceBlob };
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

@@ -46,7 +46,12 @@ export async function listMaps(): Promise<DiagramMap[]> {
   const db = await openDb();
   const store = tx(db, [STORE_MAPS], 'readonly').objectStore(STORE_MAPS);
   const result = (await asPromise(store.getAll())) as DiagramMap[];
-  return result.sort((a, b) => b.updatedAt - a.updatedAt);
+  return result.sort((a, b) => {
+    const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) return orderA - orderB;
+    return b.updatedAt - a.updatedAt;
+  });
 }
 
 export async function getMap(id: string): Promise<DiagramMap | null> {

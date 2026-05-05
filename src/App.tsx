@@ -3,7 +3,6 @@ import { PanelRightOpen } from 'lucide-react';
 import Editor from './components/Editor';
 import LeftPane from './components/LeftPane';
 import PrimitiveDetailPanel from './components/PrimitiveDetailPanel';
-import Landing from './components/Landing';
 import ErrorBoundary from './components/ErrorBoundary';
 import HotkeyHelp from './components/HotkeyHelp';
 import DropOverlay from './components/DropOverlay';
@@ -54,7 +53,12 @@ function useCloudSync(): SyncStatus {
             const updated = s.maps.map((m) => mergeById.get(m.id) ?? m);
             const added = toMerge.filter((m) => !localById.has(m.id));
             return {
-              maps: [...updated, ...added].sort((a, b) => b.updatedAt - a.updatedAt),
+              maps: [...updated, ...added].sort((a, b) => {
+                const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+                if (orderA !== orderB) return orderA - orderB;
+                return b.updatedAt - a.updatedAt;
+              }),
             };
           });
           // If the active map was updated, refresh its editor workspace
@@ -183,13 +187,22 @@ function MapPage() {
   if (!activeMap || !activeRasterUrl) {
     return (
       <SyncStatusContext.Provider value={syncStatus}>
-        <Landing />
-        <DropOverlay onError={setDropError} />
-        {dropError && (
-          <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-xs font-medium text-red-700 shadow-lg">
-            {dropError}
+        <>
+          <div className="flex h-screen w-screen items-center justify-center bg-[radial-gradient(circle_at_top,#e2e8f0,#cbd5e1)]">
+            <div className="rounded-3xl border border-white/60 bg-white/80 px-6 py-5 text-center shadow-xl backdrop-blur">
+              <div className="text-sm font-semibold text-slate-900">Preparing editor</div>
+              <div className="mt-1 text-xs text-slate-500">
+                Load a PDF, PNG, JPEG, or .dnote to start.
+              </div>
+            </div>
           </div>
-        )}
+          <DropOverlay onError={setDropError} />
+          {dropError && (
+            <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-xs font-medium text-red-700 shadow-lg">
+              {dropError}
+            </div>
+          )}
+        </>
       </SyncStatusContext.Provider>
     );
   }

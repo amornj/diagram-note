@@ -23,6 +23,27 @@ export function parseMemberKey(key: string): { id: string } | null {
   return { id: key.slice('primitive:'.length) };
 }
 
+export function makeRelatedPrimitiveKey(id: string, pageIndex: number) {
+  return `primitive-page:${pageIndex}:${id}`;
+}
+
+export function parseRelatedPrimitiveKey(
+  key: string
+): { id: string; pageIndex: number | null } | null {
+  if (key.startsWith('primitive-page:')) {
+    const rest = key.slice('primitive-page:'.length);
+    const sep = rest.indexOf(':');
+    if (sep <= 0) return null;
+    const pageIndex = Number.parseInt(rest.slice(0, sep), 10);
+    const id = rest.slice(sep + 1);
+    if (!Number.isFinite(pageIndex) || !id) return null;
+    return { id, pageIndex };
+  }
+  const legacy = parseMemberKey(key);
+  if (!legacy) return null;
+  return { id: legacy.id, pageIndex: null };
+}
+
 export function bboxFromPoints(a: Point, b: Point): BBox {
   const x = Math.min(a.x, b.x);
   const y = Math.min(a.y, b.y);

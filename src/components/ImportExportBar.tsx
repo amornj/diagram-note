@@ -39,13 +39,13 @@ export default function ImportExportBar() {
   }, [menuOpen]);
 
   const handlePdfPick = async (file: File) => {
-    setBusy('Rendering PDF…');
+    setBusy('Loading map…');
     setError(null);
     try {
       await createMapFromPdf(file, { scale: 2 });
       setMenuOpen(false);
     } catch (err) {
-      setError((err as Error).message ?? 'Failed to load PDF');
+      setError((err as Error).message ?? 'Failed to load map');
     }
     setBusy(null);
   };
@@ -55,7 +55,7 @@ export default function ImportExportBar() {
     setError(null);
     try {
       const result = await importDnote(file);
-      await importDnoteMap(result);
+      await importDnoteMap({ map: result.map, sourceBlob: result.sourceBlob });
       setMenuOpen(false);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to import .dnote');
@@ -68,12 +68,12 @@ export default function ImportExportBar() {
     setBusy('Building .dnote…');
     setError(null);
     try {
-      const pdfBlob = await idb.getPdfBlob(activeMap.id);
-      if (!pdfBlob) throw new Error('PDF not found in storage');
+      const sourceBlob = await idb.getPdfBlob(activeMap.id);
+      if (!sourceBlob) throw new Error('Source file not found in storage');
       // Always export with the latest workspace from the editor store
       const result = await exportDnote(
         { ...activeMap, workspace, updatedAt: Date.now() },
-        pdfBlob
+        sourceBlob
       );
       downloadBlob(result.blob, result.filename);
       setMenuOpen(false);
@@ -98,7 +98,7 @@ export default function ImportExportBar() {
       <input
         ref={pdfInputRef}
         type="file"
-        accept="application/pdf,.pdf"
+        accept="application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg"
         className="hidden"
         onChange={async (event) => {
           const file = event.target.files?.[0];
@@ -139,7 +139,7 @@ export default function ImportExportBar() {
             role="menuitem"
           >
             <FilePlus2 size={14} />
-            Load PDF
+            Load map
           </button>
           <button
             onClick={() => dnoteInputRef.current?.click()}

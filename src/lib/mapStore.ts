@@ -2,10 +2,13 @@ import { create } from 'zustand';
 import type { DiagramMap, MapWorkspace, PageMeta } from '../types';
 import { EMPTY_WORKSPACE } from './workspace';
 import * as idb from './idb';
-import { rasterizePdf } from './pdf';
+import { detectSourceType, rasterizeSource } from './pdf';
 import { useEditorStore } from './store';
+import { makeRelatedPrimitiveKey } from './workspace';
 
 const ACTIVE_MAP_STORAGE_KEY = 'diagram-note-active-map';
+const DEFAULT_MAP_ASSET = '/FullSubwayMap_V1023_Web.pdf';
+const DEFAULT_MAP_NAME = 'FullSubwayMap';
 
 export interface MapStoreState {
   maps: DiagramMap[];
@@ -22,10 +25,23 @@ export interface MapStoreState {
   ) => Promise<string>;
   importDnoteMap: (args: {
     map: DiagramMap;
-    pdfBlob: Blob;
+    sourceBlob: Blob;
   }) => Promise<string>;
+  addPrimitiveBacklink: (
+    sourcePageIndex: number,
+    sourceId: string,
+    targetPageIndex: number,
+    targetId: string
+  ) => Promise<void>;
+  removePrimitiveBacklink: (
+    sourcePageIndex: number,
+    sourceId: string,
+    targetPageIndex: number,
+    targetId: string
+  ) => Promise<void>;
   deleteMap: (id: string) => Promise<void>;
   renameMap: (id: string, name: string) => Promise<void>;
+  reorderMaps: (fromIndex: number, toIndex: number) => Promise<void>;
   saveActiveWorkspace: (workspace: MapWorkspace) => Promise<void>;
 }
 
@@ -90,6 +106,24 @@ function withPageMeta(
   };
 }
 
+function updatePrimitiveOnPage(
+  map: DiagramMap,
+  pageIndex: number,
+  primitiveId: string,
+  updater: (primitive: import('../types').Primitive) => import('../types').Primitive
+): DiagramMap {
+  const meta = getPageMeta(map, pageIndex);
+  return withPageMeta(map, pageIndex, {
+    ...meta,
+    workspace: {
+      ...meta.workspace,
+      primitives: meta.workspace.primitives.map((primitive) =>
+        primitive.id === primitiveId ? updater(primitive) : primitive
+      ),
+    },
+  });
+}
+
 export const useMapStore = create<MapStoreState>((set, get) => ({
   maps: [],
   activeMapId: null,
@@ -99,13 +133,30 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
 
   loadMaps: async () => {
     set({ loading: true });
-    const maps = await idb.listMaps();
-    const persistedId = loadActiveId();
-    const activeMapId =
-      persistedId && maps.some((m) => m.id === persistedId) ? persistedId : null;
-    set({ maps, activeMapId, loading: false, initialized: true });
-    if (activeMapId) {
-      await get().setActiveMap(activeMapId);
+    try {
+      let maps = await idb.listMaps();
+      if (maps.length === 0) {
+        const response = await fetch(DEFAULT_MAP_ASSET);
+        if (!response.ok) {
+          throw new Error(`Failed to load bundled default map: ${response.status}`);
+        }
+        const blob = await response.blob();
+        const file = new File([blob], 'FullSubwayMap_V1023_Web.pdf', {
+          type: 'application/pdf',
+        });
+        await get().createMapFromPdf(file, { scale: 2, name: DEFAULT_MAP_NAME });
+        maps = await idb.listMaps();
+      }
+      const persistedId = loadActiveId();
+      const activeMapId =
+        persistedId && maps.some((m) => m.id === persistedId) ? persistedId : maps[0]?.id ?? null;
+      set({ maps, activeMapId, loading: false, initialized: true });
+      if (activeMapId) {
+        await get().setActiveMap(activeMapId);
+      }
+    } catch {
+      set({ maps: [], activeMapId: null, activeRasterUrl: null, loading: false, initialized: true });
+      useEditorStore.getState().setWorkspace(EMPTY_WORKSPACE);
     }
   },
 
@@ -128,9 +179,10 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     const pageIndex = map.pageIndex;
     let raster = await idb.getRaster(id, map.renderScale, pageIndex);
     if (!raster) {
-      const pdfBlob = await idb.getPdfBlob(id);
-      if (!pdfBlob) return;
-      const result = await rasterizePdf(pdfBlob, {
+      const sourceBlob = await idb.getPdfBlob(id);
+      if (!sourceBlob) return;
+      const result = await rasterizeSource(sourceBlob, {
+        sourceType: map.sourceType ?? 'pdf',
         scale: map.renderScale,
         pageIndex,
       });
@@ -190,9 +242,10 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     // 2) Ensure the destination page has a raster.
     let raster = await idb.getRaster(id, map.renderScale, pageIndex);
     if (!raster) {
-      const pdfBlob = await idb.getPdfBlob(id);
-      if (!pdfBlob) return;
-      const result = await rasterizePdf(pdfBlob, {
+      const sourceBlob = await idb.getPdfBlob(id);
+      if (!sourceBlob) return;
+      const result = await rasterizeSource(sourceBlob, {
+        sourceType: map.sourceType ?? 'pdf',
         scale: map.renderScale,
         pageIndex,
       });
@@ -245,7 +298,12 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
 
   createMapFromPdf: async (file, options) => {
     const scale = options?.scale ?? 2;
-    const result = await rasterizePdf(file, { scale, pageIndex: 0 });
+    const sourceType = detectSourceType(file);
+    const result = await rasterizeSource(file, {
+      sourceType,
+      scale,
+      pageIndex: 0,
+    });
 
     const existing = get().maps.find((m) => m.pdfHash === result.hash);
     if (existing) {
@@ -266,9 +324,13 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       name:
         options?.name ??
         ('name' in file && typeof file.name === 'string'
-          ? file.name.replace(/\.pdf$/i, '')
+          ? file.name.replace(/\.(pdf|png|jpe?g)$/i, '')
           : `Map ${get().maps.length + 1}`),
       pdfHash: result.hash,
+      sourceType,
+      sourceName: 'name' in file && typeof file.name === 'string' ? file.name : undefined,
+      sourceMimeType: file.type || (sourceType === 'image' ? 'image/png' : 'application/pdf'),
+      sortOrder: get().maps.length,
       pageIndex: 0,
       pageCount: result.pageCount,
       sourceWidth: result.width,
@@ -283,12 +345,12 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     await idb.putPdfBlob(id, blob);
     await idb.putRaster(id, scale, 0, result.blob, result.width, result.height);
 
-    set({ maps: [map, ...get().maps] });
+    set({ maps: [...get().maps, map] });
     await get().setActiveMap(id);
     return id;
   },
 
-  importDnoteMap: async ({ map, pdfBlob }) => {
+  importDnoteMap: async ({ map, sourceBlob }) => {
     const existing = get().maps.find((m) => m.pdfHash === map.pdfHash);
     if (existing) {
       const merged: DiagramMap = {
@@ -302,6 +364,10 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         sourceHeight: map.sourceHeight,
         updatedAt: Date.now(),
         name: map.name || existing.name,
+        sourceType: map.sourceType ?? existing.sourceType ?? 'pdf',
+        sourceName: map.sourceName ?? existing.sourceName,
+        sourceMimeType: map.sourceMimeType ?? existing.sourceMimeType,
+        sortOrder: existing.sortOrder ?? map.sortOrder,
       };
       await idb.putMap(merged);
       set({
@@ -311,13 +377,17 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       return merged.id;
     }
     // Fresh import — render the active page's raster from the pdf at requested scale.
-    const result = await rasterizePdf(pdfBlob, {
+    const sourceType = map.sourceType ?? 'pdf';
+    const result = await rasterizeSource(sourceBlob, {
+      sourceType,
       scale: map.renderScale,
       pageIndex: map.pageIndex,
     });
     const filledMap: DiagramMap = {
       ...map,
+      sourceType,
       pageCount: map.pageCount ?? result.pageCount,
+      sortOrder: map.sortOrder ?? get().maps.length,
       sourceWidth: result.width,
       sourceHeight: result.height,
       pages: {
@@ -330,7 +400,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       },
     };
     await idb.putMap(filledMap);
-    await idb.putPdfBlob(filledMap.id, pdfBlob);
+    await idb.putPdfBlob(filledMap.id, sourceBlob);
     await idb.putRaster(
       filledMap.id,
       filledMap.renderScale,
@@ -339,9 +409,61 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       result.width,
       result.height
     );
-    set({ maps: [filledMap, ...get().maps.filter((m) => m.id !== filledMap.id)] });
+    set({ maps: [...get().maps.filter((m) => m.id !== filledMap.id), filledMap] });
     await get().setActiveMap(filledMap.id);
     return filledMap.id;
+  },
+
+  addPrimitiveBacklink: async (sourcePageIndex, sourceId, targetPageIndex, targetId) => {
+    const activeId = get().activeMapId;
+    if (!activeId) return;
+    const map = await idb.getMap(activeId);
+    if (!map) return;
+    const sourceKey = makeRelatedPrimitiveKey(sourceId, sourcePageIndex);
+    const targetKey = makeRelatedPrimitiveKey(targetId, targetPageIndex);
+    let updated = updatePrimitiveOnPage(map, sourcePageIndex, sourceId, (primitive) => ({
+      ...primitive,
+      relatedMemberKeys: Array.from(
+        new Set([...(primitive.relatedMemberKeys ?? []), targetKey])
+      ).filter((key) => key !== sourceKey),
+    }));
+    updated = updatePrimitiveOnPage(updated, targetPageIndex, targetId, (primitive) => ({
+      ...primitive,
+      relatedMemberKeys: Array.from(
+        new Set([...(primitive.relatedMemberKeys ?? []), sourceKey])
+      ).filter((key) => key !== targetKey),
+    }));
+    await idb.putMap(updated);
+    set({
+      maps: get().maps.map((entry) => (entry.id === updated.id ? updated : entry)),
+    });
+    useEditorStore.getState().setWorkspace(getPageMeta(updated, updated.pageIndex).workspace);
+  },
+
+  removePrimitiveBacklink: async (sourcePageIndex, sourceId, targetPageIndex, targetId) => {
+    const activeId = get().activeMapId;
+    if (!activeId) return;
+    const map = await idb.getMap(activeId);
+    if (!map) return;
+    const sourceKey = makeRelatedPrimitiveKey(sourceId, sourcePageIndex);
+    const targetKey = makeRelatedPrimitiveKey(targetId, targetPageIndex);
+    let updated = updatePrimitiveOnPage(map, sourcePageIndex, sourceId, (primitive) => ({
+      ...primitive,
+      relatedMemberKeys: (primitive.relatedMemberKeys ?? []).filter(
+        (key) => key !== targetKey
+      ),
+    }));
+    updated = updatePrimitiveOnPage(updated, targetPageIndex, targetId, (primitive) => ({
+      ...primitive,
+      relatedMemberKeys: (primitive.relatedMemberKeys ?? []).filter(
+        (key) => key !== sourceKey
+      ),
+    }));
+    await idb.putMap(updated);
+    set({
+      maps: get().maps.map((entry) => (entry.id === updated.id ? updated : entry)),
+    });
+    useEditorStore.getState().setWorkspace(getPageMeta(updated, updated.pageIndex).workspace);
   },
 
   deleteMap: async (id) => {
@@ -361,6 +483,24 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     set({
       maps: get().maps.map((m) => (m.id === id ? updated : m)),
     });
+  },
+
+  reorderMaps: async (fromIndex, toIndex) => {
+    const maps = [...get().maps];
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= maps.length ||
+      toIndex >= maps.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    const [moved] = maps.splice(fromIndex, 1);
+    maps.splice(toIndex, 0, moved);
+    const next = maps.map((map, index) => ({ ...map, sortOrder: index }));
+    await Promise.all(next.map((map) => idb.putMap(map)));
+    set({ maps: next });
   },
 
   saveActiveWorkspace: async (workspace) => {

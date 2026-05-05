@@ -16,6 +16,7 @@ import {
   parseMemberKey,
 } from '../lib/workspace';
 import type { Point, Primitive } from '../types';
+import { useMapStore } from '../lib/mapStore';
 
 interface HotspotLayerProps {
   viewer: OpenSeadragon.Viewer;
@@ -65,7 +66,15 @@ export default function HotspotLayer({
   const addGroupMember = useEditorStore((s) => s.addGroupMember);
   const addNeighborMember = useEditorStore((s) => s.addNeighborMember);
   const overlayNeighborTargetId = useEditorStore((s) => s.overlayNeighborTargetId);
+  const overlayNeighborTargetPageIndex = useEditorStore(
+    (s) => s.overlayNeighborTargetPageIndex
+  );
   const groupCollectTargetId = useEditorStore((s) => s.groupCollectTargetId);
+  const setActivePage = useMapStore((s) => s.setActivePage);
+  const addPrimitiveBacklink = useMapStore((s) => s.addPrimitiveBacklink);
+  const activePageIndex = useMapStore(
+    (s) => s.maps.find((m) => m.id === s.activeMapId)?.pageIndex ?? 0
+  );
 
   const primitivesById = useMemo(
     () => new Map(workspace.primitives.map((p) => [p.id, p])),
@@ -304,7 +313,21 @@ export default function HotspotLayer({
             addDraftGroupMember(makeMemberKey(primitive.id));
           }
         } else if (editorMode === 'overlayNeighborPick') {
-          addNeighborMember(makeMemberKey(primitive.id));
+          if (overlayNeighborTargetId && overlayNeighborTargetPageIndex !== null) {
+            void (async () => {
+              await addPrimitiveBacklink(
+                overlayNeighborTargetPageIndex,
+                overlayNeighborTargetId,
+                activePageIndex,
+                primitive.id
+              );
+              await setActivePage(overlayNeighborTargetPageIndex);
+              setSelectedPrimitiveId(overlayNeighborTargetId);
+              setEditorMode('none');
+            })();
+          } else {
+            addNeighborMember(makeMemberKey(primitive.id));
+          }
         }
         return;
       }
@@ -313,12 +336,17 @@ export default function HotspotLayer({
     [
       overlaySelectionMode,
       overlayNeighborTargetId,
+      overlayNeighborTargetPageIndex,
       groupCollectTargetId,
+      activePageIndex,
       editorMode,
       addDraftGroupMember,
       addGroupMember,
       addNeighborMember,
+      addPrimitiveBacklink,
+      setActivePage,
       setSelectedPrimitiveId,
+      setEditorMode,
     ]
   );
 

@@ -1,9 +1,11 @@
 import { PanelRightClose, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useEditorStore } from '../lib/store';
+import { useMapStore } from '../lib/mapStore';
 import {
   getGroupMemberKeys,
   getRelatedMemberKeys,
+  parseRelatedPrimitiveKey,
   normalizeTagInput,
   parseMemberKey,
 } from '../lib/workspace';
@@ -34,6 +36,9 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
   const removeGroupMember = useEditorStore((s) => s.removeGroupMember);
   const reorderGroupMember = useEditorStore((s) => s.reorderGroupMember);
   const groupCollectTargetId = useEditorStore((s) => s.groupCollectTargetId);
+  const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
+  const setActivePage = useMapStore((s) => s.setActivePage);
+  const removePrimitiveBacklink = useMapStore((s) => s.removePrimitiveBacklink);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -45,18 +50,33 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
     () =>
       getRelatedMemberKeys(primitive)
         .map((key) => {
-          const member = parseMemberKey(key);
+          const member = parseRelatedPrimitiveKey(key);
           if (!member) return null;
-          const memberPrim = workspace.primitives.find((p) => p.id === member.id);
+          const pageIndex = member.pageIndex ?? activeMap?.pageIndex ?? 0;
+          const pageWorkspace =
+            pageIndex === activeMap?.pageIndex
+              ? workspace
+              : activeMap?.pages?.[pageIndex]?.workspace;
+          const memberPrim = pageWorkspace?.primitives.find((p) => p.id === member.id);
           if (!memberPrim) return null;
           return {
             key,
-            label: memberPrim.name,
-            onClick: () => setSelectedPrimitiveId(member.id),
+            id: member.id,
+            pageIndex,
+            label:
+              pageIndex === activeMap?.pageIndex
+                ? memberPrim.name
+                : `${memberPrim.name} · Page ${pageIndex + 1}`,
+            onClick: async () => {
+              if (pageIndex !== activeMap?.pageIndex) {
+                await setActivePage(pageIndex);
+              }
+              setSelectedPrimitiveId(member.id);
+            },
           };
         })
         .filter((m): m is NonNullable<typeof m> => m !== null),
-    [primitive, workspace.primitives, setSelectedPrimitiveId]
+    [primitive, workspace, activeMap, setActivePage, setSelectedPrimitiveId]
   );
 
   const isPickingRelated = editorMode === 'overlayNeighborPick';
@@ -228,7 +248,7 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
               onClick={() =>
                 isPickingRelated
                   ? cancelNeighborPick()
-                  : startNeighborPick(primitive.id)
+                  : startNeighborPick(primitive.id, activeMap?.pageIndex ?? 0)
               }
               className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
                 isPickingRelated
@@ -256,7 +276,16 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
                     {member.label}
                   </button>
                   <button
-                    onClick={() => removeNeighborMember(primitive.id, member.key)}
+                    onClick={() =>
+                      activeMap
+                        ? removePrimitiveBacklink(
+                            activeMap.pageIndex,
+                            primitive.id,
+                            member.pageIndex,
+                            member.id
+                          )
+                        : removeNeighborMember(primitive.id, member.key)
+                    }
                     className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                     aria-label={`Remove ${member.label}`}
                   >

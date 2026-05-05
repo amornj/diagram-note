@@ -20,28 +20,34 @@ export default function Landing() {
       file.name.toLowerCase().endsWith('.zip');
     const isPdf =
       file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isImage =
+      file.type === 'image/png' ||
+      file.type === 'image/jpeg' ||
+      file.name.toLowerCase().endsWith('.png') ||
+      file.name.toLowerCase().endsWith('.jpg') ||
+      file.name.toLowerCase().endsWith('.jpeg');
     if (isDnote) {
       setBusy('Importing .dnote…');
       try {
         const result = await importDnote(file);
-        await importDnoteMap(result);
+        await importDnoteMap({ map: result.map, sourceBlob: result.sourceBlob });
       } catch (err) {
         setError((err as Error).message ?? 'Invalid .dnote file');
       }
       setBusy(null);
       return;
     }
-    if (isPdf) {
-      setBusy('Rendering PDF…');
+    if (isPdf || isImage) {
+      setBusy('Loading map…');
       try {
         await createMapFromPdf(file, { scale: renderScale });
       } catch (err) {
-        setError((err as Error).message ?? 'Failed to load PDF');
+        setError((err as Error).message ?? 'Failed to load map');
       }
       setBusy(null);
       return;
     }
-    setError('Unsupported file. Drop a .pdf or .dnote.');
+    setError('Unsupported file. Drop a PDF, PNG, JPEG, or .dnote.');
   };
 
   return (
@@ -67,8 +73,8 @@ export default function Landing() {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-slate-900">diagram-note</h1>
           <p className="mt-3 text-sm text-slate-600">
-            Drop a complex PDF diagram and start drawing study boxes, regions, and notes
-            on top.
+            Drop a PDF or image diagram and start drawing study boxes, regions, and
+            notes on top.
           </p>
         </div>
 
@@ -76,7 +82,7 @@ export default function Landing() {
           <input
             ref={pdfInputRef}
             type="file"
-            accept="application/pdf,.pdf"
+            accept="application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg"
             className="hidden"
             onChange={async (event) => {
               const file = event.target.files?.[0];
@@ -101,7 +107,7 @@ export default function Landing() {
             onClick={() => pdfInputRef.current?.click()}
             className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
           >
-            <FilePlus2 size={15} /> Load a PDF
+            <FilePlus2 size={15} /> Load a map
           </button>
           <button
             onClick={() => dnoteInputRef.current?.click()}

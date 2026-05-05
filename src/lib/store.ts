@@ -42,6 +42,7 @@ export interface EditorState {
   spacePanActive: boolean;
   pendingNameFocusId: string | null;
   overlayNeighborTargetId: string | null;
+  overlayNeighborTargetPageIndex: number | null;
   groupCollectTargetId: string | null;
 
   setWorkspace: (workspace: MapWorkspace) => void;
@@ -78,7 +79,7 @@ export interface EditorState {
     showMemberNumbers?: boolean,
     showOnLoad?: boolean
   ) => string | null;
-  startNeighborPick: (primitiveId: string) => void;
+  startNeighborPick: (primitiveId: string, pageIndex: number) => void;
   addNeighborMember: (memberKey: string) => void;
   removeNeighborMember: (primitiveId: string, memberKey: string) => void;
   cancelNeighborPick: () => void;
@@ -114,22 +115,26 @@ export const useEditorStore = create<EditorState>((set) => ({
   spacePanActive: false,
   pendingNameFocusId: null,
   overlayNeighborTargetId: null,
+  overlayNeighborTargetPageIndex: null,
   groupCollectTargetId: null,
 
   setWorkspace: (workspace) =>
-    set({
+    set((s) => ({
       workspace,
       selectedPrimitiveId: null,
       hoveredPrimitiveId: null,
       draftGroupKeys: [],
       selectedOccurrenceIndex: 0,
-      editorMode: 'none',
+      editorMode: s.editorMode === 'overlayNeighborPick' ? s.editorMode : 'none',
       draftPolygonPoints: [],
       draftRectangleStart: null,
       pendingNameFocusId: null,
-      overlayNeighborTargetId: null,
+      overlayNeighborTargetId:
+        s.editorMode === 'overlayNeighborPick' ? s.overlayNeighborTargetId : null,
+      overlayNeighborTargetPageIndex:
+        s.editorMode === 'overlayNeighborPick' ? s.overlayNeighborTargetPageIndex : null,
       groupCollectTargetId: null,
-    }),
+    })),
 
   setSelectedPrimitiveId: (id) =>
     set({
@@ -187,6 +192,8 @@ export const useEditorStore = create<EditorState>((set) => ({
       draftRectangleStart: null,
       overlayNeighborTargetId:
         mode === 'overlayNeighborPick' ? s.overlayNeighborTargetId : null,
+      overlayNeighborTargetPageIndex:
+        mode === 'overlayNeighborPick' ? s.overlayNeighborTargetPageIndex : null,
       groupCollectTargetId: mode === 'groupCollect' ? s.groupCollectTargetId : null,
     })),
 
@@ -374,11 +381,12 @@ export const useEditorStore = create<EditorState>((set) => ({
     return id;
   },
 
-  startNeighborPick: (primitiveId) =>
+  startNeighborPick: (primitiveId, pageIndex) =>
     set({
       selectedPrimitiveId: primitiveId,
       editorMode: 'overlayNeighborPick',
       overlayNeighborTargetId: primitiveId,
+      overlayNeighborTargetPageIndex: pageIndex,
       groupCollectTargetId: null,
       rightPaneOpen: true,
     }),
@@ -393,6 +401,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         return {
           editorMode: 'none',
           overlayNeighborTargetId: null,
+          overlayNeighborTargetPageIndex: null,
           selectedPrimitiveId: targetId,
           rightPaneOpen: true,
         };
@@ -418,6 +427,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         },
         editorMode: 'none',
         overlayNeighborTargetId: null,
+        overlayNeighborTargetPageIndex: null,
         groupCollectTargetId: null,
         selectedPrimitiveId: targetId,
         rightPaneOpen: true,
@@ -449,7 +459,12 @@ export const useEditorStore = create<EditorState>((set) => ({
     })),
 
   cancelNeighborPick: () =>
-    set({ editorMode: 'none', overlayNeighborTargetId: null, groupCollectTargetId: null }),
+    set({
+      editorMode: 'none',
+      overlayNeighborTargetId: null,
+      overlayNeighborTargetPageIndex: null,
+      groupCollectTargetId: null,
+    }),
 
   clearPendingNameFocus: () => set({ pendingNameFocusId: null }),
 }));

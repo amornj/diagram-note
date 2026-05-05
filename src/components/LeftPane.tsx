@@ -13,6 +13,13 @@ const KIND_LABELS: Record<Primitive['kind'], string> = {
   group: 'Group',
 };
 
+const KIND_DOT_COLORS: Record<Primitive['kind'], string> = {
+  rectangle: '#ef4444',
+  polygon: '#f59e0b',
+  customline: '#06b6d4',
+  group: '#3b82f6',
+};
+
 export default function LeftPane() {
   const leftSidebarCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
   const toggleLeftSidebar = useEditorStore((s) => s.toggleLeftSidebar);
@@ -26,11 +33,13 @@ export default function LeftPane() {
   const setActiveMap = useMapStore((s) => s.setActiveMap);
   const renameMap = useMapStore((s) => s.renameMap);
   const deleteMap = useMapStore((s) => s.deleteMap);
+  const reorderMaps = useMapStore((s) => s.reorderMaps);
 
   const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [draggedMapIndex, setDraggedMapIndex] = useState<number | null>(null);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -87,14 +96,23 @@ export default function LeftPane() {
         <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
           {maps.length === 0 && (
             <div className="text-xs text-gray-400">
-              No maps yet. Drop a PDF or .dnote.
+              No maps yet. Load a PDF, PNG, JPEG, or .dnote.
             </div>
           )}
-          {maps.map((map) => {
+          {maps.map((map, index) => {
             const isActive = map.id === activeMapId;
             return (
               <div
                 key={map.id}
+                draggable
+                onDragStart={() => setDraggedMapIndex(index)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => {
+                  if (draggedMapIndex === null) return;
+                  reorderMaps(draggedMapIndex, index);
+                  setDraggedMapIndex(null);
+                }}
+                onDragEnd={() => setDraggedMapIndex(null)}
                 className={`flex items-center justify-between gap-1 rounded-lg px-2 py-1.5 transition ${
                   isActive ? 'bg-sky-50 border border-sky-200' : 'hover:bg-gray-50'
                 }`}
@@ -229,7 +247,7 @@ export default function LeftPane() {
               >
                 <span
                   className="inline-block h-3 w-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: p.color }}
+                  style={{ backgroundColor: KIND_DOT_COLORS[p.kind] }}
                 />
                 <span className="flex-1 truncate text-sm text-gray-800">
                   {p.name}
