@@ -67,7 +67,6 @@ export async function deleteMap(id: string): Promise<void> {
   const transaction = tx(db, [STORE_MAPS, STORE_PDFS, STORE_RASTERS], 'readwrite');
   await asPromise(transaction.objectStore(STORE_MAPS).delete(id));
   await asPromise(transaction.objectStore(STORE_PDFS).delete(id));
-  // delete all rasters for this map
   const rasterStore = transaction.objectStore(STORE_RASTERS);
   const keys = (await asPromise(rasterStore.getAllKeys())) as string[];
   for (const key of keys) {
@@ -96,30 +95,40 @@ export interface RasterRecord {
   key: string;
   mapId: string;
   scale: number;
+  pageIndex: number;
   blob: Blob;
   width: number;
   height: number;
 }
 
-function rasterKey(mapId: string, scale: number) {
-  return `${mapId}:${scale}`;
+function rasterKey(mapId: string, scale: number, pageIndex: number) {
+  return `${mapId}:${scale}:${pageIndex}`;
 }
 
 export async function getRaster(
   mapId: string,
-  scale: number
+  scale: number,
+  pageIndex: number
 ): Promise<RasterRecord | null> {
   const db = await openDb();
   const store = tx(db, [STORE_RASTERS], 'readonly').objectStore(STORE_RASTERS);
-  const result = (await asPromise(store.get(rasterKey(mapId, scale)))) as
+  const result = (await asPromise(store.get(rasterKey(mapId, scale, pageIndex)))) as
     | RasterRecord
     | undefined;
+  // back-compat: a v1 raster keyed without pageIndex (pageIndex 0)
+  if (!result && pageIndex === 0) {
+    const legacy = (await asPromise(store.get(`${mapId}:${scale}`))) as
+      | (Omit<RasterRecord, 'pageIndex'> & { pageIndex?: number })
+      | undefined;
+    if (legacy) return { ...legacy, pageIndex: 0, key: rasterKey(mapId, scale, 0) };
+  }
   return result ?? null;
 }
 
 export async function putRaster(
   mapId: string,
   scale: number,
+  pageIndex: number,
   blob: Blob,
   width: number,
   height: number
@@ -127,9 +136,10 @@ export async function putRaster(
   const db = await openDb();
   const store = tx(db, [STORE_RASTERS], 'readwrite').objectStore(STORE_RASTERS);
   const record: RasterRecord = {
-    key: rasterKey(mapId, scale),
+    key: rasterKey(mapId, scale, pageIndex),
     mapId,
     scale,
+    pageIndex,
     blob,
     width,
     height,

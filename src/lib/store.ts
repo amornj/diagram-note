@@ -42,6 +42,7 @@ export interface EditorState {
   spacePanActive: boolean;
   pendingNameFocusId: string | null;
   overlayNeighborTargetId: string | null;
+  groupCollectTargetId: string | null;
 
   setWorkspace: (workspace: MapWorkspace) => void;
   setSelectedPrimitiveId: (id: string | null) => void;
@@ -65,12 +66,17 @@ export interface EditorState {
   addDraftGroupMember: (memberKey: string) => void;
   removeDraftGroupMember: (memberKey: string) => void;
   reorderDraftGroupMember: (fromIndex: number, toIndex: number) => void;
+  startGroupMemberPick: (primitiveId: string) => void;
+  addGroupMember: (primitiveId: string, memberKey: string) => void;
+  removeGroupMember: (primitiveId: string, memberKey: string) => void;
+  reorderGroupMember: (primitiveId: string, fromIndex: number, toIndex: number) => void;
   clearDraftGroup: () => void;
   createGroupPrimitive: (
     name?: string,
     notes?: NoteCard[],
     tags?: string[],
-    showMemberNumbers?: boolean
+    showMemberNumbers?: boolean,
+    showOnLoad?: boolean
   ) => string | null;
   startNeighborPick: (primitiveId: string) => void;
   addNeighborMember: (memberKey: string) => void;
@@ -108,6 +114,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   spacePanActive: false,
   pendingNameFocusId: null,
   overlayNeighborTargetId: null,
+  groupCollectTargetId: null,
 
   setWorkspace: (workspace) =>
     set({
@@ -121,6 +128,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       draftRectangleStart: null,
       pendingNameFocusId: null,
       overlayNeighborTargetId: null,
+      groupCollectTargetId: null,
     }),
 
   setSelectedPrimitiveId: (id) =>
@@ -179,6 +187,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       draftRectangleStart: null,
       overlayNeighborTargetId:
         mode === 'overlayNeighborPick' ? s.overlayNeighborTargetId : null,
+      groupCollectTargetId: mode === 'groupCollect' ? s.groupCollectTargetId : null,
     })),
 
   setDraftOverlayColor: (color) => set({ draftOverlayColor: color }),
@@ -216,7 +225,17 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((s) => ({
       workspace: {
         ...s.workspace,
-        primitives: s.workspace.primitives.filter((p) => p.id !== id),
+        primitives: s.workspace.primitives
+          .filter((p) => p.id !== id)
+          .map((p) => ({
+            ...p,
+            groupMemberKeys: (p.groupMemberKeys ?? []).filter(
+              (key) => key !== makeMemberKey(id)
+            ),
+            relatedMemberKeys: (p.relatedMemberKeys ?? []).filter(
+              (key) => key !== makeMemberKey(id)
+            ),
+          })),
       },
       selectedPrimitiveId:
         s.selectedPrimitiveId === id ? null : s.selectedPrimitiveId,
@@ -251,9 +270,81 @@ export const useEditorStore = create<EditorState>((set) => ({
       return { draftGroupKeys: next };
     }),
 
+  startGroupMemberPick: (primitiveId) =>
+    set({
+      selectedPrimitiveId: primitiveId,
+      editorMode: 'groupCollect',
+      groupCollectTargetId: primitiveId,
+      rightPaneOpen: true,
+    }),
+
+  addGroupMember: (primitiveId, memberKey) =>
+    set((s) => ({
+      workspace: {
+        ...s.workspace,
+        primitives: s.workspace.primitives.map((p) =>
+          p.id === primitiveId
+            ? {
+                ...p,
+                groupMemberKeys: Array.from(
+                  new Set([...(p.groupMemberKeys ?? []), memberKey])
+                ).filter((key) => key !== makeMemberKey(primitiveId)),
+              }
+            : p
+        ),
+      },
+      selectedPrimitiveId: primitiveId,
+      rightPaneOpen: true,
+    })),
+
+  removeGroupMember: (primitiveId, memberKey) =>
+    set((s) => ({
+      workspace: {
+        ...s.workspace,
+        primitives: s.workspace.primitives.map((p) =>
+          p.id === primitiveId
+            ? {
+                ...p,
+                groupMemberKeys: (p.groupMemberKeys ?? []).filter((key) => key !== memberKey),
+              }
+            : p
+        ),
+      },
+    })),
+
+  reorderGroupMember: (primitiveId, fromIndex, toIndex) =>
+    set((s) => ({
+      workspace: {
+        ...s.workspace,
+        primitives: s.workspace.primitives.map((p) => {
+          if (p.id !== primitiveId) return p;
+          const current = p.groupMemberKeys ?? [];
+          if (
+            fromIndex < 0 ||
+            toIndex < 0 ||
+            fromIndex >= current.length ||
+            toIndex >= current.length ||
+            fromIndex === toIndex
+          ) {
+            return p;
+          }
+          const next = [...current];
+          const [moved] = next.splice(fromIndex, 1);
+          next.splice(toIndex, 0, moved);
+          return { ...p, groupMemberKeys: next };
+        }),
+      },
+    })),
+
   clearDraftGroup: () => set({ draftGroupKeys: [] }),
 
-  createGroupPrimitive: (name, notes = [], tags = [], showMemberNumbers = false) => {
+  createGroupPrimitive: (
+    name,
+    notes = [],
+    tags = [],
+    showMemberNumbers = false,
+    showOnLoad = false
+  ) => {
     const state = useEditorStore.getState();
     if (state.draftGroupKeys.length === 0) return null;
     const id = makePrimitiveId();
@@ -266,6 +357,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       notes,
       groupMemberKeys: state.draftGroupKeys,
       showMemberNumbers,
+      showOnLoad,
     };
     set((s) => ({
       workspace: {
@@ -276,6 +368,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       selectedPrimitiveId: id,
       selectedOccurrenceIndex: 0,
       editorMode: 'none',
+      groupCollectTargetId: null,
       rightPaneOpen: true,
     }));
     return id;
@@ -286,6 +379,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       selectedPrimitiveId: primitiveId,
       editorMode: 'overlayNeighborPick',
       overlayNeighborTargetId: primitiveId,
+      groupCollectTargetId: null,
       rightPaneOpen: true,
     }),
 
@@ -293,19 +387,38 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((s) => {
       const targetId = s.overlayNeighborTargetId;
       if (!targetId) return {};
+      const targetKey = makeMemberKey(targetId);
+      const member = parseMemberKey(memberKey);
+      if (!member || memberKey === targetKey) {
+        return {
+          editorMode: 'none',
+          overlayNeighborTargetId: null,
+          selectedPrimitiveId: targetId,
+          rightPaneOpen: true,
+        };
+      }
       return {
         workspace: {
           ...s.workspace,
           primitives: s.workspace.primitives.map((p) => {
-            if (p.id !== targetId) return p;
-            const next = Array.from(
-              new Set([...(p.relatedMemberKeys ?? []), memberKey])
-            ).filter((k) => k !== makeMemberKey(targetId));
-            return { ...p, relatedMemberKeys: next };
+            if (p.id === targetId) {
+              const next = Array.from(
+                new Set([...(p.relatedMemberKeys ?? []), memberKey])
+              ).filter((k) => k !== targetKey);
+              return { ...p, relatedMemberKeys: next };
+            }
+            if (p.id === member.id) {
+              const next = Array.from(
+                new Set([...(p.relatedMemberKeys ?? []), targetKey])
+              ).filter((k) => k !== memberKey);
+              return { ...p, relatedMemberKeys: next };
+            }
+            return p;
           }),
         },
         editorMode: 'none',
         overlayNeighborTargetId: null,
+        groupCollectTargetId: null,
         selectedPrimitiveId: targetId,
         rightPaneOpen: true,
       };
@@ -323,13 +436,20 @@ export const useEditorStore = create<EditorState>((set) => ({
                   (k) => k !== memberKey
                 ),
               }
-            : p
+            : parseMemberKey(memberKey)?.id === p.id
+              ? {
+                  ...p,
+                  relatedMemberKeys: (p.relatedMemberKeys ?? []).filter(
+                    (k) => k !== makeMemberKey(primitiveId)
+                  ),
+                }
+              : p
         ),
       },
     })),
 
   cancelNeighborPick: () =>
-    set({ editorMode: 'none', overlayNeighborTargetId: null }),
+    set({ editorMode: 'none', overlayNeighborTargetId: null, groupCollectTargetId: null }),
 
   clearPendingNameFocus: () => set({ pendingNameFocusId: null }),
 }));

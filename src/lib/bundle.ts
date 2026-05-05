@@ -1,9 +1,28 @@
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
-import type { DiagramMap, DnoteManifest } from '../types';
+import type { DiagramMap, DnoteManifest, MapWorkspace, PageMeta } from '../types';
+import { EMPTY_WORKSPACE } from './workspace';
 
 function sanitizeFilename(name: string) {
   const cleaned = (name ?? 'map').trim().replace(/[^a-z0-9-_ ]+/gi, '_');
   return cleaned.length > 0 ? cleaned : 'map';
+}
+
+/**
+ * The shape of workspace.json on disk. Pages are keyed by their pageIndex
+ * (as a string, since JSON object keys are strings).
+ */
+interface WorkspaceFile {
+  pages: Record<string, MapWorkspace>;
+}
+
+function isMapWorkspace(value: unknown): value is MapWorkspace {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'version' in value &&
+    'primitives' in value &&
+    Array.isArray((value as MapWorkspace).primitives)
+  );
 }
 
 export async function exportDnote(
@@ -18,6 +37,7 @@ export async function exportDnote(
       name: map.name,
       pdfHash: map.pdfHash,
       pageIndex: map.pageIndex,
+      pageCount: map.pageCount,
       sourceWidth: map.sourceWidth,
       sourceHeight: map.sourceHeight,
       renderScale: map.renderScale,
@@ -26,14 +46,21 @@ export async function exportDnote(
     },
   };
 
+  // Build per-page workspace map, defaulting unseen pages to empty workspaces.
+  const pages: Record<string, MapWorkspace> = {};
+  pages[String(map.pageIndex)] = map.workspace;
+  for (const [key, meta] of Object.entries(map.pages ?? {})) {
+    pages[key] = meta.workspace;
+  }
+  const workspaceFile: WorkspaceFile = { pages };
+
   const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
   const zipped = zipSync({
     'manifest.json': strToU8(JSON.stringify(manifest, null, 2)),
-    'workspace.json': strToU8(JSON.stringify(map.workspace, null, 2)),
+    'workspace.json': strToU8(JSON.stringify(workspaceFile, null, 2)),
     'map.pdf': pdfBytes,
   });
 
-  // Copy into a fresh ArrayBuffer to satisfy Blob's BlobPart typing.
   const zipBuf = new ArrayBuffer(zipped.length);
   new Uint8Array(zipBuf).set(zipped);
 
@@ -60,13 +87,35 @@ export async function importDnote(
       `Unsupported .dnote (format=${manifest.format}, version=${manifest.version})`
     );
   }
-  const workspace = JSON.parse(strFromU8(workspaceBytes));
+  const parsed = JSON.parse(strFromU8(workspaceBytes)) as unknown;
+
+  // workspace.json may be either a bare single-page MapWorkspace (legacy)
+  // or the multi-page WorkspaceFile shape. Normalise to a `pages` map.
+  const pagesRaw: Record<string, MapWorkspace> = isMapWorkspace(parsed)
+    ? { [String(manifest.map.pageIndex)]: parsed }
+    : ((parsed as WorkspaceFile)?.pages ?? {});
+
+  const pages: Record<number, PageMeta> = {};
+  for (const [key, workspace] of Object.entries(pagesRaw)) {
+    const idx = Number.parseInt(key, 10);
+    if (!Number.isFinite(idx)) continue;
+    pages[idx] = {
+      workspace,
+      sourceWidth: manifest.map.sourceWidth,
+      sourceHeight: manifest.map.sourceHeight,
+    };
+  }
+
+  const activeWorkspace =
+    pages[manifest.map.pageIndex]?.workspace ?? EMPTY_WORKSPACE;
+
   const map: DiagramMap = {
     ...manifest.map,
-    workspace,
+    workspace: activeWorkspace,
+    pages,
   };
-  // pdfBytes is a slice into a larger ArrayBuffer; copy to a fresh buffer
-  // before wrapping in a Blob to avoid future mutations being observable.
+
+  // copy bytes into a fresh buffer so the Blob owns its own memory
   const fresh = new Uint8Array(pdfBytes.length);
   fresh.set(pdfBytes);
   const pdfBlob = new Blob([fresh], { type: 'application/pdf' });

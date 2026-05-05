@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import type { Primitive } from '../types';
+import ImportExportBar from './ImportExportBar';
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
   rectangle: 'Study box',
@@ -66,13 +67,16 @@ export default function LeftPane() {
             {workspace.primitives.length === 1 ? '' : 's'}
           </div>
         </div>
-        <button
-          onClick={toggleLeftSidebar}
-          className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100"
-          title="Hide left pane (1)"
-        >
-          <ChevronLeft size={18} />
-        </button>
+        <div className="flex items-center gap-1">
+          <ImportExportBar />
+          <button
+            onClick={toggleLeftSidebar}
+            className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100"
+            title="Hide left pane (1)"
+          >
+            <ChevronLeft size={18} />
+          </button>
+        </div>
       </div>
 
       <div className="border-b border-gray-100 px-3 py-3">

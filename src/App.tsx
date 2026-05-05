@@ -3,9 +3,10 @@ import { PanelRightOpen } from 'lucide-react';
 import Editor from './components/Editor';
 import LeftPane from './components/LeftPane';
 import PrimitiveDetailPanel from './components/PrimitiveDetailPanel';
-import ImportExportBar from './components/ImportExportBar';
 import Landing from './components/Landing';
 import ErrorBoundary from './components/ErrorBoundary';
+import HotkeyHelp from './components/HotkeyHelp';
+import DropOverlay from './components/DropOverlay';
 import { useEditorStore } from './lib/store';
 import { useMapStore } from './lib/mapStore';
 
@@ -17,6 +18,33 @@ function MapPage() {
   const leftSidebarCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
   const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
   const activeRasterUrl = useMapStore((s) => s.activeRasterUrl);
+  const [showHelp, setShowHelp] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const editing =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable;
+      if (event.key === '?' && !editing) {
+        event.preventDefault();
+        setShowHelp((value) => !value);
+      }
+      if (event.key === 'Escape' && showHelp) {
+        setShowHelp(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showHelp]);
+
+  useEffect(() => {
+    if (!dropError) return;
+    const t = window.setTimeout(() => setDropError(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [dropError]);
 
   const [leftPaneWidth, setLeftPaneWidth] = useState(() => {
     if (typeof window === 'undefined') return 280;
@@ -76,18 +104,32 @@ function MapPage() {
     window.addEventListener('mouseup', handleUp);
   };
 
-  if (!activeMap || !activeRasterUrl) return <Landing />;
+  if (!activeMap || !activeRasterUrl) {
+    return (
+      <>
+        <Landing />
+        <DropOverlay onError={setDropError} />
+        {dropError && (
+          <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-xs font-medium text-red-700 shadow-lg">
+            {dropError}
+          </div>
+        )}
+      </>
+    );
+  }
 
   const dims = { width: activeMap.sourceWidth, height: activeMap.sourceHeight };
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-gray-50">
       <div className="absolute inset-0">
-        <Editor rasterUrl={activeRasterUrl} dims={dims} />
+        <Editor
+          rasterUrl={activeRasterUrl}
+          dims={dims}
+          pageIndex={activeMap.pageIndex}
+          pageCount={activeMap.pageCount}
+        />
       </div>
-
-      <ImportExportBar />
-
       <div className="pointer-events-none absolute inset-y-0 left-0 z-30">
         <div
           className="pointer-events-auto relative h-full"
@@ -143,6 +185,14 @@ function MapPage() {
             <PrimitiveDetailPanel primitive={selectedPrimitive} />
           </div>
         </>
+      )}
+
+      <DropOverlay onError={setDropError} />
+      {showHelp && <HotkeyHelp onClose={() => setShowHelp(false)} />}
+      {dropError && (
+        <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-xs font-medium text-red-700 shadow-lg">
+          {dropError}
+        </div>
       )}
     </div>
   );

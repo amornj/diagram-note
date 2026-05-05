@@ -62,8 +62,10 @@ export default function HotspotLayer({
   const zoomLocked = useEditorStore((s) => s.zoomLocked);
   const spacePanActive = useEditorStore((s) => s.spacePanActive);
   const addDraftGroupMember = useEditorStore((s) => s.addDraftGroupMember);
+  const addGroupMember = useEditorStore((s) => s.addGroupMember);
   const addNeighborMember = useEditorStore((s) => s.addNeighborMember);
   const overlayNeighborTargetId = useEditorStore((s) => s.overlayNeighborTargetId);
+  const groupCollectTargetId = useEditorStore((s) => s.groupCollectTargetId);
 
   const primitivesById = useMemo(
     () => new Map(workspace.primitives.map((p) => [p.id, p])),
@@ -296,7 +298,11 @@ export default function HotspotLayer({
         primitive.id !== overlayNeighborTargetId
       ) {
         if (editorMode === 'groupCollect') {
-          addDraftGroupMember(makeMemberKey(primitive.id));
+          if (groupCollectTargetId) {
+            addGroupMember(groupCollectTargetId, makeMemberKey(primitive.id));
+          } else {
+            addDraftGroupMember(makeMemberKey(primitive.id));
+          }
         } else if (editorMode === 'overlayNeighborPick') {
           addNeighborMember(makeMemberKey(primitive.id));
         }
@@ -307,8 +313,10 @@ export default function HotspotLayer({
     [
       overlaySelectionMode,
       overlayNeighborTargetId,
+      groupCollectTargetId,
       editorMode,
       addDraftGroupMember,
+      addGroupMember,
       addNeighborMember,
       setSelectedPrimitiveId,
     ]
@@ -458,7 +466,6 @@ export default function HotspotLayer({
             selectedPrimitive.showMemberNumbers === true;
           const groupEntry = selectedGroupTargets.find((e) => e.id === primitive.id);
           const isVisible =
-            primitive.kind === 'group' ||
             primitive.showOnLoad === true ||
             isSelected ||
             isHovered ||
@@ -777,31 +784,6 @@ export default function HotspotLayer({
                   />
                 );
               })()}
-            <g className="pointer-events-none">
-              {(editorMode === 'polygon' || editorMode === 'rectangle') && (
-                <>
-                  <rect
-                    x={12}
-                    y={12}
-                    width={260}
-                    height={editorMode === 'polygon' ? 56 : 40}
-                    rx={14}
-                    fill="#0f172a"
-                    opacity={0.9}
-                  />
-                  <text x={24} y={34} fill="#f8fafc" fontSize={13} fontWeight={700}>
-                    {editorMode === 'polygon'
-                      ? 'Click points. Press Enter or click start to close.'
-                      : 'Drag a rectangle to create a study box.'}
-                  </text>
-                  {editorMode === 'polygon' && (
-                    <text x={24} y={52} fill="#cbd5e1" fontSize={11}>
-                      Esc cancels.
-                    </text>
-                  )}
-                </>
-              )}
-            </g>
           </g>
         )}
     </svg>

@@ -30,10 +30,15 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
   const startNeighborPick = useEditorStore((s) => s.startNeighborPick);
   const cancelNeighborPick = useEditorStore((s) => s.cancelNeighborPick);
   const removeNeighborMember = useEditorStore((s) => s.removeNeighborMember);
+  const startGroupMemberPick = useEditorStore((s) => s.startGroupMemberPick);
+  const removeGroupMember = useEditorStore((s) => s.removeGroupMember);
+  const reorderGroupMember = useEditorStore((s) => s.reorderGroupMember);
+  const groupCollectTargetId = useEditorStore((s) => s.groupCollectTargetId);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(primitive.name);
+  const [draggedGroupIndex, setDraggedGroupIndex] = useState<number | null>(null);
   const aliasInput = useMemo(() => (primitive.aliases ?? []).join(', '), [primitive.aliases]);
 
   const relatedMembers = useMemo(
@@ -55,6 +60,10 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
   );
 
   const isPickingRelated = editorMode === 'overlayNeighborPick';
+  const isPickingGroupItems =
+    primitive.kind === 'group' &&
+    editorMode === 'groupCollect' &&
+    groupCollectTargetId === primitive.id;
 
   // Reset state when switching primitives
   useEffect(() => {
@@ -161,9 +170,9 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
           </div>
         </div>
 
-        {primitive.kind !== 'group' && (
-          <div className="space-y-2">
-            <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+        <div className="space-y-2">
+          {primitive.kind !== 'group' && (
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
               <input
                 type="checkbox"
                 checked={primitive.showLabel === true}
@@ -174,22 +183,22 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
               />
               Show label
             </label>
-            <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
-              <input
-                type="checkbox"
-                checked={primitive.showOnLoad === true}
-                onChange={(event) =>
-                  updatePrimitive(primitive.id, { showOnLoad: event.target.checked })
-                }
-                className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
-              />
-              Show on load
-            </label>
-          </div>
-        )}
+          )}
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              checked={primitive.showOnLoad === true}
+              onChange={(event) =>
+                updatePrimitive(primitive.id, { showOnLoad: event.target.checked })
+              }
+              className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+            />
+            Show on load
+          </label>
+        </div>
 
         {primitive.kind === 'group' && (
-          <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
             <input
               type="checkbox"
               checked={primitive.showMemberNumbers === true}
@@ -210,80 +219,126 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
           placeholder="Write a note for this item."
         />
 
-        {primitive.kind !== 'group' && (
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Backlinks
+            </div>
+            <button
+              onClick={() =>
+                isPickingRelated
+                  ? cancelNeighborPick()
+                  : startNeighborPick(primitive.id)
+              }
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                isPickingRelated
+                  ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              {isPickingRelated ? <X size={12} /> : <Plus size={12} />}
+              {isPickingRelated ? 'Cancel pick' : 'Add'}
+            </button>
+          </div>
+          {isPickingRelated && (
+            <div className="mt-1 text-xs text-gray-500">
+              Click a primitive on the map to backlink it.
+            </div>
+          )}
+          {relatedMembers.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {relatedMembers.map((member) => (
+                <div
+                  key={member.key}
+                  className="group inline-flex items-center rounded-full border border-gray-200 bg-gray-50 pl-2.5 pr-1 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-100"
+                >
+                  <button onClick={member.onClick} className="mr-1">
+                    {member.label}
+                  </button>
+                  <button
+                    onClick={() => removeNeighborMember(primitive.id, member.key)}
+                    className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                    aria-label={`Remove ${member.label}`}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2 text-xs text-gray-400">No backlinks added yet.</div>
+          )}
+        </div>
+
+        {primitive.kind === 'group' && (
           <div>
             <div className="flex items-center justify-between gap-3">
               <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Backlinks
+                Group items
               </div>
               <button
                 onClick={() =>
-                  isPickingRelated
-                    ? cancelNeighborPick()
-                    : startNeighborPick(primitive.id)
+                  isPickingGroupItems ? cancelNeighborPick() : startGroupMemberPick(primitive.id)
                 }
                 className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
-                  isPickingRelated
+                  isPickingGroupItems
                     ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
                     : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                {isPickingRelated ? <X size={12} /> : <Plus size={12} />}
-                {isPickingRelated ? 'Cancel pick' : 'Add'}
+                {isPickingGroupItems ? <X size={12} /> : <Plus size={12} />}
+                {isPickingGroupItems ? 'Cancel pick' : 'Add'}
               </button>
             </div>
-            {isPickingRelated && (
+            {isPickingGroupItems && (
               <div className="mt-1 text-xs text-gray-500">
-                Click a primitive on the map to backlink it.
+                Click study boxes or other primitives on the map to add them.
               </div>
             )}
-            {relatedMembers.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {relatedMembers.map((member) => (
-                  <div
-                    key={member.key}
-                    className="group inline-flex items-center rounded-full border border-gray-200 bg-gray-50 pl-2.5 pr-1 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-100"
-                  >
-                    <button onClick={member.onClick} className="mr-1">
-                      {member.label}
-                    </button>
-                    <button
-                      onClick={() => removeNeighborMember(primitive.id, member.key)}
-                      className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                      aria-label={`Remove ${member.label}`}
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-2 text-xs text-gray-400">No backlinks added yet.</div>
-            )}
-          </div>
-        )}
-
-        {primitive.kind === 'group' && (
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Group items
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {getGroupMemberKeys(primitive).map((memberKey) => {
+            <div className="mt-2 space-y-1.5">
+              {getGroupMemberKeys(primitive).map((memberKey, index) => {
                 const member = parseMemberKey(memberKey);
                 if (!member) return null;
                 const memberPrim = workspace.primitives.find((p) => p.id === member.id);
                 if (!memberPrim) return null;
                 return (
-                  <button
+                  <div
                     key={memberKey}
-                    onClick={() => setSelectedPrimitiveId(member.id)}
-                    className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-100"
+                    draggable
+                    onDragStart={() => setDraggedGroupIndex(index)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => {
+                      if (draggedGroupIndex === null) return;
+                      reorderGroupMember(primitive.id, draggedGroupIndex, index);
+                      setDraggedGroupIndex(null);
+                    }}
+                    onDragEnd={() => setDraggedGroupIndex(null)}
+                    className="group flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
                   >
-                    {memberPrim.name}
-                  </button>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-semibold text-white">
+                        {index + 1}
+                      </span>
+                      <button
+                        onClick={() => setSelectedPrimitiveId(member.id)}
+                        className="truncate text-left"
+                      >
+                        {memberPrim.name}
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => removeGroupMember(primitive.id, memberKey)}
+                      className="rounded-full p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                      aria-label={`Remove ${memberPrim.name}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
                 );
               })}
+              {getGroupMemberKeys(primitive).length === 0 && (
+                <div className="text-xs text-gray-400">No group items yet.</div>
+              )}
             </div>
           </div>
         )}

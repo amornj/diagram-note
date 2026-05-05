@@ -17,6 +17,27 @@ const KIND_LABELS: Record<Primitive['kind'], string> = {
   group: 'group',
 };
 
+type SearchTypeFilter = 'studybox' | 'group' | 'region';
+type SearchContentFilter = 'note' | 'tag';
+
+const TYPE_FILTERS: Array<{
+  key: SearchTypeFilter;
+  label: string;
+  matches: (primitive: Primitive) => boolean;
+}> = [
+  { key: 'studybox', label: 'Studybox', matches: (primitive) => primitive.kind === 'rectangle' },
+  { key: 'group', label: 'Group', matches: (primitive) => primitive.kind === 'group' },
+  { key: 'region', label: 'Region', matches: (primitive) => primitive.kind === 'polygon' },
+];
+
+const CONTENT_FILTERS: Array<{
+  key: SearchContentFilter;
+  label: string;
+}> = [
+  { key: 'note', label: 'Note' },
+  { key: 'tag', label: 'Tag' },
+];
+
 export default function SearchBox({
   autoFocus = false,
   floating = false,
@@ -24,6 +45,8 @@ export default function SearchBox({
 }: SearchBoxProps = {}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
+  const [activeTypeFilters, setActiveTypeFilters] = useState<SearchTypeFilter[]>([]);
+  const [activeContentFilters, setActiveContentFilters] = useState<SearchContentFilter[]>([]);
   const deferredQuery = useDeferredValue(query);
 
   const workspace = useEditorStore((s) => s.workspace);
@@ -40,18 +63,29 @@ export default function SearchBox({
     if (!q) return [];
     return workspace.primitives
       .filter((p) => {
-        const haystack = [
-          p.name,
-          ...(p.aliases ?? []),
-          ...(p.tags ?? []),
-          ...(p.notes?.map((n) => `${n.name} ${n.content}`) ?? []),
-        ]
-          .join(' ')
-          .toLowerCase();
-        return haystack.includes(q);
+        const matchesType =
+          activeTypeFilters.length === 0 ||
+          TYPE_FILTERS.some(
+            (filter) => activeTypeFilters.includes(filter.key) && filter.matches(p)
+          );
+
+        if (!matchesType) return false;
+
+        const baseFields = [p.name, ...(p.aliases ?? [])];
+        const noteFields = p.notes?.map((n) => `${n.name} ${n.content}`) ?? [];
+        const tagFields = p.tags ?? [];
+        const searchableFields =
+          activeContentFilters.length === 0
+            ? [...baseFields, ...tagFields, ...noteFields]
+            : [
+                ...baseFields,
+                ...(activeContentFilters.includes('tag') ? tagFields : []),
+                ...(activeContentFilters.includes('note') ? noteFields : []),
+              ];
+        return searchableFields.join(' ').toLowerCase().includes(q);
       })
       .slice(0, 20);
-  }, [deferredQuery, workspace.primitives]);
+  }, [deferredQuery, workspace.primitives, activeTypeFilters, activeContentFilters]);
 
   const handleSelect = (primitive: Primitive) => {
     setSelectedPrimitiveId(primitive.id);
@@ -62,6 +96,18 @@ export default function SearchBox({
   const clearQuery = () => {
     setQuery('');
     setSelectedPrimitiveId(null);
+  };
+
+  const toggleTypeFilter = (key: SearchTypeFilter) => {
+    setActiveTypeFilters((current) =>
+      current.includes(key) ? current.filter((value) => value !== key) : [...current, key]
+    );
+  };
+
+  const toggleContentFilter = (key: SearchContentFilter) => {
+    setActiveContentFilters((current) =>
+      current.includes(key) ? current.filter((value) => value !== key) : [...current, key]
+    );
   };
 
   useEffect(() => {
@@ -136,6 +182,41 @@ export default function SearchBox({
             <X className="h-4 w-4" />
           </button>
         )}
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {TYPE_FILTERS.map((filter) => {
+          const active = activeTypeFilters.includes(filter.key);
+          return (
+            <button
+              key={filter.key}
+              onClick={() => toggleTypeFilter(filter.key)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
+                active
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {filter.label}
+            </button>
+          );
+        })}
+        {CONTENT_FILTERS.map((filter) => {
+          const active = activeContentFilters.includes(filter.key);
+          return (
+            <button
+              key={filter.key}
+              onClick={() => toggleContentFilter(filter.key)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
+                active
+                  ? 'bg-sky-600 text-white'
+                  : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
+              }`}
+            >
+              {filter.label}
+            </button>
+          );
+        })}
       </div>
 
       {results.length > 0 && (

@@ -4,6 +4,7 @@ import { Home, Lock, Minus, Plus, Unlock } from 'lucide-react';
 import HotspotLayer from './HotspotLayer';
 import SearchBox from './SearchBox';
 import DrawTools from './DrawTools';
+import PagePicker from './PagePicker';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import { fitBBox, type SourceDims } from '../lib/coords';
@@ -11,9 +12,11 @@ import { fitBBox, type SourceDims } from '../lib/coords';
 interface EditorProps {
   rasterUrl: string;
   dims: SourceDims;
+  pageIndex: number;
+  pageCount: number;
 }
 
-export default function Editor({ rasterUrl, dims }: EditorProps) {
+export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
   const [viewer, setViewer] = useState<OpenSeadragon.Viewer | null>(null);
@@ -21,8 +24,9 @@ export default function Editor({ rasterUrl, dims }: EditorProps) {
   const [mapDragActive, setMapDragActive] = useState(false);
   const [spaceDragActive, setSpaceDragActive] = useState(false);
   const [showQuickSearch, setShowQuickSearch] = useState(false);
-  const [showFloatingGroupBuilder, setShowFloatingGroupBuilder] = useState(false);
-  const [showFloatingDrawTools, setShowFloatingDrawTools] = useState(false);
+  const [floatingTool, setFloatingTool] = useState<
+    null | 'studybox' | 'group' | 'polyline'
+  >(null);
   const [groupBuilderFocusSignal, setGroupBuilderFocusSignal] = useState(0);
   const [zoomPercent, setZoomPercent] = useState(100);
   const spaceHeldRef = useRef(false);
@@ -33,6 +37,7 @@ export default function Editor({ rasterUrl, dims }: EditorProps) {
   const zoomLocked = useEditorStore((s) => s.zoomLocked);
   const toggleZoomLock = useEditorStore((s) => s.toggleZoomLock);
   const toggleLeftSidebar = useEditorStore((s) => s.toggleLeftSidebar);
+  const setLeftSidebarCollapsed = useEditorStore((s) => s.setLeftSidebarCollapsed);
   const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
   const cycleSelection = useEditorStore((s) => s.cycleSelection);
   const setSpacePanActive = useEditorStore((s) => s.setSpacePanActive);
@@ -85,8 +90,7 @@ export default function Editor({ rasterUrl, dims }: EditorProps) {
   // Reset transient UI when map switches
   useEffect(() => {
     setShowQuickSearch(false);
-    setShowFloatingGroupBuilder(false);
-    setShowFloatingDrawTools(false);
+    setFloatingTool(null);
   }, [activeMapId]);
 
   useEffect(() => {
@@ -150,8 +154,7 @@ export default function Editor({ rasterUrl, dims }: EditorProps) {
 
       if (event.key === 'Escape') {
         setShowQuickSearch(false);
-        setShowFloatingGroupBuilder(false);
-        setShowFloatingDrawTools(false);
+        setFloatingTool(null);
         if (editorMode === 'rectangle' || editorMode === 'polygon') {
           event.preventDefault();
           if (editorMode === 'polygon') clearDraftPolygon();
@@ -192,30 +195,30 @@ export default function Editor({ rasterUrl, dims }: EditorProps) {
           handled = cycleSelection(1);
           break;
         case '5':
-          setShowFloatingGroupBuilder(false);
-          setShowFloatingDrawTools(false);
+          setLeftSidebarCollapsed(true);
+          setFloatingTool(null);
           setShowQuickSearch(true);
           window.dispatchEvent(new Event('map-search-focus'));
           break;
         case '6':
+          setLeftSidebarCollapsed(true);
           setShowQuickSearch(false);
-          setShowFloatingGroupBuilder(false);
-          setShowFloatingDrawTools(false);
+          setFloatingTool('studybox');
           setSelectedPrimitiveId(null);
           setEditorMode('rectangle');
           window.dispatchEvent(new Event('map-search-clear'));
           container.focus({ preventScroll: true });
           break;
         case '7':
+          setLeftSidebarCollapsed(true);
           setShowQuickSearch(false);
-          setShowFloatingDrawTools(false);
-          setShowFloatingGroupBuilder(true);
+          setFloatingTool('group');
           setGroupBuilderFocusSignal((value) => value + 1);
           break;
         case '8':
+          setLeftSidebarCollapsed(true);
           setShowQuickSearch(false);
-          setShowFloatingGroupBuilder(false);
-          setShowFloatingDrawTools(true);
+          setFloatingTool('polyline');
           setSelectedPrimitiveId(null);
           setEditorMode('polygon');
           window.dispatchEvent(new Event('map-search-clear'));
@@ -297,6 +300,7 @@ export default function Editor({ rasterUrl, dims }: EditorProps) {
     viewer,
     setSelectedPrimitiveId,
     toggleLeftSidebar,
+    setLeftSidebarCollapsed,
     toggleRightPane,
     cycleSelection,
     toggleZoomLock,
@@ -393,28 +397,39 @@ export default function Editor({ rasterUrl, dims }: EditorProps) {
         </div>
       )}
 
-      {showFloatingGroupBuilder && (
-        <div className="absolute left-14 top-20 z-20 w-80 max-w-[calc(100vw-5rem)]">
+      {floatingTool === 'group' && (
+        <div className="absolute left-14 top-4 z-20 w-80 max-w-[calc(100vw-5rem)]">
           <DrawTools
             mode="group"
             groupBuilderFocusSignal={groupBuilderFocusSignal}
-            onRequestClose={() => setShowFloatingGroupBuilder(false)}
+            onRequestClose={() => setFloatingTool(null)}
           />
         </div>
       )}
 
-      {showFloatingDrawTools && (
-        <div className="absolute left-14 top-20 z-20 w-80 max-w-[calc(100vw-5rem)]">
+      {floatingTool === 'studybox' && (
+        <div className="absolute left-14 top-4 z-20 w-fit max-w-[calc(100vw-5rem)]">
           <DrawTools
-            mode="draw"
-            onRequestClose={() => setShowFloatingDrawTools(false)}
+            mode="studybox"
+            onRequestClose={() => setFloatingTool(null)}
+          />
+        </div>
+      )}
+
+      {floatingTool === 'polyline' && (
+        <div className="absolute left-14 top-4 z-20 w-fit max-w-[calc(100vw-5rem)]">
+          <DrawTools
+            mode="polyline"
+            onRequestClose={() => setFloatingTool(null)}
           />
         </div>
       )}
 
       <div className="absolute bottom-4 left-4 z-10 rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
-        1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · -/+ zoom · space pan
+        1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · ? help
       </div>
+
+      <PagePicker pageIndex={pageIndex} pageCount={pageCount} />
     </div>
   );
 }

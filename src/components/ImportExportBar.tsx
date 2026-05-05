@@ -1,13 +1,15 @@
-import { Download, FilePlus2, Upload, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { Download, FilePlus2, Menu, Upload, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useMapStore } from '../lib/mapStore';
 import { useEditorStore } from '../lib/store';
 import { downloadBlob, exportDnote, importDnote } from '../lib/bundle';
 import * as idb from '../lib/idb';
 
 export default function ImportExportBar() {
+  const rootRef = useRef<HTMLDivElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const dnoteInputRef = useRef<HTMLInputElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const activeMapId = useMapStore((s) => s.activeMapId);
@@ -18,11 +20,30 @@ export default function ImportExportBar() {
 
   const activeMap = maps.find((m) => m.id === activeMapId);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [menuOpen]);
+
   const handlePdfPick = async (file: File) => {
     setBusy('Rendering PDF…');
     setError(null);
     try {
       await createMapFromPdf(file, { scale: 2 });
+      setMenuOpen(false);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to load PDF');
     }
@@ -35,6 +56,7 @@ export default function ImportExportBar() {
     try {
       const result = await importDnote(file);
       await importDnoteMap(result);
+      setMenuOpen(false);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to import .dnote');
     }
@@ -54,6 +76,7 @@ export default function ImportExportBar() {
         pdfBlob
       );
       downloadBlob(result.blob, result.filename);
+      setMenuOpen(false);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to export .dnote');
     }
@@ -67,23 +90,11 @@ export default function ImportExportBar() {
     });
     const filename = `${activeMap.name.replace(/[^a-z0-9-_ ]+/gi, '_')}.workspace.json`;
     downloadBlob(blob, filename);
+    setMenuOpen(false);
   };
 
   return (
-    <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
-      {error && (
-        <div className="flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
-          {error}
-          <button onClick={() => setError(null)}>
-            <X size={12} />
-          </button>
-        </div>
-      )}
-      {busy && (
-        <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
-          {busy}
-        </div>
-      )}
+    <div ref={rootRef} className="relative flex items-center gap-2">
       <input
         ref={pdfInputRef}
         type="file"
@@ -109,31 +120,69 @@ export default function ImportExportBar() {
         }}
       />
       <button
-        onClick={() => pdfInputRef.current?.click()}
-        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+        onClick={() => setMenuOpen((value) => !value)}
+        className={`rounded-md p-1.5 transition-colors ${
+          menuOpen ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-100'
+        }`}
+        title="Open file menu"
+        aria-label="Open file menu"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
       >
-        <FilePlus2 size={13} /> Load PDF
+        <Menu size={18} />
       </button>
-      <button
-        onClick={() => dnoteInputRef.current?.click()}
-        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
-      >
-        <Upload size={13} /> Load .dnote
-      </button>
-      <button
-        onClick={handleExportDnote}
-        disabled={!activeMap}
-        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <Download size={13} /> Export .dnote
-      </button>
-      <button
-        onClick={handleExportJson}
-        disabled={!activeMap}
-        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <Download size={13} /> Export JSON
-      </button>
+      {menuOpen && (
+        <div className="absolute right-0 top-full z-40 mt-2 translate-x-12 w-56 rounded-2xl border border-gray-200 bg-white p-2 shadow-xl">
+          <button
+            onClick={() => pdfInputRef.current?.click()}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            role="menuitem"
+          >
+            <FilePlus2 size={14} />
+            Load PDF
+          </button>
+          <button
+            onClick={() => dnoteInputRef.current?.click()}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            role="menuitem"
+          >
+            <Upload size={14} />
+            Load .dnote
+          </button>
+          <button
+            onClick={handleExportDnote}
+            disabled={!activeMap}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            role="menuitem"
+          >
+            <Download size={14} />
+            Export .dnote
+          </button>
+          <button
+            onClick={handleExportJson}
+            disabled={!activeMap}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            role="menuitem"
+          >
+            <Download size={14} />
+            Export JSON
+          </button>
+          {(busy || error) && <div className="my-2 border-t border-gray-100" />}
+          {busy && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+              {busy}
+            </div>
+          )}
+          {error && (
+            <div className="mt-2 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+              <span className="flex-1">{error}</span>
+              <button onClick={() => setError(null)} aria-label="Dismiss file menu error">
+                <X size={12} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

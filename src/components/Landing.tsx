@@ -9,6 +9,7 @@ export default function Landing() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [renderScale, setRenderScale] = useState(2);
   const createMapFromPdf = useMapStore((s) => s.createMapFromPdf);
   const importDnoteMap = useMapStore((s) => s.importDnoteMap);
 
@@ -33,7 +34,7 @@ export default function Landing() {
     if (isPdf) {
       setBusy('Rendering PDF…');
       try {
-        await createMapFromPdf(file, { scale: 2 });
+        await createMapFromPdf(file, { scale: renderScale });
       } catch (err) {
         setError((err as Error).message ?? 'Failed to load PDF');
       }
@@ -110,6 +111,28 @@ export default function Landing() {
           </button>
         </div>
 
+        <div className="mt-5 flex items-center justify-center gap-3 text-xs text-slate-600">
+          <span className="font-semibold uppercase tracking-wider text-slate-500">
+            Render quality
+          </span>
+          {[1, 2, 3].map((value) => (
+            <button
+              key={value}
+              onClick={() => setRenderScale(value)}
+              className={`rounded-full px-3 py-1 font-semibold transition ${
+                renderScale === value
+                  ? 'bg-slate-900 text-white'
+                  : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {value}×
+            </button>
+          ))}
+          <span className="text-[10px] text-slate-400">
+            higher = sharper but slower / heavier
+          </span>
+        </div>
+
         <div className="mt-6 text-center text-xs text-slate-400">
           …or drop a file anywhere on this page.
         </div>
@@ -130,7 +153,7 @@ export default function Landing() {
           <Hint kbd="8" label="Polyline / shape" />
           <Hint kbd="7" label="Group" />
           <Hint kbd="5" label="Search" />
-          <Hint kbd="1 / 2" label="Toggle panes" />
+          <Hint kbd="?" label="Hotkey help" />
           <Hint kbd="Space" label="Pan" />
         </div>
       </div>

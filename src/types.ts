@@ -43,15 +43,28 @@ export interface MapWorkspace {
   primitives: Primitive[];
 }
 
+export interface PageMeta {
+  workspace: MapWorkspace;
+  sourceWidth: number;
+  sourceHeight: number;
+}
+
 export interface DiagramMap {
   id: string;
   name: string;
   pdfHash: string;
+  /** Currently-active page index (0-based). */
   pageIndex: number;
+  /** Total number of pages in the source PDF. */
+  pageCount: number;
+  /** Active page's raster width — denormalised for convenience. */
   sourceWidth: number;
   sourceHeight: number;
   renderScale: number;
+  /** Active page's workspace — denormalised so v1 readers still work. */
   workspace: MapWorkspace;
+  /** Per-page workspace + dims. Includes the active page. Optional for v1 compat. */
+  pages?: Record<number, PageMeta>;
   createdAt: number;
   updatedAt: number;
 }
@@ -59,5 +72,6 @@ export interface DiagramMap {
 export interface DnoteManifest {
   format: 'dnote';
   version: 1;
-  map: Omit<DiagramMap, 'workspace'>;
+  /** Map metadata sans per-page contents (those live in workspace.json). */
+  map: Omit<DiagramMap, 'workspace' | 'pages'>;
 }

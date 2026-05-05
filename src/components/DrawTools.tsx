@@ -1,11 +1,11 @@
-import { Plus, Tags, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../lib/store';
 import { normalizeTagInput, parseMemberKey } from '../lib/workspace';
 import { COLOR_SWATCHES } from './sharedControls';
 
 interface DrawToolsProps {
-  mode: 'group' | 'draw';
+  mode: 'group' | 'studybox' | 'polyline';
   groupBuilderFocusSignal?: number;
   onRequestClose?: () => void;
 }
@@ -18,6 +18,7 @@ export default function DrawTools({
   const [groupName, setGroupName] = useState('');
   const [groupTagsInput, setGroupTagsInput] = useState('');
   const [showGroupNumbers, setShowGroupNumbers] = useState(false);
+  const [showGroupOnLoad, setShowGroupOnLoad] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const groupNameInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,30 +37,19 @@ export default function DrawTools({
 
   const primitivesById = new Map(workspace.primitives.map((p) => [p.id, p]));
 
-  const toggleMode = (next: 'polygon' | 'rectangle') => {
-    if (editorMode === next) {
-      setEditorMode('none');
-      clearDraftPolygon();
-      return;
-    }
-    if (next === 'rectangle' || next === 'polygon') {
-      setSelectedPrimitiveId(null);
-      window.dispatchEvent(new Event('map-search-clear'));
-    }
-    setEditorMode(next);
-  };
-
   const handleCreateGroup = () => {
     const created = createGroupPrimitive(
       groupName,
       [],
       normalizeTagInput(groupTagsInput),
-      showGroupNumbers
+      showGroupNumbers,
+      showGroupOnLoad
     );
     if (!created) return;
     setGroupName('');
     setGroupTagsInput('');
     setShowGroupNumbers(false);
+    setShowGroupOnLoad(false);
   };
 
   const handleStartGroupCollect = () => {
@@ -71,7 +61,23 @@ export default function DrawTools({
     setGroupName('');
     setGroupTagsInput('');
     setShowGroupNumbers(false);
+    setShowGroupOnLoad(false);
     setEditorMode('none');
+  };
+
+  const handleClose = () => {
+    if (mode === 'group' && editorMode === 'groupCollect') {
+      clearDraftGroup();
+      setEditorMode('none');
+    }
+    if (mode === 'polyline' && editorMode === 'polygon') {
+      clearDraftPolygon();
+      setEditorMode('none');
+    }
+    if (mode === 'studybox' && editorMode === 'rectangle') {
+      setEditorMode('none');
+    }
+    onRequestClose?.();
   };
 
   useEffect(() => {
@@ -86,17 +92,21 @@ export default function DrawTools({
   }, [groupBuilderFocusSignal, setEditorMode, setSelectedPrimitiveId]);
 
   const showGroupSection = mode === 'group';
-  const showDrawSection = mode === 'draw';
+  const showStudyBoxSection = mode === 'studybox';
+  const showPolylineSection = mode === 'polyline';
+  const headerLabel = showGroupSection
+    ? 'Group builder'
+    : showStudyBoxSection
+      ? 'New Study box'
+      : 'New polyline/shape';
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-xl">
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-gray-500">
-          {mode === 'group' ? 'Group builder' : 'Draw tools'}
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-semibold text-gray-900">{headerLabel}</div>
         {onRequestClose && (
           <button
-            onClick={onRequestClose}
+            onClick={handleClose}
             className="rounded-full border border-gray-200 p-1.5 text-gray-500 transition hover:bg-gray-50"
             aria-label="Close"
           >
@@ -106,11 +116,7 @@ export default function DrawTools({
       </div>
 
       {showGroupSection && (
-        <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-3">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
-            <Tags className="h-3.5 w-3.5" />
-            Group builder
-          </div>
+        <div className="mt-2">
           <input
             ref={groupNameInputRef}
             value={groupName}
@@ -186,7 +192,7 @@ export default function DrawTools({
             <div className="mt-3 text-xs text-gray-400">
               {editorMode === 'groupCollect'
                 ? 'Click primitives on the map to add them.'
-                : 'Click "Collecting on map", then pick primitives.'}
+                : 'Pick primitives on the map.'}
             </div>
           )}
           <input
@@ -203,6 +209,15 @@ export default function DrawTools({
               className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
             />
             Show member numbers on map
+          </label>
+          <label className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              checked={showGroupOnLoad}
+              onChange={(event) => setShowGroupOnLoad(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+            />
+            Show on load
           </label>
           <div className="mt-3 flex gap-2">
             <button
@@ -223,65 +238,23 @@ export default function DrawTools({
         </div>
       )}
 
-      {showDrawSection && (
-        <div className="mt-3 rounded-2xl border border-gray-200 bg-gray-50 p-2">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
-            <Tags className="h-3.5 w-3.5" />
-            Draw on map
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <ModeButton
-              active={editorMode === 'rectangle'}
-              onClick={() => toggleMode('rectangle')}
-              label="New study box"
+      {(showStudyBoxSection || showPolylineSection) && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {COLOR_SWATCHES.map((color) => (
+            <button
+              key={color}
+              onClick={() => setDraftOverlayColor(color)}
+              className={`h-7 w-7 rounded-full border-2 transition ${
+                draftOverlayColor === color
+                  ? 'border-slate-900 scale-105'
+                  : 'border-white'
+              }`}
+              style={{ backgroundColor: color }}
+              aria-label={`Set color ${color}`}
             />
-            <ModeButton
-              active={editorMode === 'polygon'}
-              onClick={() => toggleMode('polygon')}
-              label="New polyline / shape"
-            />
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {COLOR_SWATCHES.map((color) => (
-              <button
-                key={color}
-                onClick={() => setDraftOverlayColor(color)}
-                className={`h-7 w-7 rounded-full border-2 transition ${
-                  draftOverlayColor === color
-                    ? 'border-slate-900 scale-105'
-                    : 'border-white'
-                }`}
-                style={{ backgroundColor: color }}
-                aria-label={`Set color ${color}`}
-              />
-            ))}
-          </div>
+          ))}
         </div>
       )}
     </div>
-  );
-}
-
-function ModeButton({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-        active
-          ? 'bg-slate-900 text-white'
-          : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
-      }`}
-    >
-      <Plus className="h-3.5 w-3.5" />
-      {label}
-    </button>
   );
 }
