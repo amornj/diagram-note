@@ -4,6 +4,7 @@ import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import type { Primitive } from '../types';
 import ImportExportBar from './ImportExportBar';
+import GoogleAuthButton from './GoogleAuthButton';
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
   rectangle: 'Study box',
@@ -241,6 +242,8 @@ export default function LeftPane() {
           })}
         </div>
       </div>
+
+      <GoogleAuthButton />
     </div>
   );
 }
