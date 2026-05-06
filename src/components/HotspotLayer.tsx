@@ -742,6 +742,7 @@ export default function HotspotLayer({
       </g>
 
       {editorMode !== 'none' &&
+        editorMode !== 'textSelect' &&
         editorMode !== 'groupCollect' &&
         editorMode !== 'overlayNeighborPick' && (
           <g>

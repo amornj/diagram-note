@@ -59,10 +59,14 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
     idb.getPdfBlob(activeMapId).then((blob) => setPdfBlob(blob));
   }, [editorMode, activeMapId, activeMap?.sourceType]);
 
-  // Enable/disable OSD mouse navigation based on mode
+  // Enable/disable OSD mouse navigation based on mode; reset inline cursor.
   useEffect(() => {
     if (!viewer) return;
-    viewer.setMouseNavEnabled(editorMode !== 'textSelect');
+    const isText = editorMode === 'textSelect';
+    viewer.setMouseNavEnabled(!isText);
+    // OSD sets cursor inline on its canvas — override it so CSS cursor shows.
+    const canvas = viewer.canvas as HTMLElement | undefined;
+    if (canvas) canvas.style.cursor = isText ? 'text' : '';
   }, [viewer, editorMode]);
 
   // Initialize viewer (rebuild whenever the raster URL changes — i.e. map switch)
