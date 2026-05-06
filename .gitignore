@@ -32,4 +32,4 @@ dist-ssr
 # Sample bundles users may drop in
 *.dnote
 *.pdf
-!public/FullSubwayMap_V1023_Web.pdf
+!public/metabolic-map.pdf

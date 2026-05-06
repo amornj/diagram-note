@@ -7,8 +7,8 @@ import { useEditorStore } from './store';
 import { makeRelatedPrimitiveKey } from './workspace';
 
 const ACTIVE_MAP_STORAGE_KEY = 'diagram-note-active-map';
-const DEFAULT_MAP_ASSET = '/FullSubwayMap_V1023_Web.pdf';
-const DEFAULT_MAP_NAME = 'FullSubwayMap';
+const DEFAULT_MAP_ASSET = '/metabolic-map.pdf';
+const DEFAULT_MAP_NAME = 'metabolic-map';
 
 export interface MapStoreState {
   maps: DiagramMap[];
