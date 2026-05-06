@@ -20,7 +20,8 @@ body {
   line-height: 1;
   text-size-adjust: none;
   forced-color-adjust: none;
-  overflow: clip;
+  user-select: text;
+  -webkit-user-select: text;
 }
 .pdf-text-layer :is(span, br) {
   color: transparent;
@@ -28,8 +29,10 @@ body {
   white-space: pre;
   cursor: text;
   transform-origin: 0% 0%;
+  user-select: text;
+  -webkit-user-select: text;
 }
 .pdf-text-layer ::selection {
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.45);
   color: transparent;
 }

@@ -462,6 +462,8 @@ export default function HotspotLayer({
   // re-render markers when viewport changes
   void viewTick;
 
+  if (editorMode === 'textSelect') return null;
+
   return (
     <svg
       ref={svgRef}

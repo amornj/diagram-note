@@ -357,6 +357,8 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
               ? 'grabbing'
               : 'grab'
             : 'crosshair',
+        userSelect: editorMode === 'textSelect' ? 'text' : 'none',
+        WebkitUserSelect: editorMode === 'textSelect' ? 'text' : 'none',
       }}
     >
       <div ref={containerRef} className="absolute inset-0" />
