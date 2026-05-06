@@ -114,13 +114,15 @@ export function detectSourceType(file: File | Blob): SourceType {
   if (
     mime === 'image/png' ||
     mime === 'image/jpeg' ||
+    mime === 'image/webp' ||
     name.endsWith('.png') ||
     name.endsWith('.jpg') ||
-    name.endsWith('.jpeg')
+    name.endsWith('.jpeg') ||
+    name.endsWith('.webp')
   ) {
     return 'image';
   }
-  throw new Error('Unsupported file. Load a PDF, PNG, JPEG, or .dnote.');
+  throw new Error('Unsupported file. Load a PDF, PNG, JPEG, WEBP, or .dnote.');
 }
 
 export async function rasterizeSource(

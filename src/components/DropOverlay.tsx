@@ -46,9 +46,11 @@ export default function DropOverlay({ onError }: DropOverlayProps) {
       const isImage =
         file.type === 'image/png' ||
         file.type === 'image/jpeg' ||
+        file.type === 'image/webp' ||
         file.name.toLowerCase().endsWith('.png') ||
         file.name.toLowerCase().endsWith('.jpg') ||
-        file.name.toLowerCase().endsWith('.jpeg');
+        file.name.toLowerCase().endsWith('.jpeg') ||
+        file.name.toLowerCase().endsWith('.webp');
       setBusy(true);
       try {
         if (isDnote) {
@@ -57,7 +59,7 @@ export default function DropOverlay({ onError }: DropOverlayProps) {
         } else if (isPdf || isImage) {
           await createMapFromPdf(file, { scale: 2 });
         } else {
-          onError?.('Unsupported file. Drop a PDF, PNG, JPEG, or .dnote.');
+          onError?.('Unsupported file. Drop a PDF, PNG, JPEG, WEBP, or .dnote.');
         }
       } catch (err) {
         onError?.((err as Error).message ?? 'Failed to load file');

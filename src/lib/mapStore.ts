@@ -373,7 +373,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       name:
         options?.name ??
         ('name' in file && typeof file.name === 'string'
-          ? file.name.replace(/\.(pdf|png|jpe?g)$/i, '')
+          ? file.name.replace(/\.(pdf|png|jpe?g|webp)$/i, '')
           : `Map ${get().maps.length + 1}`),
       pdfHash: result.hash,
       sourceType,

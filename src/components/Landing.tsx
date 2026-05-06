@@ -23,9 +23,11 @@ export default function Landing() {
     const isImage =
       file.type === 'image/png' ||
       file.type === 'image/jpeg' ||
+      file.type === 'image/webp' ||
       file.name.toLowerCase().endsWith('.png') ||
       file.name.toLowerCase().endsWith('.jpg') ||
-      file.name.toLowerCase().endsWith('.jpeg');
+      file.name.toLowerCase().endsWith('.jpeg') ||
+      file.name.toLowerCase().endsWith('.webp');
     if (isDnote) {
       setBusy('Importing .dnote…');
       try {
@@ -47,7 +49,7 @@ export default function Landing() {
       setBusy(null);
       return;
     }
-    setError('Unsupported file. Drop a PDF, PNG, JPEG, or .dnote.');
+    setError('Unsupported file. Drop a PDF, PNG, JPEG, WEBP, or .dnote.');
   };
 
   return (
@@ -73,8 +75,8 @@ export default function Landing() {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-slate-900">diagram-note</h1>
           <p className="mt-3 text-sm text-slate-600">
-            Drop a PDF or image diagram and start drawing study boxes, regions, and
-            notes on top.
+            Drop a PDF, PNG, JPEG, or WEBP diagram and start drawing study boxes,
+            regions, and notes on top.
           </p>
         </div>
 
@@ -82,7 +84,7 @@ export default function Landing() {
           <input
             ref={pdfInputRef}
             type="file"
-            accept="application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg"
+            accept="application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg,image/webp,.webp"
             className="hidden"
             onChange={async (event) => {
               const file = event.target.files?.[0];

@@ -98,7 +98,7 @@ export default function ImportExportBar() {
       <input
         ref={pdfInputRef}
         type="file"
-        accept="application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg"
+        accept="application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg,image/webp,.webp"
         className="hidden"
         onChange={async (event) => {
           const file = event.target.files?.[0];
