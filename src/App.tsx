@@ -66,9 +66,9 @@ function useCloudSync(): SyncStatus {
         if (toMerge.length > 0) {
           for (const m of toMerge) await idb.putMap(m);
           const mergeById = new Map(toMerge.map((m) => [m.id, m]));
-          useMapStore.setState((s) => {
-            const updated = s.maps.map((m) => mergeById.get(m.id) ?? m);
-            const added = toMerge.filter((m) => !localById.has(m.id));
+          const updated = useMapStore.getState().maps.map((m) => mergeById.get(m.id) ?? m);
+          const added = toMerge.filter((m) => !localById.has(m.id));
+          useMapStore.setState(() => {
             const merged = [...updated, ...added].sort((a, b) => {
               const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
               const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
@@ -78,9 +78,8 @@ function useCloudSync(): SyncStatus {
             return { maps: dedupByHash(merged) };
           });
           // Delete any maps that dedup removed from IDB
-          const afterDedup = useMapStore.getState().maps;
-          const afterIds = new Set(afterDedup.map((m) => m.id));
-          const removedByDedup = [...updated, ...toMerge.filter((m) => !localById.has(m.id))]
+          const afterIds = new Set(useMapStore.getState().maps.map((m) => m.id));
+          const removedByDedup = [...updated, ...added]
             .filter((m) => !afterIds.has(m.id));
           await Promise.all(removedByDedup.map((m) => idb.deleteMap(m.id)));
           // If the active map was updated, refresh its editor workspace
