@@ -64,12 +64,15 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
     if (!viewer) return;
     const isText = editorMode === 'textSelect';
     viewer.setMouseNavEnabled(!isText);
-    // OSD keeps its canvas above the map image; disable its hit-testing in text mode
-    // so the PDF text layer can receive drag/select events.
+    // In text mode the PDF.js text layer must receive pointer events directly.
+    // Disable hit-testing on the entire OSD surface, not just the canvas.
+    const viewerElement = containerRef.current;
+    if (viewerElement) {
+      viewerElement.style.pointerEvents = isText ? 'none' : '';
+    }
     const canvas = viewer.canvas as HTMLElement | undefined;
     if (canvas) {
       canvas.style.cursor = isText ? 'text' : '';
-      canvas.style.pointerEvents = isText ? 'none' : '';
     }
   }, [viewer, editorMode]);
 
