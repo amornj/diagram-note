@@ -603,7 +603,69 @@ export default function HotspotLayer({
             );
           }
 
-          // rectangle / group
+          // group
+          if (primitive.kind === 'group') {
+            return (
+              <g key={primitive.id}>
+                <rect
+                  x={boundsRect.x}
+                  y={boundsRect.y}
+                  width={boundsRect.width}
+                  height={boundsRect.height}
+                  rx={12}
+                  fill="transparent"
+                  stroke="transparent"
+                  strokeWidth={18}
+                  style={interactiveStyle}
+                  onPointerDown={(event) =>
+                    beginInteractiveDrag(event, () => activatePrimitive(primitive))
+                  }
+                  onPointerMove={continueInteractiveDrag}
+                  onPointerUp={endInteractiveDrag}
+                  onPointerCancel={cancelInteractiveDrag}
+                  onMouseEnter={() => setHoveredPrimitiveId(primitive.id)}
+                  onMouseLeave={() => setHoveredPrimitiveId(null)}
+                />
+                {showGroupNumbers && groupEntry && (
+                  <g pointerEvents="none">
+                    <rect
+                      x={boundsRect.x - 4}
+                      y={boundsRect.y - 18}
+                      width={18}
+                      height={18}
+                      rx={9}
+                      fill="#ffffff"
+                      stroke={primitive.color}
+                      strokeWidth={2}
+                    />
+                    <text
+                      x={boundsRect.x + 5}
+                      y={boundsRect.y - 5}
+                      fill={primitive.color}
+                      fontSize={11}
+                      fontWeight={700}
+                      textAnchor="middle"
+                    >
+                      {groupEntry.order}
+                    </text>
+                  </g>
+                )}
+                {isVisible && primitive.showLabel === true && (
+                  <text
+                    x={boundsRect.x + 8}
+                    y={boundsRect.y - 8}
+                    fill={primitive.color}
+                    fontSize={12}
+                    fontWeight={700}
+                  >
+                    {primitive.name}
+                  </text>
+                )}
+              </g>
+            );
+          }
+
+          // rectangle
           return (
             <g key={primitive.id}>
               <rect
@@ -627,7 +689,6 @@ export default function HotspotLayer({
                     : 'transparent'
                 }
                 strokeWidth={isSelected ? 3.5 : 2}
-                strokeDasharray={primitive.kind === 'group' ? '10 5' : undefined}
                 style={interactiveStyle}
                 onPointerDown={(event) =>
                   beginInteractiveDrag(event, () => activatePrimitive(primitive))
@@ -648,30 +709,6 @@ export default function HotspotLayer({
                   strokeWidth={2}
                   pointerEvents="none"
                 />
-              )}
-              {showGroupNumbers && groupEntry && (
-                <g pointerEvents="none">
-                  <rect
-                    x={boundsRect.x - 4}
-                    y={boundsRect.y - 18}
-                    width={18}
-                    height={18}
-                    rx={9}
-                    fill="#ffffff"
-                    stroke={primitive.color}
-                    strokeWidth={2}
-                  />
-                  <text
-                    x={boundsRect.x + 5}
-                    y={boundsRect.y - 5}
-                    fill={primitive.color}
-                    fontSize={11}
-                    fontWeight={700}
-                    textAnchor="middle"
-                  >
-                    {groupEntry.order}
-                  </text>
-                </g>
               )}
               {/* Always-visible label for rectangles when name set + showLabel */}
               {isVisible &&
@@ -702,19 +739,6 @@ export default function HotspotLayer({
                       {primitive.name}
                     </text>
                   </g>
-                )}
-              {isVisible &&
-                primitive.kind === 'group' &&
-                primitive.showLabel === true && (
-                  <text
-                    x={boundsRect.x + 8}
-                    y={boundsRect.y - 8}
-                    fill={primitive.color}
-                    fontSize={12}
-                    fontWeight={700}
-                  >
-                    {primitive.name}
-                  </text>
                 )}
             </g>
           );
