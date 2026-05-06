@@ -132,6 +132,8 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
   initialized: false,
 
   loadMaps: async () => {
+    // Guard against concurrent calls (React StrictMode fires effects twice)
+    if (get().loading || get().initialized) return;
     set({ loading: true });
     try {
       let maps = await idb.listMaps();
@@ -140,12 +142,15 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       // This runs on first launch and also migrates existing users who had
       // the subway map loaded without the isDefault flag.
       if (!maps.some((m) => m.isDefault)) {
+        // Pre-populate in-memory maps so createMapFromPdf's hash dedup check
+        // can find maps that are already in IDB but not yet in state.
+        set({ maps });
         const response = await fetch(DEFAULT_MAP_ASSET);
         if (!response.ok) {
           throw new Error(`Failed to load bundled default map: ${response.status}`);
         }
         const blob = await response.blob();
-        const file = new File([blob], 'FullSubwayMap_V1023_Web.pdf', {
+        const file = new File([blob], DEFAULT_MAP_ASSET.split('/').pop()!, {
           type: 'application/pdf',
         });
         const defaultId = await get().createMapFromPdf(file, { scale: 2, name: DEFAULT_MAP_NAME });
@@ -155,6 +160,31 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
           await idb.putMap({ ...target, isDefault: true, sortOrder: -1 });
         }
         maps = await idb.listMaps();
+      }
+
+      // Deduplicate: if multiple maps share the same pdfHash, keep the one
+      // with isDefault:true, or else the most-recently updated one, and
+      // delete the rest. This cleans up state left by the prior bug.
+      const byHash = new Map<string, DiagramMap[]>();
+      for (const m of maps) {
+        if (!m.pdfHash) continue;
+        const group = byHash.get(m.pdfHash) ?? [];
+        group.push(m);
+        byHash.set(m.pdfHash, group);
+      }
+      const dupeIdsToDelete: string[] = [];
+      for (const group of byHash.values()) {
+        if (group.length <= 1) continue;
+        const keep =
+          group.find((m) => m.isDefault) ??
+          group.reduce((best, m) => (m.updatedAt > best.updatedAt ? m : best));
+        for (const m of group) {
+          if (m.id !== keep.id) dupeIdsToDelete.push(m.id);
+        }
+      }
+      if (dupeIdsToDelete.length > 0) {
+        await Promise.all(dupeIdsToDelete.map((id) => idb.deleteMap(id)));
+        maps = maps.filter((m) => !dupeIdsToDelete.includes(m.id));
       }
 
       // Default map always sorts first; others by sortOrder then updatedAt.
