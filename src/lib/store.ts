@@ -17,6 +17,7 @@ import {
 
 export type EditorMode =
   | 'none'
+  | 'textSelect'
   | 'polygon'
   | 'rectangle'
   | 'customline'

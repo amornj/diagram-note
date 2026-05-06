@@ -14,3 +14,22 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* PDF.js text layer — makes text invisible but selectable */
+.pdf-text-layer {
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  overflow: clip;
+}
+.pdf-text-layer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+.pdf-text-layer ::selection {
+  background: rgba(59, 130, 246, 0.35);
+  color: transparent;
+}

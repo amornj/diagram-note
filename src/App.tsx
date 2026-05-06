@@ -13,6 +13,22 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
 import { loadCloudMaps, saveCloudMaps } from './lib/cloudSync';
 import * as idb from './lib/idb';
+import type { DiagramMap } from './types';
+
+/** Keep only one map per pdfHash — prefer isDefault, then most-recently updated. */
+function dedupByHash(maps: DiagramMap[]): DiagramMap[] {
+  const seen = new Map<string, DiagramMap>();
+  const dupeIds = new Set<string>();
+  for (const m of maps) {
+    if (!m.pdfHash) continue;
+    const prev = seen.get(m.pdfHash);
+    if (!prev) { seen.set(m.pdfHash, m); continue; }
+    const keep = prev.isDefault ? prev : m.isDefault ? m : (m.updatedAt >= prev.updatedAt ? m : prev);
+    dupeIds.add(keep === prev ? m.id : prev.id);
+    seen.set(m.pdfHash, keep);
+  }
+  return dupeIds.size ? maps.filter((m) => !dupeIds.has(m.id)) : maps;
+}
 
 function useCloudSync(): SyncStatus {
   const maps = useMapStore((s) => s.maps);
@@ -53,15 +69,20 @@ function useCloudSync(): SyncStatus {
           useMapStore.setState((s) => {
             const updated = s.maps.map((m) => mergeById.get(m.id) ?? m);
             const added = toMerge.filter((m) => !localById.has(m.id));
-            return {
-              maps: [...updated, ...added].sort((a, b) => {
-                const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
-                const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
-                if (orderA !== orderB) return orderA - orderB;
-                return b.updatedAt - a.updatedAt;
-              }),
-            };
+            const merged = [...updated, ...added].sort((a, b) => {
+              const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+              const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+              if (orderA !== orderB) return orderA - orderB;
+              return b.updatedAt - a.updatedAt;
+            });
+            return { maps: dedupByHash(merged) };
           });
+          // Delete any maps that dedup removed from IDB
+          const afterDedup = useMapStore.getState().maps;
+          const afterIds = new Set(afterDedup.map((m) => m.id));
+          const removedByDedup = [...updated, ...toMerge.filter((m) => !localById.has(m.id))]
+            .filter((m) => !afterIds.has(m.id));
+          await Promise.all(removedByDedup.map((m) => idb.deleteMap(m.id)));
           // If the active map was updated, refresh its editor workspace
           const activeId = useMapStore.getState().activeMapId;
           if (activeId && mergeById.has(activeId)) {
@@ -72,7 +93,7 @@ function useCloudSync(): SyncStatus {
         // First login — push local maps to cloud
         const localMaps = useMapStore.getState().maps;
         if (localMaps.length > 0) {
-          saveCloudMaps(user.uid, localMaps);
+          saveCloudMaps(user.uid, dedupByHash(localMaps));
         }
       }
       syncReadyRef.current = true;
@@ -86,7 +107,7 @@ function useCloudSync(): SyncStatus {
     const uid = user.uid;
     setStatus('saving');
     const timer = setTimeout(async () => {
-      const ok = await saveCloudMaps(uid, useMapStore.getState().maps);
+      const ok = await saveCloudMaps(uid, dedupByHash(useMapStore.getState().maps));
       setStatus(ok ? 'synced' : 'error');
     }, 3000);
     return () => clearTimeout(timer);

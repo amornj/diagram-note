@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import OpenSeadragon from 'openseadragon';
-import { Home, Lock, Minus, Plus, Unlock } from 'lucide-react';
+import { Home, Lock, Minus, MousePointer2, Plus, Unlock } from 'lucide-react';
 import HotspotLayer from './HotspotLayer';
 import SearchBox from './SearchBox';
 import DrawTools from './DrawTools';
 import PagePicker from './PagePicker';
+import TextLayer from './TextLayer';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import { fitBBox, type SourceDims } from '../lib/coords';
+import * as idb from '../lib/idb';
 
 interface EditorProps {
   rasterUrl: string;
@@ -46,6 +48,22 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
   const clearDraftPolygon = useEditorStore((s) => s.clearDraftPolygon);
   const setEditorMode = useEditorStore((s) => s.setEditorMode);
   const activeMapId = useMapStore((s) => s.activeMapId);
+  const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
+
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+
+  // Load PDF blob when entering text-select mode (PDF sources only)
+  useEffect(() => {
+    if (editorMode !== 'textSelect') { setPdfBlob(null); return; }
+    if (!activeMapId || activeMap?.sourceType !== 'pdf') return;
+    idb.getPdfBlob(activeMapId).then((blob) => setPdfBlob(blob));
+  }, [editorMode, activeMapId, activeMap?.sourceType]);
+
+  // Enable/disable OSD mouse navigation based on mode
+  useEffect(() => {
+    if (!viewer) return;
+    viewer.setMouseNavEnabled(editorMode !== 'textSelect');
+  }, [viewer, editorMode]);
 
   // Initialize viewer (rebuild whenever the raster URL changes — i.e. map switch)
   useEffect(() => {
@@ -155,6 +173,11 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
       if (event.key === 'Escape') {
         setShowQuickSearch(false);
         setFloatingTool(null);
+        if (editorMode === 'textSelect') {
+          event.preventDefault();
+          setEditorMode('none');
+          return;
+        }
         if (editorMode === 'rectangle' || editorMode === 'polygon') {
           event.preventDefault();
           if (editorMode === 'polygon') clearDraftPolygon();
@@ -174,6 +197,10 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
       const panSpeed = 0.08;
       let handled = true;
       switch (event.key) {
+        case 't':
+        case 'T':
+          setEditorMode(editorMode === 'textSelect' ? 'none' : 'textSelect');
+          break;
         case '+':
         case '=':
           viewer.viewport.zoomBy(1.3);
@@ -317,9 +344,11 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
       onWheel={handleWheelZoom}
       style={{
         cursor:
-          editorMode === 'none' ||
-          editorMode === 'groupCollect' ||
-          editorMode === 'overlayNeighborPick'
+          editorMode === 'textSelect'
+            ? 'text'
+            : editorMode === 'none' ||
+              editorMode === 'groupCollect' ||
+              editorMode === 'overlayNeighborPick'
             ? mapDragActive || spaceDragActive
               ? 'grabbing'
               : 'grab'
@@ -345,6 +374,14 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
           dims={dims}
           mapDragActive={mapDragActive || spaceDragActive}
           onMapDragActiveChange={setMapDragActive}
+        />
+      )}
+
+      {viewerReady && viewer && editorMode === 'textSelect' && pdfBlob && (
+        <TextLayer
+          pdfBlob={pdfBlob}
+          pageIndex={pageIndex}
+          viewer={viewer}
         />
       )}
 
@@ -385,6 +422,19 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
         >
           <Home size={16} />
         </button>
+        {activeMap?.sourceType === 'pdf' && (
+          <button
+            onClick={() => setEditorMode(editorMode === 'textSelect' ? 'none' : 'textSelect')}
+            className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+              editorMode === 'textSelect'
+                ? 'bg-sky-500 text-white hover:bg-sky-600'
+                : 'bg-white/90 text-gray-700 hover:bg-white'
+            }`}
+            title={editorMode === 'textSelect' ? 'Exit text mode (T or Esc)' : 'Select text (T)'}
+          >
+            <MousePointer2 size={15} />
+          </button>
+        )}
       </div>
 
       {showQuickSearch && (
@@ -426,7 +476,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
       )}
 
       <div className="absolute bottom-4 left-4 z-10 rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
-        1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · ? help
+        1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · ? help
       </div>
 
       <PagePicker pageIndex={pageIndex} pageCount={pageCount} />
