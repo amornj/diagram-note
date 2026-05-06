@@ -69,6 +69,8 @@ export interface DiagramMap {
   workspace: MapWorkspace;
   /** Per-page workspace + dims. Includes the active page. Optional for v1 compat. */
   pages?: Record<number, PageMeta>;
+  /** Marks the built-in default map — renameable but not deletable. */
+  isDefault?: boolean;
   createdAt: number;
   updatedAt: number;
 }

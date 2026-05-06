@@ -135,7 +135,11 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     set({ loading: true });
     try {
       let maps = await idb.listMaps();
-      if (maps.length === 0) {
+
+      // Ensure the built-in default map always exists.
+      // This runs on first launch and also migrates existing users who had
+      // the subway map loaded without the isDefault flag.
+      if (!maps.some((m) => m.isDefault)) {
         const response = await fetch(DEFAULT_MAP_ASSET);
         if (!response.ok) {
           throw new Error(`Failed to load bundled default map: ${response.status}`);
@@ -144,9 +148,24 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         const file = new File([blob], 'FullSubwayMap_V1023_Web.pdf', {
           type: 'application/pdf',
         });
-        await get().createMapFromPdf(file, { scale: 2, name: DEFAULT_MAP_NAME });
+        const defaultId = await get().createMapFromPdf(file, { scale: 2, name: DEFAULT_MAP_NAME });
+        // Mark whichever map was created or found (by pdfHash) as the default.
+        const target = await idb.getMap(defaultId);
+        if (target) {
+          await idb.putMap({ ...target, isDefault: true, sortOrder: -1 });
+        }
         maps = await idb.listMaps();
       }
+
+      // Default map always sorts first; others by sortOrder then updatedAt.
+      maps.sort((a, b) => {
+        if (a.isDefault && !b.isDefault) return -1;
+        if (!a.isDefault && b.isDefault) return 1;
+        const oa = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        const ob = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        return oa !== ob ? oa - ob : b.updatedAt - a.updatedAt;
+      });
+
       const persistedId = loadActiveId();
       const activeMapId =
         persistedId && maps.some((m) => m.id === persistedId) ? persistedId : maps[0]?.id ?? null;
@@ -467,6 +486,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
   },
 
   deleteMap: async (id) => {
+    if (get().maps.find((m) => m.id === id)?.isDefault) return;
     await idb.deleteMap(id);
     const next = get().maps.filter((m) => m.id !== id);
     set({ maps: next });

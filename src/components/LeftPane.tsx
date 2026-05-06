@@ -104,11 +104,11 @@ export default function LeftPane() {
             return (
               <div
                 key={map.id}
-                draggable
-                onDragStart={() => setDraggedMapIndex(index)}
+                draggable={!map.isDefault}
+                onDragStart={() => !map.isDefault && setDraggedMapIndex(index)}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => {
-                  if (draggedMapIndex === null) return;
+                  if (draggedMapIndex === null || map.isDefault) return;
                   reorderMaps(draggedMapIndex, index);
                   setDraggedMapIndex(null);
                 }}
@@ -152,33 +152,35 @@ export default function LeftPane() {
                     {map.name}
                   </button>
                 )}
-                {confirmDeleteId === map.id ? (
-                  <div className="flex items-center gap-1">
+                {!map.isDefault && (
+                  confirmDeleteId === map.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          deleteMap(map.id);
+                          setConfirmDeleteId(null);
+                        }}
+                        className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      onClick={() => {
-                        deleteMap(map.id);
-                        setConfirmDeleteId(null);
-                      }}
-                      className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white"
+                      onClick={() => setConfirmDeleteId(map.id)}
+                      className="rounded-full p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                      aria-label={`Delete ${map.name}`}
+                      title="Delete map"
                     >
-                      Delete
+                      <Trash2 size={12} />
                     </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setConfirmDeleteId(map.id)}
-                    className="rounded-full p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
-                    aria-label={`Delete ${map.name}`}
-                    title="Delete map"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  )
                 )}
               </div>
             );
