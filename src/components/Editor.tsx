@@ -64,9 +64,13 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
     if (!viewer) return;
     const isText = editorMode === 'textSelect';
     viewer.setMouseNavEnabled(!isText);
-    // OSD sets cursor inline on its canvas — override it so CSS cursor shows.
+    // OSD keeps its canvas above the map image; disable its hit-testing in text mode
+    // so the PDF text layer can receive drag/select events.
     const canvas = viewer.canvas as HTMLElement | undefined;
-    if (canvas) canvas.style.cursor = isText ? 'text' : '';
+    if (canvas) {
+      canvas.style.cursor = isText ? 'text' : '';
+      canvas.style.pointerEvents = isText ? 'none' : '';
+    }
   }, [viewer, editorMode]);
 
   // Initialize viewer (rebuild whenever the raster URL changes — i.e. map switch)
