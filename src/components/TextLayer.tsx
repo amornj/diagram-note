@@ -16,6 +16,87 @@ export default function TextLayer({ pdfBlob, pageIndex, viewer }: Props) {
   // State (not ref) so the transform effect re-runs when PDF finishes loading.
   const [pageSize, setPageSize] = useState({ w: 0, h: 0 });
 
+  // Mirror the minimal selection wiring PDF.js adds in its TextLayerBuilder.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const endOfContent = container.querySelector('.endOfContent') as HTMLDivElement | null;
+    if (!endOfContent) return;
+
+    let pointerDown = false;
+
+    const resetSelectionUi = () => {
+      container.append(endOfContent);
+      endOfContent.style.width = '';
+      endOfContent.style.height = '';
+      container.classList.remove('selecting');
+    };
+
+    const handleMouseDown = () => {
+      container.classList.add('selecting');
+    };
+
+    const handlePointerDown = () => {
+      pointerDown = true;
+    };
+
+    const handlePointerUp = () => {
+      pointerDown = false;
+      resetSelectionUi();
+    };
+
+    const handleBlur = () => {
+      pointerDown = false;
+      resetSelectionUi();
+    };
+
+    const handleKeyUp = () => {
+      if (!pointerDown) resetSelectionUi();
+    };
+
+    const handleSelectionChange = () => {
+      const selection = document.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        resetSelectionUi();
+        return;
+      }
+
+      let intersects = false;
+      for (let i = 0; i < selection.rangeCount; i += 1) {
+        if (selection.getRangeAt(i).intersectsNode(container)) {
+          intersects = true;
+          break;
+        }
+      }
+
+      if (!intersects) {
+        resetSelectionUi();
+        return;
+      }
+
+      container.classList.add('selecting');
+      endOfContent.style.width = container.style.width;
+      endOfContent.style.height = container.style.height;
+    };
+
+    container.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('pointerup', handlePointerUp);
+    document.addEventListener('selectionchange', handleSelectionChange);
+    document.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      container.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('pointerup', handlePointerUp);
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      document.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [pageSize.w]);
+
   // Load PDF and render the PDF.js text layer into the container.
   useEffect(() => {
     let cancelled = false;
@@ -38,12 +119,18 @@ export default function TextLayer({ pdfBlob, pageIndex, viewer }: Props) {
       container.style.height = `${viewport.height}px`;
 
       const textLayer = new pdfjsLib.TextLayer({
-        textContentSource: page.streamTextContent(),
+        textContentSource: page.streamTextContent({
+          includeMarkedContent: true,
+          disableNormalization: true,
+        }),
         container,
         viewport,
       });
 
       await textLayer.render();
+      const endOfContent = document.createElement('div');
+      endOfContent.className = 'endOfContent';
+      container.append(endOfContent);
       pdf.destroy();
 
       if (cancelled) {
@@ -85,8 +172,9 @@ export default function TextLayer({ pdfBlob, pageIndex, viewer }: Props) {
   return (
     <div
       ref={containerRef}
-      className="pdf-text-layer absolute top-0 left-0 pointer-events-auto"
+      className="pdf-text-layer textLayer absolute top-0 left-0 pointer-events-auto"
       style={{ transformOrigin: '0 0', zIndex: 25, cursor: 'text' }}
+      tabIndex={0}
     />
   );
 }
