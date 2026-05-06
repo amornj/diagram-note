@@ -15,10 +15,12 @@ body {
   min-height: 100vh;
 }
 
-/* PDF.js text layer — makes text invisible but selectable */
+/* PDF.js text layer — makes text invisible but selectable.
+   Width/height come from PDF.js's calc(var(--scale-factor) * Npx) inline
+   styles, so we deliberately don't set inset: 0 (which would override them
+   when --scale-factor is briefly undefined and break alignment). */
 .pdf-text-layer {
   position: absolute;
-  inset: 0;
   overflow: clip;
   opacity: 1;
   line-height: 1;

@@ -115,8 +115,10 @@ export default function TextLayer({ pdfBlob, pageIndex, viewer }: Props) {
       if (cancelled) { pdf.destroy(); return; }
 
       const viewport = page.getViewport({ scale: 1 });
-      container.style.width = `${viewport.width}px`;
-      container.style.height = `${viewport.height}px`;
+      // PDF.js v4 sizes spans/container via the --scale-factor CSS variable
+      // (e.g. width: round(down, var(--scale-factor) * 4836px, 1px)).
+      // Initialize to 1; the transform effect will keep it in sync with zoom.
+      container.style.setProperty('--scale-factor', '1');
 
       const textLayer = new pdfjsLib.TextLayer({
         textContentSource: page.streamTextContent({
@@ -156,7 +158,12 @@ export default function TextLayer({ pdfBlob, pageIndex, viewer }: Props) {
       const tl = viewer.viewport.pixelFromPoint(new OpenSeadragon.Point(0, 0), true);
       const tr = viewer.viewport.pixelFromPoint(new OpenSeadragon.Point(1, 0), true);
       const cssScale = (tr.x - tl.x) / pageSize.w;
-      container.style.transform = `translate(${tl.x}px, ${tl.y}px) scale(${cssScale})`;
+      // --scale-factor drives PDF.js v4's container width/height and span
+      // font-sizes; spans are positioned with %, so the container resolves
+      // to the correct on-screen size automatically.
+      container.style.setProperty('--scale-factor', String(cssScale));
+      // Only translate — scale is handled by --scale-factor above.
+      container.style.transform = `translate(${tl.x}px, ${tl.y}px)`;
     };
 
     update();
