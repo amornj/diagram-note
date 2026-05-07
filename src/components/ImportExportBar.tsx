@@ -1,6 +1,7 @@
 import { Download, FilePlus2, Menu, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useMapStore } from '../lib/mapStore';
+import { FIXED_RENDER_SCALE } from '../lib/mapStore';
 import { useEditorStore } from '../lib/store';
 import { downloadBlob, exportDnote, importDnote } from '../lib/bundle';
 import * as idb from '../lib/idb';
@@ -55,7 +56,6 @@ function isMapWorkspace(value: unknown): value is MapWorkspace {
 }
 
 export default function ImportExportBar() {
-  const rasterScaleOptions = [1, 1.5, 2] as const;
   const rootRef = useRef<HTMLDivElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const dnoteInputRef = useRef<HTMLInputElement>(null);
@@ -68,7 +68,6 @@ export default function ImportExportBar() {
   const activeMapId = useMapStore((s) => s.activeMapId);
   const maps = useMapStore((s) => s.maps);
   const createMapFromPdf = useMapStore((s) => s.createMapFromPdf);
-  const setMapRenderScale = useMapStore((s) => s.setMapRenderScale);
   const importDnoteMap = useMapStore((s) => s.importDnoteMap);
   const clearMapOverlays = useMapStore((s) => s.clearMapOverlays);
   const saveActiveWorkspace = useMapStore((s) => s.saveActiveWorkspace);
@@ -105,7 +104,7 @@ export default function ImportExportBar() {
     setBusy('Loading map…');
     setError(null);
     try {
-      await createMapFromPdf(file, { scale: 2 });
+      await createMapFromPdf(file, { scale: FIXED_RENDER_SCALE });
       setMenuOpen(false);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to load map');
@@ -198,18 +197,6 @@ export default function ImportExportBar() {
     const filename = `Notes from ${activeMap.name}.md`;
     downloadBlob(blob, filename);
     setMenuOpen(false);
-  };
-
-  const handleSetRasterScale = async (scale: (typeof rasterScaleOptions)[number]) => {
-    if (!activeMap) return;
-    setBusy(`Rebuilding raster at ${scale}x…`);
-    setError(null);
-    try {
-      await setMapRenderScale(activeMap.id, scale);
-    } catch (err) {
-      setError((err as Error).message ?? 'Failed to change resolution');
-    }
-    setBusy(null);
   };
 
   const handleDeleteAllOverlays = async () => {
@@ -331,34 +318,6 @@ export default function ImportExportBar() {
             <Download size={14} />
             Export notes
           </button>
-          <div className="my-2 border-t border-gray-100" />
-          <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
-            Resolution
-          </div>
-          <div className="px-2 pb-1">
-            <div className="grid grid-cols-3 gap-2">
-              {rasterScaleOptions.map((scale) => {
-                const active = activeMap?.renderScale === scale;
-                return (
-                  <button
-                    key={scale}
-                    onClick={() => void handleSetRasterScale(scale)}
-                    disabled={!activeMap || busy !== null}
-                    className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${
-                      active
-                        ? 'bg-gray-900 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    } disabled:cursor-not-allowed disabled:opacity-50`}
-                  >
-                    {scale}x
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-2 px-1 text-[11px] leading-4 text-gray-500">
-              New maps import at 2x by default. Lower values are faster, higher values are sharper.
-            </p>
-          </div>
           <div className="my-2 border-t border-gray-100" />
           {!showDeleteAllConfirm ? (
             <button

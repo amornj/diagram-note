@@ -1,6 +1,6 @@
 import { FilePlus2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { useMapStore } from '../lib/mapStore';
+import { FIXED_RENDER_SCALE, useMapStore } from '../lib/mapStore';
 import { importDnote } from '../lib/bundle';
 
 export default function Landing() {
@@ -9,7 +9,6 @@ export default function Landing() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [renderScale, setRenderScale] = useState(2);
   const createMapFromPdf = useMapStore((s) => s.createMapFromPdf);
   const importDnoteMap = useMapStore((s) => s.importDnoteMap);
 
@@ -42,7 +41,7 @@ export default function Landing() {
     if (isPdf || isImage) {
       setBusy('Loading map…');
       try {
-        await createMapFromPdf(file, { scale: renderScale });
+        await createMapFromPdf(file, { scale: FIXED_RENDER_SCALE });
       } catch (err) {
         setError((err as Error).message ?? 'Failed to load map');
       }
@@ -119,26 +118,8 @@ export default function Landing() {
           </button>
         </div>
 
-        <div className="mt-5 flex items-center justify-center gap-3 text-xs text-slate-600">
-          <span className="font-semibold uppercase tracking-wider text-slate-500">
-            Render quality
-          </span>
-          {[1, 2, 3].map((value) => (
-            <button
-              key={value}
-              onClick={() => setRenderScale(value)}
-              className={`rounded-full px-3 py-1 font-semibold transition ${
-                renderScale === value
-                  ? 'bg-slate-900 text-white'
-                  : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {value}×
-            </button>
-          ))}
-          <span className="text-[10px] text-slate-400">
-            higher = sharper but slower / heavier
-          </span>
+        <div className="mt-5 text-center text-xs text-slate-500">
+          Maps load at a fixed 1.5× resolution for stable overlay alignment.
         </div>
 
         <div className="mt-6 text-center text-xs text-slate-400">

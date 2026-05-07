@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Upload } from 'lucide-react';
-import { useMapStore } from '../lib/mapStore';
+import { FIXED_RENDER_SCALE, useMapStore } from '../lib/mapStore';
 import { importDnote } from '../lib/bundle';
 
 interface DropOverlayProps {
@@ -57,7 +57,7 @@ export default function DropOverlay({ onError }: DropOverlayProps) {
           const result = await importDnote(file);
           await importDnoteMap({ map: result.map, sourceBlob: result.sourceBlob });
         } else if (isPdf || isImage) {
-          await createMapFromPdf(file, { scale: 2 });
+          await createMapFromPdf(file, { scale: FIXED_RENDER_SCALE });
         } else {
           onError?.('Unsupported file. Drop a PDF, PNG, JPEG, WEBP, or .dnote.');
         }

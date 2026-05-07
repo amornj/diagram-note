@@ -16,6 +16,7 @@ import {
 const ACTIVE_MAP_STORAGE_KEY = 'diagram-note-active-map';
 const DEFAULT_MAP_ASSET = '/metabolic-map.pdf';
 const DEFAULT_MAP_NAME = 'metabolic-map';
+export const FIXED_RENDER_SCALE = 1.5;
 
 function debugMap(message: string, details?: Record<string, unknown>) {
   if (details) console.info(`[map] ${message}`, details);
@@ -35,7 +36,6 @@ export interface MapStoreState {
     file: File | Blob,
     options?: { scale?: number; name?: string }
   ) => Promise<string>;
-  setMapRenderScale: (id: string, scale: number) => Promise<void>;
   importDnoteMap: (args: {
     map: DiagramMap;
     sourceBlob: Blob;
@@ -280,7 +280,10 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         const file = new File([blob], DEFAULT_MAP_ASSET.split('/').pop()!, {
           type: 'application/pdf',
         });
-        const defaultId = await get().createMapFromPdf(file, { scale: 2, name: DEFAULT_MAP_NAME });
+        const defaultId = await get().createMapFromPdf(file, {
+          scale: FIXED_RENDER_SCALE,
+          name: DEFAULT_MAP_NAME,
+        });
         // Mark whichever map was created or found (by pdfHash) as the default.
         const target = await idb.getMap(defaultId);
         if (target) {
@@ -525,7 +528,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
   },
 
   createMapFromPdf: async (file, options) => {
-    const scale = options?.scale ?? 2;
+    const scale = options?.scale ?? FIXED_RENDER_SCALE;
     const sourceType = detectSourceType(file);
     const result = await rasterizeSource(file, {
       sourceType,
@@ -578,24 +581,6 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     set({ maps: [...get().maps, syncedMap] });
     await get().setActiveMap(id);
     return id;
-  },
-
-  setMapRenderScale: async (id, scale) => {
-    const map = await idb.getMap(id);
-    if (!map || map.renderScale === scale) return;
-    const updated: DiagramMap = {
-      ...map,
-      renderScale: scale,
-      updatedAt: Date.now(),
-    };
-    await idb.putMap(updated);
-    await idb.deleteMapRasters(id);
-    set({
-      maps: get().maps.map((entry) => (entry.id === id ? updated : entry)),
-    });
-    if (get().activeMapId === id) {
-      await get().setActiveMap(id);
-    }
   },
 
   importDnoteMap: async ({ map, sourceBlob }) => {
