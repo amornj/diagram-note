@@ -11,7 +11,7 @@ import { useEditorStore } from './lib/store';
 import { useMapStore } from './lib/mapStore';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
-import { loadCloudMaps, saveCloudMaps } from './lib/cloudSync';
+import { loadCloudMaps, saveCloudMaps, subscribeCloudMaps } from './lib/cloudSync';
 import { uploadMapSource } from './lib/cloudStorage';
 import * as idb from './lib/idb';
 import type { DiagramMap } from './types';
@@ -104,78 +104,90 @@ async function mergeCloudMaps(cloud: DiagramMap[]) {
   }
 }
 
-function useCloudSync() {
+function useCloudSync(): SyncStatus {
+  const maps = useMapStore((s) => s.maps);
   const { user } = useAuth();
+  const syncReadyRef = useRef(false);
   const prevUidRef = useRef<string | null>(null);
   const [status, setStatus] = useState<SyncStatus>('idle');
+  const [syncReady, setSyncReady] = useState(false);
 
-  const syncNow = async () => {
-    if (!user) return;
-    setStatus('loading');
-    try {
-      const cloud = await loadCloudMaps(user.uid);
-      if (cloud === 'error') {
-        setStatus('error');
-        return;
-      }
-      if (cloud && cloud.length > 0) {
-        await mergeCloudMaps(cloud);
-      }
-      setStatus('saving');
-      const syncedMaps = await backfillCloudSourcePaths(
-        user.uid,
-        useMapStore.getState().maps
-      );
-      const ok = await saveCloudMaps(user.uid, dedupByHash(syncedMaps));
-      setStatus(ok ? 'synced' : 'error');
-    } catch (error) {
-      console.error('[cloud] manual sync failed:', error);
-      setStatus('error');
-    }
-  };
-
+  // On login: load cloud maps and merge (newer updatedAt wins)
   useEffect(() => {
     if (!user) {
       prevUidRef.current = null;
+      syncReadyRef.current = false;
+      setSyncReady(false);
       setStatus('idle');
       return;
     }
     if (prevUidRef.current === user.uid) return;
     prevUidRef.current = user.uid;
-    void (async () => {
-      setStatus('loading');
-      try {
-        const cloud = await loadCloudMaps(user.uid);
-        if (cloud === 'error') {
-          setStatus('error');
-          return;
-        }
-        if (cloud && cloud.length > 0) {
-          await mergeCloudMaps(cloud);
-        } else if (!cloud) {
-          const localMaps = await backfillCloudSourcePaths(
-            user.uid,
-            useMapStore.getState().maps
-          );
-          if (localMaps.length > 0) {
-            const ok = await saveCloudMaps(user.uid, dedupByHash(localMaps));
-            setStatus(ok ? 'synced' : 'error');
-            return;
-          }
-        }
-        setStatus('synced');
-      } catch (error) {
-        console.error('[cloud] initial load failed:', error);
+    syncReadyRef.current = false;
+    setStatus('loading');
+
+    loadCloudMaps(user.uid).then(async (cloud) => {
+      if (cloud === 'error') {
+        syncReadyRef.current = true;
+        setSyncReady(true);
         setStatus('error');
+        return;
       }
-    })();
+      if (cloud && cloud.length > 0) {
+        await mergeCloudMaps(cloud);
+      } else if (!cloud) {
+        // First login — push local maps to cloud
+        const localMaps = await backfillCloudSourcePaths(
+          user.uid,
+          useMapStore.getState().maps
+        );
+        if (localMaps.length > 0) {
+          saveCloudMaps(user.uid, dedupByHash(localMaps));
+        }
+      }
+      syncReadyRef.current = true;
+      setSyncReady(true);
+      setStatus('synced');
+    });
   }, [user?.uid]);
 
-  return { status, syncNow: user ? syncNow : null };
+  useEffect(() => {
+    if (!user || !syncReady) return;
+    const unsubscribe = subscribeCloudMaps(user.uid, {
+      onData: (cloud) => {
+        if (!cloud || cloud.length === 0) return;
+        setStatus('loading');
+        void mergeCloudMaps(cloud).then(() => setStatus('synced'));
+      },
+      onError: (error) => {
+        console.error('[cloud] subscribe failed:', error);
+        setStatus('error');
+      },
+    });
+    return unsubscribe;
+  }, [user?.uid, syncReady]);
+
+  // On maps change: debounce-save to cloud
+  useEffect(() => {
+    if (!user || !syncReadyRef.current) return;
+    const uid = user.uid;
+    setStatus('saving');
+    const timer = setTimeout(async () => {
+      const syncedMaps = await backfillCloudSourcePaths(
+        uid,
+        useMapStore.getState().maps
+      );
+      const ok = await saveCloudMaps(uid, dedupByHash(syncedMaps));
+      setStatus(ok ? 'synced' : 'error');
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [user, maps]);
+
+  return status;
 }
 
 function MapPage() {
-  const syncState = useCloudSync();
+  const syncStatus = useCloudSync();
 
   const selectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
   const workspace = useEditorStore((s) => s.workspace);
@@ -280,7 +292,7 @@ function MapPage() {
 
   if (!activeMap || !activeRasterUrl) {
     return (
-      <SyncStatusContext.Provider value={syncState}>
+      <SyncStatusContext.Provider value={syncStatus}>
         <Landing />
       </SyncStatusContext.Provider>
     );
@@ -289,7 +301,7 @@ function MapPage() {
   const dims = { width: activeMap.sourceWidth, height: activeMap.sourceHeight };
 
   return (
-    <SyncStatusContext.Provider value={syncState}>
+    <SyncStatusContext.Provider value={syncStatus}>
       <div className="relative h-screen w-screen overflow-hidden bg-gray-50">
         <div className="absolute inset-0">
           <Editor

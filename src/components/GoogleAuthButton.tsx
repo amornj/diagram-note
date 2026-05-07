@@ -1,7 +1,7 @@
 import { signInWithPopup, signOut, GoogleAuthProvider } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { useSyncNow, useSyncStatus } from '../contexts/SyncStatusContext';
+import { useSyncStatus } from '../contexts/SyncStatusContext';
 
 const STATUS_DOT: Record<string, string> = {
   idle: '',
@@ -21,7 +21,6 @@ const STATUS_LABEL: Record<string, string> = {
 export default function GoogleAuthButton() {
   const { user, loading } = useAuth();
   const syncStatus = useSyncStatus();
-  const syncNow = useSyncNow();
 
   if (!isFirebaseConfigured) return null;
 
@@ -67,13 +66,6 @@ export default function GoogleAuthButton() {
             <span className="min-w-0 flex-1 truncate text-xs text-gray-600">
               {user.displayName ?? user.email}
             </span>
-            <button
-              onClick={() => void syncNow?.()}
-              className="shrink-0 text-xs text-sky-600 transition hover:text-sky-800"
-              title="Sync now"
-            >
-              Sync now
-            </button>
             <button
               onClick={handleSignOut}
               className="shrink-0 text-xs text-gray-400 transition hover:text-gray-700"
