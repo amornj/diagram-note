@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
@@ -21,6 +21,7 @@ const KIND_DOT_COLORS: Record<Primitive['kind'], string> = {
 };
 
 export default function LeftPane() {
+  const rootRef = useRef<HTMLDivElement>(null);
   const leftSidebarCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
   const toggleLeftSidebar = useEditorStore((s) => s.toggleLeftSidebar);
   const workspace = useEditorStore((s) => s.workspace);
@@ -40,6 +41,28 @@ export default function LeftPane() {
   const [renameDraft, setRenameDraft] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [draggedMapIndex, setDraggedMapIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (leftSidebarCollapsed) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+
+      const target = event.target as HTMLElement | null;
+      const editing =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable;
+      if (editing) return;
+      if (!target || !rootRef.current?.contains(target)) return;
+
+      event.preventDefault();
+      toggleLeftSidebar();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [leftSidebarCollapsed, toggleLeftSidebar]);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -67,7 +90,10 @@ export default function LeftPane() {
   }
 
   return (
-    <div className="pointer-events-auto flex h-full w-full flex-col border-r border-gray-200 bg-white shadow-sm">
+    <div
+      ref={rootRef}
+      className="pointer-events-auto flex h-full w-full flex-col border-r border-gray-200 bg-white shadow-sm"
+    >
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-3">
         <div>
           <div className="text-sm font-bold text-gray-900">diagram-note</div>
