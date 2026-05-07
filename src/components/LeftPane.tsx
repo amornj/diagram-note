@@ -205,24 +205,60 @@ export default function LeftPane({
       </div>
 
       <div className="border-b border-gray-100 px-3 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Maps
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Maps
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setAndPersistSortMode('recent')}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                  mapSortMode === 'recent'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title="Sort by most recent use"
+              >
+                Recent
+              </button>
+              <button
+                onClick={toggleAlphaSort}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                  mapSortMode === 'alphaAsc' || mapSortMode === 'alphaDesc'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title="Sort by name"
+              >
+                {mapSortMode === 'alphaDesc' ? 'Z-A' : 'A-Z'}
+              </button>
+              <button
+                onClick={toggleCreatedSort}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                  mapSortMode === 'createdDesc' || mapSortMode === 'createdAsc'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title="Sort by created date"
+              >
+                {mapSortMode === 'createdAsc' ? 'Oldest' : 'Newest'}
+              </button>
+            </div>
           </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onToggleSplitMode}
-            className={`rounded-full p-1.5 transition ${
-              splitMode
-                ? 'bg-slate-900 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-            title={splitMode ? 'Exit split compare' : 'Enter split compare'}
-          >
-            <Columns2 size={12} />
-          </button>
           {splitMode && (
-            <>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onToggleSplitMode}
+                className={`rounded-full p-1.5 transition ${
+                  splitMode
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title={splitMode ? 'Exit split compare' : 'Enter split compare'}
+              >
+                <Columns2 size={12} />
+              </button>
               <button
                 onClick={() => onSetSplitTarget?.(1)}
                 className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
@@ -245,42 +281,8 @@ export default function LeftPane({
               >
                 W2
               </button>
-            </>
+            </div>
           )}
-          <button
-            onClick={() => setAndPersistSortMode('recent')}
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
-                mapSortMode === 'recent'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title="Sort by most recent use"
-            >
-              Recent
-            </button>
-            <button
-              onClick={toggleAlphaSort}
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
-                mapSortMode === 'alphaAsc' || mapSortMode === 'alphaDesc'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title="Sort by name"
-            >
-              {mapSortMode === 'alphaDesc' ? 'Z-A' : 'A-Z'}
-            </button>
-            <button
-              onClick={toggleCreatedSort}
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
-                mapSortMode === 'createdDesc' || mapSortMode === 'createdAsc'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title="Sort by created date"
-            >
-              {mapSortMode === 'createdAsc' ? 'Oldest' : 'Newest'}
-            </button>
-          </div>
         </div>
         <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
           {maps.length === 0 && (
