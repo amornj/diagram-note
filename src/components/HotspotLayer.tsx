@@ -36,7 +36,9 @@ export default function HotspotLayer({
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewportSize, setViewportSize] = useState({ w: 1, h: 1 });
   const [viewTick, setViewTick] = useState(0);
+  const [viewportAnimating, setViewportAnimating] = useState(false);
   const [draftPointer, setDraftPointer] = useState<Point | null>(null);
+  const animationIdleTimerRef = useRef<number | null>(null);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -142,6 +144,14 @@ export default function HotspotLayer({
     };
     const schedule = () => {
       if (frame !== null) return;
+       setViewportAnimating(true);
+       if (animationIdleTimerRef.current !== null) {
+         window.clearTimeout(animationIdleTimerRef.current);
+       }
+       animationIdleTimerRef.current = window.setTimeout(() => {
+         setViewportAnimating(false);
+         animationIdleTimerRef.current = null;
+       }, 120);
       frame = window.requestAnimationFrame(update);
     };
 
@@ -153,12 +163,18 @@ export default function HotspotLayer({
 
     return () => {
       if (frame !== null) window.cancelAnimationFrame(frame);
+      if (animationIdleTimerRef.current !== null) {
+        window.clearTimeout(animationIdleTimerRef.current);
+        animationIdleTimerRef.current = null;
+      }
       viewer.removeHandler('animation', schedule);
       viewer.removeHandler('update-viewport', schedule);
       viewer.removeHandler('open', schedule);
       viewer.removeHandler('resize', schedule);
     };
   }, [viewer]);
+
+  const simplifyOverlay = viewportAnimating && editorMode === 'none';
 
   // re-fit map to selected primitive
   const selectionGeomKey = selectedPrimitive
@@ -541,7 +557,7 @@ export default function HotspotLayer({
                 : null;
 
           const memberNumberBadge =
-            showGroupNumbers && groupEntry ? (
+            !simplifyOverlay && showGroupNumbers && groupEntry ? (
               <g pointerEvents="none">
                 <rect
                   x={boundsRect.x - 4}
@@ -567,7 +583,7 @@ export default function HotspotLayer({
             ) : null;
 
           const focusDot =
-            activeFocusId === primitive.id ? (
+            !simplifyOverlay && activeFocusId === primitive.id ? (
               <circle
                 cx={boundsRect.x + boundsRect.width - 4}
                 cy={boundsRect.y + 4}
@@ -629,7 +645,7 @@ export default function HotspotLayer({
                   ))}
                 {memberNumberBadge}
                 {focusDot}
-                {isVisible && primitive.showLabel === true && (
+                {!simplifyOverlay && isVisible && primitive.showLabel === true && (
                   <text
                     x={boundsRect.x}
                     y={boundsRect.y - 8}
@@ -671,7 +687,7 @@ export default function HotspotLayer({
                 />
                 {memberNumberBadge}
                 {focusDot}
-                {isVisible && primitive.showLabel === true && (
+                {!simplifyOverlay && isVisible && primitive.showLabel === true && (
                   <text
                     x={boundsRect.x}
                     y={boundsRect.y - 8}
@@ -711,7 +727,7 @@ export default function HotspotLayer({
                   onMouseLeave={() => setHoveredPrimitiveId(null)}
                 />
                 {focusDot}
-                {isVisible && primitive.showLabel === true && (
+                {!simplifyOverlay && isVisible && primitive.showLabel === true && (
                   <text
                     x={boundsRect.x + 8}
                     y={boundsRect.y - 8}
@@ -761,7 +777,7 @@ export default function HotspotLayer({
                 onMouseLeave={() => setHoveredPrimitiveId(null)}
               />
               {memberNumberBadge}
-              {focusDot ?? (isSelected && primitive.kind === 'rectangle' ? (
+              {focusDot ?? (!simplifyOverlay && isSelected && primitive.kind === 'rectangle' ? (
                 <circle
                   cx={boundsRect.x + boundsRect.width - 4}
                   cy={boundsRect.y + 4}
@@ -773,7 +789,8 @@ export default function HotspotLayer({
                 />
               ) : null)}
               {/* Always-visible label for rectangles when name set + showLabel */}
-              {isVisible &&
+              {!simplifyOverlay &&
+                isVisible &&
                 primitive.kind === 'rectangle' &&
                 primitive.name &&
                 primitive.showLabel === true && (
@@ -808,8 +825,9 @@ export default function HotspotLayer({
       </g>
 
       {/* Highlight ring for group-member primitives */}
-      <g className="pointer-events-none">
-        {selectedGroupTargets.map((entry) => {
+      {!simplifyOverlay && (
+        <g className="pointer-events-none">
+          {selectedGroupTargets.map((entry) => {
           const rect = bboxToViewerElementRect(viewer, entry.bbox, dims);
           if (!rect) return null;
           return (
@@ -827,12 +845,14 @@ export default function HotspotLayer({
             />
           );
         })}
-      </g>
+        </g>
+      )}
 
-      <g className="pointer-events-none">
-        {selectedPrimitive?.kind !== 'group' &&
-          selectedNameTargets.length > 1 &&
-          selectedNameTargets.map((entry) => {
+      {!simplifyOverlay && (
+        <g className="pointer-events-none">
+          {selectedPrimitive?.kind !== 'group' &&
+            selectedNameTargets.length > 1 &&
+            selectedNameTargets.map((entry) => {
             const rect = bboxToViewerElementRect(viewer, entry.bbox, dims);
             if (!rect) return null;
             return (
@@ -850,7 +870,8 @@ export default function HotspotLayer({
               />
             );
           })}
-      </g>
+        </g>
+      )}
 
       {editorMode !== 'none' &&
         editorMode !== 'groupCollect' &&
