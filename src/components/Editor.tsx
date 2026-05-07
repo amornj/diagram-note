@@ -351,6 +351,10 @@ export default function Editor({
         case '9':
           toggleZoomLock();
           break;
+        case 'b':
+        case 'B':
+          onToggleSplitMode?.();
+          break;
         case '\\':
           toggleShowAllPrimitivesVisible();
           break;
@@ -690,7 +694,7 @@ export default function Editor({
         <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
           {compareOnly
             ? '+ zoom in · - zoom out · 0 home · drag pan'
-            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · \\ overlays · ? help'}
+            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · B split · \\ overlays · ? help'}
         </div>
         {compareOnly && onComparePageChange && pageCount > 1 ? (
           <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur">

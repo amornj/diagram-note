@@ -17,6 +17,7 @@ const ROWS: { keys: string; label: string }[] = [
   { keys: '+ / − / wheel', label: 'Zoom' },
   { keys: 'Space + drag', label: 'Pan' },
   { keys: '/', label: 'Focus search' },
+  { keys: 'B', label: 'Split compare' },
   { keys: '?', label: 'This help' },
   { keys: 'Esc', label: 'Cancel current draw / close popup' },
 ];
