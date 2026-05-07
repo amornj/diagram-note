@@ -1,4 +1,4 @@
-import { deleteObject, getBlob, ref, uploadBytes } from 'firebase/storage';
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { storage } from './firebase';
 
 export function mapSourcePath(uid: string, mapId: string) {
@@ -21,7 +21,12 @@ export async function uploadMapSource(
 
 export async function downloadMapSource(path: string): Promise<Blob | null> {
   if (!storage) return null;
-  return getBlob(ref(storage, path));
+  const url = await getDownloadURL(ref(storage, path));
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch storage object: ${response.status}`);
+  }
+  return response.blob();
 }
 
 export async function deleteMapSource(path: string): Promise<void> {
