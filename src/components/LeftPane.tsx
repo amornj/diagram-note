@@ -454,7 +454,9 @@ export default function LeftPane({
       </div>
       )}
 
-      <GoogleAuthButton />
+      <div className="mt-auto">
+        <GoogleAuthButton />
+      </div>
     </div>
   );
 }
