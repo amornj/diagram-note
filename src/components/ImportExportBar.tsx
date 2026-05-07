@@ -364,11 +364,10 @@ export default function ImportExportBar() {
             <button
               onClick={() => setShowDeleteAllConfirm(true)}
               disabled={!activeMap || busy !== null}
-              className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
               role="menuitem"
             >
               <span>Remove all overlays</span>
-              <span className="text-[10px] uppercase tracking-[0.14em] text-red-400">Hidden</span>
             </button>
           ) : (
             <div className="rounded-xl border border-red-200 bg-red-50 p-3">
