@@ -4,6 +4,44 @@ import { useMapStore } from '../lib/mapStore';
 import { useEditorStore } from '../lib/store';
 import { downloadBlob, exportDnote, importDnote } from '../lib/bundle';
 import * as idb from '../lib/idb';
+import type { MapWorkspace } from '../types';
+
+function escapeMarkdown(value: string) {
+  return value.replace(/([\\`*_{}\[\]()#+\-.!|>])/g, '\\$1');
+}
+
+function buildNotesMarkdown(
+  mapName: string,
+  workspaces: Array<{ pageIndex: number; workspace: MapWorkspace }>
+) {
+  const sections: string[] = [`# Notes from ${mapName}`];
+
+  for (const { pageIndex, workspace } of workspaces) {
+    const primitivesWithNotes = workspace.primitives.filter((primitive) =>
+      (primitive.notes ?? []).some((note) => note.name.trim() || note.content.trim())
+    );
+    if (primitivesWithNotes.length === 0) continue;
+
+    sections.push(``, `## Page ${pageIndex + 1}`);
+
+    for (const primitive of primitivesWithNotes) {
+      sections.push(``, `### ${escapeMarkdown(primitive.name || 'Untitled primitive')}`);
+
+      for (const [noteIndex, note] of (primitive.notes ?? []).entries()) {
+        const noteName = note.name.trim() || `Note ${noteIndex + 1}`;
+        const noteContent = note.content.trim();
+        sections.push(``, `#### ${escapeMarkdown(noteName)}`);
+        sections.push(noteContent || '_Empty note_');
+      }
+    }
+  }
+
+  if (sections.length === 1) {
+    sections.push('', '_No notes found in this map._');
+  }
+
+  return `${sections.join('\n')}\n`;
+}
 
 export default function ImportExportBar() {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -93,6 +131,31 @@ export default function ImportExportBar() {
     setMenuOpen(false);
   };
 
+  const handleExportNotes = () => {
+    if (!activeMap) return;
+
+    const pageIndexes = new Set<number>([activeMap.pageIndex]);
+    for (const key of Object.keys(activeMap.pages ?? {})) {
+      pageIndexes.add(Number(key));
+    }
+
+    const workspaces = Array.from(pageIndexes)
+      .sort((a, b) => a - b)
+      .map((pageIndex) => ({
+        pageIndex,
+        workspace:
+          pageIndex === activeMap.pageIndex
+            ? workspace
+            : activeMap.pages?.[pageIndex]?.workspace ?? activeMap.workspace,
+      }));
+
+    const markdown = buildNotesMarkdown(activeMap.name, workspaces);
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const filename = `Notes from ${activeMap.name}.md`;
+    downloadBlob(blob, filename);
+    setMenuOpen(false);
+  };
+
   return (
     <div ref={rootRef} className="relative flex items-center gap-2">
       <input
@@ -166,6 +229,15 @@ export default function ImportExportBar() {
           >
             <Download size={14} />
             Export JSON
+          </button>
+          <button
+            onClick={handleExportNotes}
+            disabled={!activeMap}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            role="menuitem"
+          >
+            <Download size={14} />
+            Export notes
           </button>
           {(busy || error) && <div className="my-2 border-t border-gray-100" />}
           {busy && (
