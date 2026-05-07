@@ -351,10 +351,6 @@ export default function Editor({
         case '9':
           toggleZoomLock();
           break;
-        case 'b':
-        case 'B':
-          onToggleSplitMode?.();
-          break;
         case '\\':
           toggleShowAllPrimitivesVisible();
           break;

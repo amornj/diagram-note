@@ -387,6 +387,14 @@ function MapPage() {
         setShowHelp(false);
         return;
       }
+      if ((event.key === 'b' || event.key === 'B') && !editing) {
+        event.preventDefault();
+        if (!splitMode) {
+          setLeftSidebarCollapsed(false);
+        }
+        toggleSplitModeRef.current();
+        return;
+      }
       if (event.key === 'Escape' && !editing && (!leftSidebarCollapsed || rightPaneOpen)) {
         event.preventDefault();
         if (!leftSidebarCollapsed) setLeftSidebarCollapsed(true);
@@ -484,6 +492,8 @@ function MapPage() {
       return next;
     });
   };
+  const toggleSplitModeRef = useRef(toggleSplitMode);
+  toggleSplitModeRef.current = toggleSplitMode;
 
   const assignSplitMap = (mapId: string) => {
     const map = useMapStore.getState().maps.find((entry) => entry.id === mapId);
