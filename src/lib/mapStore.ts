@@ -19,7 +19,7 @@ export interface MapStoreState {
   loading: boolean;
   initialized: boolean;
   loadMaps: () => Promise<void>;
-  setActiveMap: (id: string | null) => Promise<void>;
+  setActiveMap: (id: string | null) => Promise<boolean>;
   setActivePage: (pageIndex: number) => Promise<void>;
   createMapFromPdf: (
     file: File | Blob,
@@ -82,6 +82,36 @@ async function ensureRemoteSource(
   } catch (error) {
     console.error('[storage] source upload failed:', error);
     return map;
+  }
+}
+
+async function resolveSourceBlob(map: DiagramMap): Promise<Blob | null> {
+  let sourceBlob = await idb.getPdfBlob(map.id);
+  if (sourceBlob) return sourceBlob;
+
+  if (map.isDefault) {
+    try {
+      const response = await fetch(DEFAULT_MAP_ASSET);
+      if (!response.ok) return null;
+      sourceBlob = await response.blob();
+      await idb.putPdfBlob(map.id, sourceBlob);
+      return sourceBlob;
+    } catch (error) {
+      console.error('[map] default source fetch failed:', error);
+      return null;
+    }
+  }
+
+  if (!map.sourceStoragePath) return null;
+  try {
+    sourceBlob = await downloadMapSource(map.sourceStoragePath);
+    if (sourceBlob) {
+      await idb.putPdfBlob(map.id, sourceBlob);
+    }
+    return sourceBlob;
+  } catch (error) {
+    console.error('[storage] source download failed:', error);
+    return null;
   }
 }
 
@@ -226,10 +256,15 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
           return bRecent - aRecent;
         })[0];
       const defaultMap = maps.find((m) => m.isDefault) ?? null;
-      const activeMapId = mostRecentNonDefault?.id ?? defaultMap?.id ?? maps[0]?.id ?? null;
-      set({ maps, activeMapId, loading: false, initialized: true });
-      if (activeMapId) {
-        await get().setActiveMap(activeMapId);
+      const preferredIds = [
+        mostRecentNonDefault?.id ?? null,
+        defaultMap?.id ?? null,
+        ...maps.map((m) => m.id),
+      ].filter((id, index, items): id is string => Boolean(id) && items.indexOf(id) === index);
+      set({ maps, activeMapId: preferredIds[0] ?? null, loading: false, initialized: true });
+      for (const candidateId of preferredIds) {
+        const loaded = await get().setActiveMap(candidateId);
+        if (loaded) return;
       }
     } catch {
       set({ maps: [], activeMapId: null, activeRasterUrl: null, loading: false, initialized: true });
@@ -243,7 +278,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       setObjectUrl(null);
       set({ activeMapId: null, activeRasterUrl: null });
       useEditorStore.getState().setWorkspace(EMPTY_WORKSPACE);
-      return;
+      return true;
     }
     const map = await idb.getMap(id);
     if (!map) {
@@ -251,7 +286,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       setObjectUrl(null);
       set({ activeMapId: null, activeRasterUrl: null });
       useEditorStore.getState().setWorkspace(EMPTY_WORKSPACE);
-      return;
+      return false;
     }
     const pageIndex = map.pageIndex;
     const openedAt = Date.now();
@@ -259,14 +294,8 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     await idb.putMap(openedMap);
     let raster = await idb.getRaster(id, openedMap.renderScale, pageIndex);
     if (!raster) {
-      let sourceBlob = await idb.getPdfBlob(id);
-      if (!sourceBlob && openedMap.sourceStoragePath) {
-        sourceBlob = await downloadMapSource(openedMap.sourceStoragePath);
-        if (sourceBlob) {
-          await idb.putPdfBlob(id, sourceBlob);
-        }
-      }
-      if (!sourceBlob) return;
+      const sourceBlob = await resolveSourceBlob(openedMap);
+      if (!sourceBlob) return false;
       const result = await rasterizeSource(sourceBlob, {
         sourceType: openedMap.sourceType ?? 'pdf',
         scale: openedMap.renderScale,
@@ -307,6 +336,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       maps: get().maps.map((m) => (m.id === id ? synced : m)),
     });
     useEditorStore.getState().setWorkspace(meta.workspace);
+    return true;
   },
 
   setActivePage: async (pageIndex) => {
@@ -328,13 +358,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     // 2) Ensure the destination page has a raster.
     let raster = await idb.getRaster(id, map.renderScale, pageIndex);
     if (!raster) {
-      let sourceBlob = await idb.getPdfBlob(id);
-      if (!sourceBlob && map.sourceStoragePath) {
-        sourceBlob = await downloadMapSource(map.sourceStoragePath);
-        if (sourceBlob) {
-          await idb.putPdfBlob(id, sourceBlob);
-        }
-      }
+      const sourceBlob = await resolveSourceBlob(map);
       if (!sourceBlob) return;
       const result = await rasterizeSource(sourceBlob, {
         sourceType: map.sourceType ?? 'pdf',

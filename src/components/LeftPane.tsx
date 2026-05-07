@@ -7,8 +7,10 @@ import ImportExportBar from './ImportExportBar';
 import GoogleAuthButton from './GoogleAuthButton';
 
 type MapSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
+type PrimitiveSortMode = 'default' | 'alphaAsc' | 'alphaDesc';
 
 const MAP_SORT_STORAGE_KEY = 'diagram-note-map-sort-mode';
+const PRIMITIVE_SORT_STORAGE_KEY = 'diagram-note-primitive-sort-mode';
 
 function loadMapSortMode(): MapSortMode {
   if (typeof window === 'undefined') return 'recent';
@@ -28,6 +30,20 @@ function loadMapSortMode(): MapSortMode {
 function persistMapSortMode(mode: MapSortMode) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(MAP_SORT_STORAGE_KEY, mode);
+}
+
+function loadPrimitiveSortMode(): PrimitiveSortMode {
+  if (typeof window === 'undefined') return 'default';
+  const raw = window.localStorage.getItem(PRIMITIVE_SORT_STORAGE_KEY);
+  if (raw === 'default' || raw === 'alphaAsc' || raw === 'alphaDesc') {
+    return raw;
+  }
+  return 'default';
+}
+
+function persistPrimitiveSortMode(mode: PrimitiveSortMode) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(PRIMITIVE_SORT_STORAGE_KEY, mode);
 }
 
 function sortMaps(maps: DiagramMap[], mode: MapSortMode) {
@@ -86,6 +102,8 @@ export default function LeftPane() {
   const [renameDraft, setRenameDraft] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [mapSortMode, setMapSortMode] = useState<MapSortMode>(loadMapSortMode);
+  const [primitiveSortMode, setPrimitiveSortMode] =
+    useState<PrimitiveSortMode>(loadPrimitiveSortMode);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -96,9 +114,18 @@ export default function LeftPane() {
   }, [workspace.primitives]);
 
   const filteredPrimitives = useMemo(() => {
-    if (!activeTagFilter) return workspace.primitives;
-    return workspace.primitives.filter((p) => p.tags?.includes(activeTagFilter));
-  }, [workspace.primitives, activeTagFilter]);
+    const base = !activeTagFilter
+      ? workspace.primitives
+      : workspace.primitives.filter((p) => p.tags?.includes(activeTagFilter));
+    if (primitiveSortMode === 'default') return base;
+    const next = [...base];
+    next.sort((a, b) =>
+      primitiveSortMode === 'alphaDesc'
+        ? b.name.localeCompare(a.name, undefined, { sensitivity: 'base' })
+        : a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
+    return next;
+  }, [workspace.primitives, activeTagFilter, primitiveSortMode]);
 
   const sortedMaps = useMemo(() => sortMaps(maps, mapSortMode), [maps, mapSortMode]);
 
@@ -113,6 +140,17 @@ export default function LeftPane() {
 
   const toggleCreatedSort = () => {
     setAndPersistSortMode(mapSortMode === 'createdDesc' ? 'createdAsc' : 'createdDesc');
+  };
+
+  const togglePrimitiveAlphaSort = () => {
+    const nextMode =
+      primitiveSortMode === 'alphaAsc'
+        ? 'alphaDesc'
+        : primitiveSortMode === 'alphaDesc'
+          ? 'default'
+          : 'alphaAsc';
+    setPrimitiveSortMode(nextMode);
+    persistPrimitiveSortMode(nextMode);
   };
 
   if (leftSidebarCollapsed) {
@@ -311,8 +349,25 @@ export default function LeftPane() {
       )}
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
-        <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Primitives
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Primitives
+          </div>
+          <button
+            onClick={togglePrimitiveAlphaSort}
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+              primitiveSortMode === 'alphaAsc' || primitiveSortMode === 'alphaDesc'
+                ? 'bg-slate-900 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title="Sort primitives by name"
+          >
+            {primitiveSortMode === 'alphaDesc'
+              ? 'Z-A'
+              : primitiveSortMode === 'alphaAsc'
+                ? 'A-Z'
+                : 'A-Z'}
+          </button>
         </div>
         <div className="mt-2 space-y-1">
           {filteredPrimitives.length === 0 && (
