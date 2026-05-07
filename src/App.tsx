@@ -389,6 +389,9 @@ function MapPage() {
       }
       if ((event.key === 'b' || event.key === 'B') && !editing) {
         event.preventDefault();
+        if (!splitMode) {
+          setLeftSidebarCollapsed(false);
+        }
         toggleSplitModeRef.current();
         return;
       }
@@ -593,6 +596,7 @@ function MapPage() {
               leftInset={leftSidebarCollapsed ? 0 : leftPaneWidth}
               splitMode={splitMode}
               onToggleSplitMode={() => {
+                setLeftSidebarCollapsed(false);
                 toggleSplitMode();
               }}
             />
