@@ -71,6 +71,8 @@ export interface DiagramMap {
   pages?: Record<number, PageMeta>;
   /** Marks the built-in default map — renameable but not deletable. */
   isDefault?: boolean;
+  /** Last time the user opened this map in the editor. */
+  lastOpenedAt?: number;
   createdAt: number;
   updatedAt: number;
 }

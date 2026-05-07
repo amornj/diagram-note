@@ -2,9 +2,56 @@ import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
-import type { Primitive } from '../types';
+import type { DiagramMap, Primitive } from '../types';
 import ImportExportBar from './ImportExportBar';
 import GoogleAuthButton from './GoogleAuthButton';
+
+type MapSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
+
+const MAP_SORT_STORAGE_KEY = 'diagram-note-map-sort-mode';
+
+function loadMapSortMode(): MapSortMode {
+  if (typeof window === 'undefined') return 'recent';
+  const raw = window.localStorage.getItem(MAP_SORT_STORAGE_KEY);
+  if (
+    raw === 'recent' ||
+    raw === 'alphaAsc' ||
+    raw === 'alphaDesc' ||
+    raw === 'createdDesc' ||
+    raw === 'createdAsc'
+  ) {
+    return raw;
+  }
+  return 'recent';
+}
+
+function persistMapSortMode(mode: MapSortMode) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(MAP_SORT_STORAGE_KEY, mode);
+}
+
+function sortMaps(maps: DiagramMap[], mode: MapSortMode) {
+  const next = [...maps];
+  next.sort((a, b) => {
+    switch (mode) {
+      case 'alphaAsc':
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      case 'alphaDesc':
+        return b.name.localeCompare(a.name, undefined, { sensitivity: 'base' });
+      case 'createdAsc':
+        return a.createdAt - b.createdAt;
+      case 'createdDesc':
+        return b.createdAt - a.createdAt;
+      case 'recent':
+      default: {
+        const aRecent = a.lastOpenedAt ?? a.updatedAt ?? a.createdAt;
+        const bRecent = b.lastOpenedAt ?? b.updatedAt ?? b.createdAt;
+        return bRecent - aRecent;
+      }
+    }
+  });
+  return next;
+}
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
   rectangle: 'Study box',
@@ -33,13 +80,12 @@ export default function LeftPane() {
   const setActiveMap = useMapStore((s) => s.setActiveMap);
   const renameMap = useMapStore((s) => s.renameMap);
   const deleteMap = useMapStore((s) => s.deleteMap);
-  const reorderMaps = useMapStore((s) => s.reorderMaps);
 
   const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [draggedMapIndex, setDraggedMapIndex] = useState<number | null>(null);
+  const [mapSortMode, setMapSortMode] = useState<MapSortMode>(loadMapSortMode);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -53,6 +99,21 @@ export default function LeftPane() {
     if (!activeTagFilter) return workspace.primitives;
     return workspace.primitives.filter((p) => p.tags?.includes(activeTagFilter));
   }, [workspace.primitives, activeTagFilter]);
+
+  const sortedMaps = useMemo(() => sortMaps(maps, mapSortMode), [maps, mapSortMode]);
+
+  const setAndPersistSortMode = (mode: MapSortMode) => {
+    setMapSortMode(mode);
+    persistMapSortMode(mode);
+  };
+
+  const toggleAlphaSort = () => {
+    setAndPersistSortMode(mapSortMode === 'alphaAsc' ? 'alphaDesc' : 'alphaAsc');
+  };
+
+  const toggleCreatedSort = () => {
+    setAndPersistSortMode(mapSortMode === 'createdDesc' ? 'createdAsc' : 'createdDesc');
+  };
 
   if (leftSidebarCollapsed) {
     return (
@@ -90,29 +151,57 @@ export default function LeftPane() {
       </div>
 
       <div className="border-b border-gray-100 px-3 py-3">
-        <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Maps
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Maps
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setAndPersistSortMode('recent')}
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                mapSortMode === 'recent'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Sort by most recent use"
+            >
+              Recent
+            </button>
+            <button
+              onClick={toggleAlphaSort}
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                mapSortMode === 'alphaAsc' || mapSortMode === 'alphaDesc'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Sort by name"
+            >
+              {mapSortMode === 'alphaDesc' ? 'Z-A' : 'A-Z'}
+            </button>
+            <button
+              onClick={toggleCreatedSort}
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                mapSortMode === 'createdDesc' || mapSortMode === 'createdAsc'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Sort by created date"
+            >
+              {mapSortMode === 'createdAsc' ? 'Oldest' : 'Newest'}
+            </button>
+          </div>
         </div>
         <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
           {maps.length === 0 && (
             <div className="text-xs text-gray-400">
-              No maps yet. Load a PDF, PNG, JPEG, or .dnote.
+              No maps yet. Load a PDF, PNG, JPEG, WEBP, or .dnote.
             </div>
           )}
-          {maps.map((map, index) => {
+          {sortedMaps.map((map) => {
             const isActive = map.id === activeMapId;
             return (
               <div
                 key={map.id}
-                draggable={!map.isDefault}
-                onDragStart={() => !map.isDefault && setDraggedMapIndex(index)}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={() => {
-                  if (draggedMapIndex === null || map.isDefault) return;
-                  reorderMaps(draggedMapIndex, index);
-                  setDraggedMapIndex(null);
-                }}
-                onDragEnd={() => setDraggedMapIndex(null)}
                 className={`flex items-center justify-between gap-1 rounded-lg px-2 py-1.5 transition ${
                   isActive ? 'bg-sky-50 border border-sky-200' : 'hover:bg-gray-50'
                 }`}

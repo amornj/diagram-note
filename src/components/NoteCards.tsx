@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { NoteCard } from '../types';
 
 interface NoteCardsProps {
@@ -8,14 +8,24 @@ interface NoteCardsProps {
   placeholder?: string;
 }
 
+const NOTE_HEIGHT_STORAGE_KEY = 'diagram-note-note-height';
+
+function loadSavedHeight() {
+  if (typeof window === 'undefined') return 128;
+  const raw = Number(window.localStorage.getItem(NOTE_HEIGHT_STORAGE_KEY));
+  return Number.isFinite(raw) ? Math.max(80, raw) : 128;
+}
+
 export default function NoteCards({
   notes,
   onChange,
   placeholder = 'Write a note snippet...',
 }: NoteCardsProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [currentIndex, setCurrentIndex] = useState(Math.max(0, notes.length - 1));
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [noteHeight, setNoteHeight] = useState(loadSavedHeight);
 
   useEffect(() => {
     if (notes.length === 0) {
@@ -68,6 +78,16 @@ export default function NoteCards({
     );
     onChange(nextNotes);
     setEditingName(false);
+  };
+
+  const persistHeight = () => {
+    const nextHeight = textareaRef.current?.offsetHeight;
+    if (!nextHeight) return;
+    const clamped = Math.max(80, nextHeight);
+    setNoteHeight(clamped);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(NOTE_HEIGHT_STORAGE_KEY, String(clamped));
+    }
   };
 
   return (
@@ -151,10 +171,15 @@ export default function NoteCards({
             </button>
           )}
           <textarea
+            ref={textareaRef}
             value={currentNote?.content ?? ''}
             onChange={(event) => handleUpdateContent(event.target.value)}
+            onMouseUp={persistHeight}
+            onTouchEnd={persistHeight}
+            onBlur={persistHeight}
             placeholder={placeholder}
-            className="min-h-20 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-sky-300"
+            style={{ height: `${noteHeight}px` }}
+            className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-sky-300"
           />
         </div>
       ) : (

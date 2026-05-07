@@ -4,6 +4,7 @@ import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import {
   getGroupMemberKeys,
+  getPrimitiveBounds,
   getRelatedMemberKeys,
   parseRelatedPrimitiveKey,
   normalizeTagInput,
@@ -22,6 +23,7 @@ const KIND_LABELS: Record<Primitive['kind'], string> = {
 
 export default function PrimitiveDetailPanel({ primitive }: { primitive: Primitive }) {
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
+  const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
   const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
   const updatePrimitive = useEditorStore((s) => s.updatePrimitive);
   const deletePrimitive = useEditorStore((s) => s.deletePrimitive);
@@ -45,6 +47,10 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
   const [nameDraft, setNameDraft] = useState(primitive.name);
   const [draggedGroupIndex, setDraggedGroupIndex] = useState<number | null>(null);
   const aliasInput = useMemo(() => (primitive.aliases ?? []).join(', '), [primitive.aliases]);
+  const primitivesById = useMemo(
+    () => new Map(workspace.primitives.map((p) => [p.id, p])),
+    [workspace.primitives]
+  );
 
   const relatedMembers = useMemo(
     () =>
@@ -349,7 +355,17 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
                         {index + 1}
                       </span>
                       <button
-                        onClick={() => setSelectedPrimitiveId(member.id)}
+                        onClick={() => {
+                          setSelectedPrimitiveId(member.id);
+                          const bbox = getPrimitiveBounds(memberPrim, primitivesById);
+                          if (bbox) {
+                            setZoomTarget({
+                              bbox,
+                              immediate: false,
+                              padding: 16,
+                            });
+                          }
+                        }}
                         className="truncate text-left"
                       >
                         {memberPrim.name}

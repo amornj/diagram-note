@@ -24,7 +24,12 @@ export type EditorMode =
   | 'groupCollect'
   | 'overlayNeighborPick';
 
-export type ZoomTarget = { bbox: BBox; immediate?: boolean; lockZoom?: boolean };
+export type ZoomTarget = {
+  bbox: BBox;
+  immediate?: boolean;
+  lockZoom?: boolean;
+  padding?: number;
+};
 
 export interface EditorState {
   selectedPrimitiveId: string | null;
@@ -36,6 +41,7 @@ export interface EditorState {
   draftOverlayColor: string;
   draftPolygonPoints: Point[];
   draftRectangleStart: Point | null;
+  showAllPrimitivesVisible: boolean;
   leftSidebarCollapsed: boolean;
   rightPaneOpen: boolean;
   zoomTarget: ZoomTarget | null;
@@ -64,6 +70,7 @@ export interface EditorState {
   setDraftRectangleStart: (point: Point | null) => void;
   addPrimitive: (primitive: Omit<Primitive, 'id'>) => string;
   updatePrimitive: (id: string, patch: Partial<Primitive>) => void;
+  toggleShowAllPrimitivesVisible: () => void;
   deletePrimitive: (id: string) => void;
   addDraftGroupMember: (memberKey: string) => void;
   removeDraftGroupMember: (memberKey: string) => void;
@@ -109,7 +116,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   draftOverlayColor: '#fb7185',
   draftPolygonPoints: [],
   draftRectangleStart: null,
-  leftSidebarCollapsed: false,
+  showAllPrimitivesVisible: false,
+  leftSidebarCollapsed: true,
   rightPaneOpen: true,
   zoomTarget: null,
   zoomLocked: loadZoomLock(),
@@ -129,6 +137,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       editorMode: s.editorMode === 'overlayNeighborPick' ? s.editorMode : 'none',
       draftPolygonPoints: [],
       draftRectangleStart: null,
+      showAllPrimitivesVisible: false,
       pendingNameFocusId: null,
       overlayNeighborTargetId:
         s.editorMode === 'overlayNeighborPick' ? s.overlayNeighborTargetId : null,
@@ -154,21 +163,44 @@ export const useEditorStore = create<EditorState>((set) => ({
     const selected = state.workspace.primitives.find(
       (p) => p.id === state.selectedPrimitiveId
     );
-    if (selected?.kind !== 'group') return false;
-    const members = getGroupMemberKeys(selected);
-    if (members.length <= 1) return false;
-    const next =
-      (state.selectedOccurrenceIndex + direction + members.length) % members.length;
-    const member = parseMemberKey(members[next]);
-    if (!member) return false;
-    const memberPrim = state.workspace.primitives.find((p) => p.id === member.id);
-    if (!memberPrim) return false;
+    if (!selected) return false;
     const primitivesById = new Map(state.workspace.primitives.map((p) => [p.id, p]));
-    const bbox = getPrimitiveBounds(memberPrim, primitivesById);
+
+    if (selected.kind === 'group') {
+      const members = getGroupMemberKeys(selected);
+      if (members.length <= 1) return false;
+      const next =
+        (state.selectedOccurrenceIndex + direction + members.length) % members.length;
+      const member = parseMemberKey(members[next]);
+      if (!member) return false;
+      const memberPrim = state.workspace.primitives.find((p) => p.id === member.id);
+      if (!memberPrim) return false;
+      const bbox = getPrimitiveBounds(memberPrim, primitivesById);
+      if (!bbox) return false;
+      set({
+        selectedOccurrenceIndex: next,
+        zoomTarget: { bbox, immediate: false, lockZoom: true, padding: 16 },
+      });
+      return true;
+    }
+
+    const normalizedName = selected.name.trim().toLowerCase();
+    if (!normalizedName) return false;
+    const sameName = state.workspace.primitives.filter(
+      (primitive) => primitive.name.trim().toLowerCase() === normalizedName
+    );
+    if (sameName.length <= 1) return false;
+    const currentIndex = sameName.findIndex((primitive) => primitive.id === selected.id);
+    if (currentIndex === -1) return false;
+    const next = (currentIndex + direction + sameName.length) % sameName.length;
+    const nextPrimitive = sameName[next];
+    const bbox = getPrimitiveBounds(nextPrimitive, primitivesById);
     if (!bbox) return false;
     set({
+      selectedPrimitiveId: nextPrimitive.id,
       selectedOccurrenceIndex: next,
-      zoomTarget: { bbox, immediate: false, lockZoom: true },
+      zoomTarget: { bbox, immediate: false, lockZoom: true, padding: 16 },
+      rightPaneOpen: true,
     });
     return true;
   },
@@ -229,6 +261,17 @@ export const useEditorStore = create<EditorState>((set) => ({
       },
     })),
 
+  toggleShowAllPrimitivesVisible: () =>
+    set((s) => {
+      const nextVisible = !s.showAllPrimitivesVisible;
+      return {
+        showAllPrimitivesVisible: nextVisible,
+        selectedPrimitiveId: nextVisible ? s.selectedPrimitiveId : null,
+        hoveredPrimitiveId: nextVisible ? s.hoveredPrimitiveId : null,
+        selectedOccurrenceIndex: nextVisible ? s.selectedOccurrenceIndex : 0,
+      };
+    }),
+
   deletePrimitive: (id) =>
     set((s) => ({
       workspace: {
@@ -287,23 +330,36 @@ export const useEditorStore = create<EditorState>((set) => ({
     }),
 
   addGroupMember: (primitiveId, memberKey) =>
-    set((s) => ({
-      workspace: {
-        ...s.workspace,
-        primitives: s.workspace.primitives.map((p) =>
-          p.id === primitiveId
-            ? {
+    set((s) => {
+      const groupKey = makeMemberKey(primitiveId);
+      const member = parseMemberKey(memberKey);
+      return {
+        workspace: {
+          ...s.workspace,
+          primitives: s.workspace.primitives.map((p) => {
+            if (p.id === primitiveId) {
+              return {
                 ...p,
                 groupMemberKeys: Array.from(
                   new Set([...(p.groupMemberKeys ?? []), memberKey])
-                ).filter((key) => key !== makeMemberKey(primitiveId)),
-              }
-            : p
-        ),
-      },
-      selectedPrimitiveId: primitiveId,
-      rightPaneOpen: true,
-    })),
+                ).filter((key) => key !== groupKey),
+              };
+            }
+            if (member && p.id === member.id) {
+              return {
+                ...p,
+                relatedMemberKeys: Array.from(
+                  new Set([...(p.relatedMemberKeys ?? []), groupKey])
+                ).filter((key) => key !== memberKey),
+              };
+            }
+            return p;
+          }),
+        },
+        selectedPrimitiveId: primitiveId,
+        rightPaneOpen: true,
+      };
+    }),
 
   removeGroupMember: (primitiveId, memberKey) =>
     set((s) => ({
@@ -315,7 +371,14 @@ export const useEditorStore = create<EditorState>((set) => ({
                 ...p,
                 groupMemberKeys: (p.groupMemberKeys ?? []).filter((key) => key !== memberKey),
               }
-            : p
+            : parseMemberKey(memberKey)?.id === p.id
+              ? {
+                  ...p,
+                  relatedMemberKeys: (p.relatedMemberKeys ?? []).filter(
+                    (key) => key !== makeMemberKey(primitiveId)
+                  ),
+                }
+              : p
         ),
       },
     })),
@@ -356,6 +419,12 @@ export const useEditorStore = create<EditorState>((set) => ({
     const state = useEditorStore.getState();
     if (state.draftGroupKeys.length === 0) return null;
     const id = makePrimitiveId();
+    const groupKey = makeMemberKey(id);
+    const memberIds = new Set(
+      state.draftGroupKeys
+        .map((key) => parseMemberKey(key)?.id)
+        .filter((value): value is string => Boolean(value))
+    );
     const primitive: Primitive = {
       id,
       kind: 'group',
@@ -370,7 +439,20 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((s) => ({
       workspace: {
         ...s.workspace,
-        primitives: [...s.workspace.primitives, primitive],
+        primitives: [
+          ...s.workspace.primitives.map((p) => {
+            if (!memberIds.has(p.id)) {
+              return p;
+            }
+            return {
+              ...p,
+              relatedMemberKeys: Array.from(
+                new Set([...(p.relatedMemberKeys ?? []), groupKey])
+              ).filter((key) => key !== makeMemberKey(p.id)),
+            };
+          }),
+          primitive,
+        ],
       },
       draftGroupKeys: [],
       selectedPrimitiveId: id,

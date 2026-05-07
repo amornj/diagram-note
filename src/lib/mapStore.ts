@@ -52,11 +52,6 @@ function setObjectUrl(url: string | null) {
   lastObjectUrl = url;
 }
 
-function loadActiveId(): string | null {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem(ACTIVE_MAP_STORAGE_KEY);
-}
-
 function saveActiveId(id: string | null) {
   if (typeof window === 'undefined') return;
   if (id) window.localStorage.setItem(ACTIVE_MAP_STORAGE_KEY, id);
@@ -196,9 +191,15 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         return oa !== ob ? oa - ob : b.updatedAt - a.updatedAt;
       });
 
-      const persistedId = loadActiveId();
-      const activeMapId =
-        persistedId && maps.some((m) => m.id === persistedId) ? persistedId : maps[0]?.id ?? null;
+      const mostRecentNonDefault = [...maps]
+        .filter((m) => !m.isDefault)
+        .sort((a, b) => {
+          const aRecent = a.lastOpenedAt ?? a.updatedAt ?? a.createdAt;
+          const bRecent = b.lastOpenedAt ?? b.updatedAt ?? b.createdAt;
+          return bRecent - aRecent;
+        })[0];
+      const defaultMap = maps.find((m) => m.isDefault) ?? null;
+      const activeMapId = mostRecentNonDefault?.id ?? defaultMap?.id ?? maps[0]?.id ?? null;
       set({ maps, activeMapId, loading: false, initialized: true });
       if (activeMapId) {
         await get().setActiveMap(activeMapId);
@@ -226,18 +227,21 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       return;
     }
     const pageIndex = map.pageIndex;
-    let raster = await idb.getRaster(id, map.renderScale, pageIndex);
+    const openedAt = Date.now();
+    const openedMap: DiagramMap = { ...map, lastOpenedAt: openedAt };
+    await idb.putMap(openedMap);
+    let raster = await idb.getRaster(id, openedMap.renderScale, pageIndex);
     if (!raster) {
       const sourceBlob = await idb.getPdfBlob(id);
       if (!sourceBlob) return;
       const result = await rasterizeSource(sourceBlob, {
-        sourceType: map.sourceType ?? 'pdf',
-        scale: map.renderScale,
+        sourceType: openedMap.sourceType ?? 'pdf',
+        scale: openedMap.renderScale,
         pageIndex,
       });
       await idb.putRaster(
         id,
-        map.renderScale,
+        openedMap.renderScale,
         pageIndex,
         result.blob,
         result.width,
@@ -246,7 +250,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       raster = {
         key: '',
         mapId: id,
-        scale: map.renderScale,
+        scale: openedMap.renderScale,
         pageIndex,
         blob: result.blob,
         width: result.width,
@@ -257,8 +261,8 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     setObjectUrl(url);
 
     // Sync map record dims with raster (in case of re-render mismatch)
-    const meta = getPageMeta(map, pageIndex);
-    const synced = withPageMeta(map, pageIndex, {
+    const meta = getPageMeta(openedMap, pageIndex);
+    const synced = withPageMeta(openedMap, pageIndex, {
       ...meta,
       sourceWidth: raster.width,
       sourceHeight: raster.height,
@@ -387,6 +391,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       renderScale: scale,
       workspace: initialMeta.workspace,
       pages: { 0: initialMeta },
+      lastOpenedAt: now,
       createdAt: now,
       updatedAt: now,
     };
@@ -417,6 +422,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         sourceName: map.sourceName ?? existing.sourceName,
         sourceMimeType: map.sourceMimeType ?? existing.sourceMimeType,
         sortOrder: existing.sortOrder ?? map.sortOrder,
+        lastOpenedAt: Date.now(),
       };
       await idb.putMap(merged);
       set({
@@ -437,6 +443,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       sourceType,
       pageCount: map.pageCount ?? result.pageCount,
       sortOrder: map.sortOrder ?? get().maps.length,
+      lastOpenedAt: Date.now(),
       sourceWidth: result.width,
       sourceHeight: result.height,
       pages: {

@@ -25,6 +25,8 @@ interface HotspotLayerProps {
   onMapDragActiveChange: (active: boolean) => void;
 }
 
+const FOCUS_PADDING = 16;
+
 export default function HotspotLayer({
   viewer,
   dims,
@@ -50,6 +52,7 @@ export default function HotspotLayer({
   const selectedOccurrenceIndex = useEditorStore((s) => s.selectedOccurrenceIndex);
   const workspace = useEditorStore((s) => s.workspace);
   const editorMode = useEditorStore((s) => s.editorMode);
+  const showAllPrimitivesVisible = useEditorStore((s) => s.showAllPrimitivesVisible);
   const draftOverlayColor = useEditorStore((s) => s.draftOverlayColor);
   const draftPolygonPoints = useEditorStore((s) => s.draftPolygonPoints);
   const draftRectangleStart = useEditorStore((s) => s.draftRectangleStart);
@@ -113,6 +116,20 @@ export default function HotspotLayer({
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
   }, [selectedPrimitive, primitivesById]);
 
+  const selectedNameTargets = useMemo(() => {
+    if (!selectedPrimitive || selectedPrimitive.kind === 'group') return [];
+    const normalizedName = selectedPrimitive.name.trim().toLowerCase();
+    if (!normalizedName) return [];
+    return workspace.primitives
+      .filter((primitive) => primitive.name.trim().toLowerCase() === normalizedName)
+      .map((primitive) => {
+        const bbox = getPrimitiveBounds(primitive, primitivesById);
+        if (!bbox) return null;
+        return { id: primitive.id, primitive, bbox };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  }, [selectedPrimitive, primitivesById, workspace.primitives]);
+
   useEffect(() => {
     let frame: number | null = null;
 
@@ -160,12 +177,20 @@ export default function HotspotLayer({
           Math.min(selectedOccurrenceIndex, selectedGroupTargets.length - 1)
         ];
       if (target?.bbox) {
-        fitBBox(viewer, target.bbox, dims, { locked: zoomLocked });
+        fitBBox(viewer, target.bbox, dims, {
+          locked: zoomLocked,
+          padding: FOCUS_PADDING,
+        });
         return;
       }
     }
     const bounds = getPrimitiveBounds(selectedPrimitive, primitivesById);
-    if (bounds) fitBBox(viewer, bounds, dims, { locked: zoomLocked });
+    if (bounds) {
+      fitBBox(viewer, bounds, dims, {
+        locked: zoomLocked,
+        padding: FOCUS_PADDING,
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPrimitiveId, selectedOccurrenceIndex, selectionGeomKey, viewer, zoomLocked, dims.width, dims.height]);
 
@@ -491,19 +516,72 @@ export default function HotspotLayer({
           const isGroupMember = selectedGroupTargets.some(
             (entry) => entry.id === primitive.id
           );
+          const isSameNameMatch = selectedNameTargets.some((entry) => entry.id === primitive.id);
           const showGroupNumbers =
             selectedPrimitive?.kind === 'group' &&
             selectedPrimitive.showMemberNumbers === true;
           const groupEntry = selectedGroupTargets.find((e) => e.id === primitive.id);
           const isVisible =
+            showAllPrimitivesVisible ||
             primitive.showOnLoad === true ||
             isSelected ||
             isHovered ||
-            isGroupMember;
+            isGroupMember ||
+            isSameNameMatch;
+
+          const activeFocusId =
+            selectedPrimitive?.kind === 'group'
+              ? selectedGroupTargets[
+                  Math.min(selectedOccurrenceIndex, selectedGroupTargets.length - 1)
+                ]?.id ?? null
+              : selectedNameTargets.length > 1
+                ? selectedPrimitiveId
+                : null;
+
+          const memberNumberBadge =
+            showGroupNumbers && groupEntry ? (
+              <g pointerEvents="none">
+                <rect
+                  x={boundsRect.x - 4}
+                  y={boundsRect.y - 8}
+                  width={18}
+                  height={18}
+                  rx={9}
+                  fill="#ffffff"
+                  stroke={selectedPrimitive?.color ?? primitive.color}
+                  strokeWidth={2}
+                />
+                <text
+                  x={boundsRect.x + 5}
+                  y={boundsRect.y + 5}
+                  fill={selectedPrimitive?.color ?? primitive.color}
+                  fontSize={11}
+                  fontWeight={700}
+                  textAnchor="middle"
+                >
+                  {groupEntry.order}
+                </text>
+              </g>
+            ) : null;
+
+          const focusDot =
+            activeFocusId === primitive.id ? (
+              <circle
+                cx={boundsRect.x + boundsRect.width - 4}
+                cy={boundsRect.y + 4}
+                r={6}
+                fill="#dc2626"
+                stroke="#ffffff"
+                strokeWidth={2}
+                pointerEvents="none"
+              />
+            ) : null;
 
           const interactiveStyle = {
             pointerEvents:
-              spacePanActive || (editorMode !== 'none' && !overlaySelectionMode)
+              spacePanActive ||
+              (editorMode !== 'none' && !overlaySelectionMode) ||
+              (primitive.kind === 'group' && isSelected)
                 ? ('none' as const)
                 : ('auto' as const),
             cursor: mapDragActive ? 'grabbing' : 'pointer',
@@ -547,6 +625,8 @@ export default function HotspotLayer({
                       style={{ pointerEvents: 'none' }}
                     />
                   ))}
+                {memberNumberBadge}
+                {focusDot}
                 {isVisible && primitive.showLabel === true && (
                   <text
                     x={boundsRect.x}
@@ -587,6 +667,8 @@ export default function HotspotLayer({
                   onMouseEnter={() => setHoveredPrimitiveId(primitive.id)}
                   onMouseLeave={() => setHoveredPrimitiveId(null)}
                 />
+                {memberNumberBadge}
+                {focusDot}
                 {isVisible && primitive.showLabel === true && (
                   <text
                     x={boundsRect.x}
@@ -626,30 +708,7 @@ export default function HotspotLayer({
                   onMouseEnter={() => setHoveredPrimitiveId(primitive.id)}
                   onMouseLeave={() => setHoveredPrimitiveId(null)}
                 />
-                {showGroupNumbers && groupEntry && (
-                  <g pointerEvents="none">
-                    <rect
-                      x={boundsRect.x - 4}
-                      y={boundsRect.y - 18}
-                      width={18}
-                      height={18}
-                      rx={9}
-                      fill="#ffffff"
-                      stroke={primitive.color}
-                      strokeWidth={2}
-                    />
-                    <text
-                      x={boundsRect.x + 5}
-                      y={boundsRect.y - 5}
-                      fill={primitive.color}
-                      fontSize={11}
-                      fontWeight={700}
-                      textAnchor="middle"
-                    >
-                      {groupEntry.order}
-                    </text>
-                  </g>
-                )}
+                {focusDot}
                 {isVisible && primitive.showLabel === true && (
                   <text
                     x={boundsRect.x + 8}
@@ -699,7 +758,8 @@ export default function HotspotLayer({
                 onMouseEnter={() => setHoveredPrimitiveId(primitive.id)}
                 onMouseLeave={() => setHoveredPrimitiveId(null)}
               />
-              {isSelected && primitive.kind === 'rectangle' && (
+              {memberNumberBadge}
+              {focusDot ?? (isSelected && primitive.kind === 'rectangle' ? (
                 <circle
                   cx={boundsRect.x + boundsRect.width - 4}
                   cy={boundsRect.y + 4}
@@ -709,7 +769,7 @@ export default function HotspotLayer({
                   strokeWidth={2}
                   pointerEvents="none"
                 />
-              )}
+              ) : null)}
               {/* Always-visible label for rectangles when name set + showLabel */}
               {isVisible &&
                 primitive.kind === 'rectangle' &&
@@ -765,6 +825,29 @@ export default function HotspotLayer({
             />
           );
         })}
+      </g>
+
+      <g className="pointer-events-none">
+        {selectedPrimitive?.kind !== 'group' &&
+          selectedNameTargets.length > 1 &&
+          selectedNameTargets.map((entry) => {
+            const rect = bboxToViewerElementRect(viewer, entry.bbox, dims);
+            if (!rect) return null;
+            return (
+              <rect
+                key={`name-ring-${entry.id}`}
+                x={rect.x - 4}
+                y={rect.y - 4}
+                width={rect.width + 8}
+                height={rect.height + 8}
+                rx={8}
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth={2}
+                opacity={0.95}
+              />
+            );
+          })}
       </g>
 
       {editorMode !== 'none' &&

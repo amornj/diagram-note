@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
+import { useMapStore } from '../lib/mapStore';
 import { getPrimitiveBounds } from '../lib/workspace';
 import type { Primitive } from '../types';
 
@@ -17,7 +18,7 @@ const KIND_LABELS: Record<Primitive['kind'], string> = {
   group: 'group',
 };
 
-type SearchTypeFilter = 'studybox' | 'group' | 'region';
+type SearchTypeFilter = 'studybox' | 'group' | 'region' | 'map';
 type SearchContentFilter = 'note' | 'tag';
 
 const TYPE_FILTERS: Array<{
@@ -28,6 +29,7 @@ const TYPE_FILTERS: Array<{
   { key: 'studybox', label: 'Studybox', matches: (primitive) => primitive.kind === 'rectangle' },
   { key: 'group', label: 'Group', matches: (primitive) => primitive.kind === 'group' },
   { key: 'region', label: 'Region', matches: (primitive) => primitive.kind === 'polygon' },
+  { key: 'map', label: 'Map', matches: () => false },
 ];
 
 const CONTENT_FILTERS: Array<{
@@ -52,21 +54,35 @@ export default function SearchBox({
   const workspace = useEditorStore((s) => s.workspace);
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
   const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
+  const maps = useMapStore((s) => s.maps);
+  const activeMapId = useMapStore((s) => s.activeMapId);
+  const setActiveMap = useMapStore((s) => s.setActiveMap);
 
   const primitivesById = useMemo(
     () => new Map(workspace.primitives.map((p) => [p.id, p])),
     [workspace.primitives]
   );
 
+  const mapResults = useMemo(() => {
+    const q = deferredQuery.trim().toLowerCase();
+    if (!q || !activeTypeFilters.includes('map')) return [];
+    return maps
+      .filter((map) => map.name.toLowerCase().includes(q))
+      .slice(0, 20);
+  }, [activeTypeFilters, deferredQuery, maps]);
+
   const results = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
-    if (!q) return [];
+    if (!q || activeTypeFilters.includes('map')) return [];
     return workspace.primitives
       .filter((p) => {
         const matchesType =
           activeTypeFilters.length === 0 ||
           TYPE_FILTERS.some(
-            (filter) => activeTypeFilters.includes(filter.key) && filter.matches(p)
+            (filter) =>
+              filter.key !== 'map' &&
+              activeTypeFilters.includes(filter.key) &&
+              filter.matches(p)
           );
 
         if (!matchesType) return false;
@@ -90,7 +106,12 @@ export default function SearchBox({
   const handleSelect = (primitive: Primitive) => {
     setSelectedPrimitiveId(primitive.id);
     const bbox = getPrimitiveBounds(primitive, primitivesById);
-    if (bbox) setZoomTarget({ bbox, immediate: false });
+    if (bbox) setZoomTarget({ bbox, immediate: false, padding: 16 });
+  };
+
+  const handleMapSelect = async (mapId: string) => {
+    await setActiveMap(mapId);
+    onRequestClose?.();
   };
 
   const clearQuery = () => {
@@ -170,7 +191,11 @@ export default function SearchBox({
           ref={inputRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search primitives, tags, notes…"
+          placeholder={
+            activeTypeFilters.includes('map')
+              ? 'Search map names…'
+              : 'Search primitives, tags, notes…'
+          }
           className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-9 text-sm text-gray-900 outline-none transition focus:border-sky-300 focus:bg-white"
         />
         {query && (
@@ -218,6 +243,32 @@ export default function SearchBox({
           );
         })}
       </div>
+
+      {mapResults.length > 0 && (
+        <div className="mt-2 max-h-80 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
+          {mapResults.map((map) => (
+            <button
+              key={map.id}
+              onClick={() => void handleMapSelect(map.id)}
+              className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-block h-3 w-3 rounded-full ${
+                    map.id === activeMapId ? 'bg-sky-500' : 'bg-gray-300'
+                  }`}
+                />
+                <span className="truncate text-sm font-medium text-gray-900">
+                  {map.name}
+                </span>
+                {map.id === activeMapId && (
+                  <span className="ml-auto text-[11px] text-sky-600">active</span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
 
       {results.length > 0 && (
         <div className="mt-2 max-h-80 overflow-y-auto rounded-2xl border border-gray-200 bg-white">

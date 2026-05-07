@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import OpenSeadragon from 'openseadragon';
 import {
+  Eye,
   Home,
   Lock,
   Minus,
-  MousePointer2,
   PenTool,
   Plus,
   Search,
+  Square,
   Shapes,
   Unlock,
 } from 'lucide-react';
@@ -57,6 +58,10 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
   const clearDraftGroup = useEditorStore((s) => s.clearDraftGroup);
   const clearDraftPolygon = useEditorStore((s) => s.clearDraftPolygon);
   const setEditorMode = useEditorStore((s) => s.setEditorMode);
+  const showAllPrimitivesVisible = useEditorStore((s) => s.showAllPrimitivesVisible);
+  const toggleShowAllPrimitivesVisible = useEditorStore(
+    (s) => s.toggleShowAllPrimitivesVisible
+  );
   const activeMapId = useMapStore((s) => s.activeMapId);
   const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
 
@@ -137,6 +142,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
     fitBBox(viewer, zoomTarget.bbox, dims, {
       immediate: zoomTarget.immediate ?? false,
       locked: zoomTarget.lockZoom ?? zoomLocked,
+      padding: zoomTarget.padding,
     });
     setZoomTarget(null);
   }, [viewer, zoomTarget, setZoomTarget, zoomLocked, dims]);
@@ -150,6 +156,15 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
     setShowQuickSearch(true);
     window.dispatchEvent(new Event('map-search-focus'));
   }, [setLeftSidebarCollapsed]);
+  const openStudyBoxTool = useCallback(() => {
+    setLeftSidebarCollapsed(true);
+    setShowQuickSearch(false);
+    setFloatingTool('studybox');
+    setSelectedPrimitiveId(null);
+    setEditorMode('rectangle');
+    window.dispatchEvent(new Event('map-search-clear'));
+    containerRef.current?.focus({ preventScroll: true });
+  }, [setEditorMode, setLeftSidebarCollapsed, setSelectedPrimitiveId]);
   const openGroupTool = useCallback(() => {
     setLeftSidebarCollapsed(true);
     setShowQuickSearch(false);
@@ -267,13 +282,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
           openSearch();
           break;
         case '6':
-          setLeftSidebarCollapsed(true);
-          setShowQuickSearch(false);
-          setFloatingTool('studybox');
-          setSelectedPrimitiveId(null);
-          setEditorMode('rectangle');
-          window.dispatchEvent(new Event('map-search-clear'));
-          container.focus({ preventScroll: true });
+          openStudyBoxTool();
           break;
         case '7':
           openGroupTool();
@@ -283,6 +292,9 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
           break;
         case '9':
           toggleZoomLock();
+          break;
+        case '\\':
+          toggleShowAllPrimitivesVisible();
           break;
         case 'ArrowUp':
           viewer.viewport.panBy(new OpenSeadragon.Point(0, -panSpeed));
@@ -365,10 +377,12 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
     editorMode,
     clearDraftGroup,
     clearDraftPolygon,
+    openStudyBoxTool,
     openGroupTool,
     openPolylineTool,
     openSearch,
     setEditorMode,
+    toggleShowAllPrimitivesVisible,
   ]);
 
   return (
@@ -467,7 +481,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
             }`}
             title={editorMode === 'textSelect' ? 'Exit text mode (T or Esc)' : 'Select text (T)'}
           >
-            <MousePointer2 size={15} />
+            <span className="text-[13px] font-bold leading-none">T</span>
           </button>
         )}
         <button
@@ -480,6 +494,17 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
           title="Search (5)"
         >
           <Search size={15} />
+        </button>
+        <button
+          onClick={openStudyBoxTool}
+          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+            floatingTool === 'studybox' || editorMode === 'rectangle'
+              ? 'bg-sky-500 text-white hover:bg-sky-600'
+              : 'bg-white/90 text-gray-700 hover:bg-white'
+          }`}
+          title="Study box (6)"
+        >
+          <Square size={15} />
         </button>
         <button
           onClick={openGroupTool}
@@ -502,6 +527,17 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
           title="Polyline (8)"
         >
           <PenTool size={15} />
+        </button>
+        <button
+          onClick={toggleShowAllPrimitivesVisible}
+          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+            showAllPrimitivesVisible
+              ? 'bg-sky-500 text-white hover:bg-sky-600'
+              : 'bg-white/90 text-gray-700 hover:bg-white'
+          }`}
+          title={showAllPrimitivesVisible ? 'Hide all overlays (\\)' : 'Show all overlays (\\)'}
+        >
+          <Eye size={15} />
         </button>
       </div>
 
@@ -544,7 +580,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
       )}
 
       <div className="absolute bottom-4 left-4 z-10 rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
-        1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · ? help
+        1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · \ overlays · ? help
       </div>
 
       <PagePicker pageIndex={pageIndex} pageCount={pageCount} />

@@ -141,17 +141,25 @@ function MapPage() {
         setShowHelp((value) => !value);
       }
       if (event.key === 'Escape' && showHelp) {
+        event.preventDefault();
         setShowHelp(false);
         return;
       }
-      if (event.key === 'Escape' && !editing && !leftSidebarCollapsed) {
+      if (event.key === 'Escape' && !editing && (!leftSidebarCollapsed || rightPaneOpen)) {
         event.preventDefault();
-        setLeftSidebarCollapsed(true);
+        if (!leftSidebarCollapsed) setLeftSidebarCollapsed(true);
+        if (rightPaneOpen) toggleRightPane();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [showHelp, leftSidebarCollapsed, setLeftSidebarCollapsed]);
+  }, [
+    showHelp,
+    leftSidebarCollapsed,
+    rightPaneOpen,
+    setLeftSidebarCollapsed,
+    toggleRightPane,
+  ]);
 
   useEffect(() => {
     if (!dropError) return;
