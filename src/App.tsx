@@ -547,14 +547,14 @@ function MapPage() {
                 </button>
               </div>
               <div
-                className="relative z-20 w-3 shrink-0 cursor-col-resize bg-transparent"
+                className="relative z-20 w-2 shrink-0 cursor-col-resize bg-transparent"
                 onMouseDown={(event) => {
                   event.preventDefault();
                   startSplitResize(event.clientX, splitRatio);
                 }}
               >
-                <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-white/20" />
-                <div className="absolute left-1/2 top-1/2 h-20 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/50 shadow" />
+                <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-slate-900/70" />
+                <div className="absolute left-1/2 top-1/2 h-20 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-800/85 shadow" />
               </div>
               <div className="relative h-full flex-1">
                 <ComparePane
