@@ -15,11 +15,28 @@ export interface RasterizeResult {
 
 export type SourceType = 'pdf' | 'image';
 
+const MAX_RASTER_DIMENSION = 4096;
+const MAX_RASTER_PIXELS = 12_000_000;
+
 export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+function clampRasterScale(width: number, height: number, requestedScale: number) {
+  const scaledWidth = width * requestedScale;
+  const scaledHeight = height * requestedScale;
+  const dimensionScale = Math.min(
+    1,
+    MAX_RASTER_DIMENSION / Math.max(scaledWidth, scaledHeight)
+  );
+  const pixelScale = Math.min(
+    1,
+    Math.sqrt(MAX_RASTER_PIXELS / Math.max(1, scaledWidth * scaledHeight))
+  );
+  return requestedScale * Math.min(dimensionScale, pixelScale);
 }
 
 export async function rasterizePdf(
@@ -38,8 +55,13 @@ export async function rasterizePdf(
   const pdf = await loadingTask.promise;
   const pageIndex = opts.pageIndex ?? 0;
   const page = await pdf.getPage(pageIndex + 1);
-
-  const viewport = page.getViewport({ scale: opts.scale });
+  const baseViewport = page.getViewport({ scale: 1 });
+  const renderScale = clampRasterScale(
+    baseViewport.width,
+    baseViewport.height,
+    opts.scale
+  );
+  const viewport = page.getViewport({ scale: renderScale });
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
@@ -81,13 +103,20 @@ export async function rasterizeImage(
       next.onerror = () => reject(new Error('Failed to load image'));
       next.src = imageUrl;
     });
-    const width = Math.max(1, Math.round(image.naturalWidth * opts.scale));
-    const height = Math.max(1, Math.round(image.naturalHeight * opts.scale));
+    const renderScale = clampRasterScale(
+      image.naturalWidth,
+      image.naturalHeight,
+      opts.scale
+    );
+    const width = Math.max(1, Math.round(image.naturalWidth * renderScale));
+    const height = Math.max(1, Math.round(image.naturalHeight * renderScale));
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Failed to get 2D canvas context');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(image, 0, 0, width, height);
     const rasterBlob: Blob = await new Promise((resolve, reject) => {
       canvas.toBlob((b) => {
