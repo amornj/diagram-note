@@ -584,6 +584,11 @@ function MapPage() {
               pageIndex={activeMap.pageIndex}
               pageCount={activeMap.pageCount}
               leftInset={leftSidebarCollapsed ? 0 : leftPaneWidth}
+              splitMode={splitMode}
+              onToggleSplitMode={() => {
+                setLeftSidebarCollapsed(false);
+                toggleSplitMode();
+              }}
             />
           )}
         </div>
@@ -599,7 +604,6 @@ function MapPage() {
                 1: splitMaps[1].mapId,
                 2: splitMaps[2].mapId,
               }}
-              onToggleSplitMode={toggleSplitMode}
               onSetSplitTarget={setSplitTarget}
               onAssignMapToSplit={assignSplitMap}
             />

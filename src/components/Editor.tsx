@@ -3,6 +3,7 @@ import OpenSeadragon from 'openseadragon';
 import {
   ChevronLeft,
   ChevronRight,
+  Columns2,
   Eye,
   Home,
   Lock,
@@ -36,6 +37,8 @@ interface EditorProps {
   sourceType?: 'pdf' | 'image';
   onComparePageChange?: (pageIndex: number) => void;
   workspaceOverride?: MapWorkspace;
+  splitMode?: boolean;
+  onToggleSplitMode?: () => void;
 }
 
 export default function Editor({
@@ -48,6 +51,8 @@ export default function Editor({
   title,
   onComparePageChange,
   workspaceOverride,
+  splitMode = false,
+  onToggleSplitMode,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
@@ -602,8 +607,21 @@ export default function Editor({
         )}
         {!compareOnly && (
           <button
-          onClick={toggleShowAllPrimitivesVisible}
-          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+            onClick={onToggleSplitMode}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+              splitMode
+                ? 'bg-sky-500 text-white hover:bg-sky-600'
+                : 'bg-white/90 text-gray-700 hover:bg-white'
+            }`}
+            title={splitMode ? 'Exit split compare' : 'Split compare'}
+          >
+            <Columns2 size={15} />
+          </button>
+        )}
+        {!compareOnly && (
+          <button
+            onClick={toggleShowAllPrimitivesVisible}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             showAllPrimitivesVisible
               ? 'bg-sky-500 text-white hover:bg-sky-600'
               : 'bg-white/90 text-gray-700 hover:bg-white'
