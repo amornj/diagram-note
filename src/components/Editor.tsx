@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import OpenSeadragon from 'openseadragon';
-import { Home, Lock, Minus, MousePointer2, Plus, Unlock } from 'lucide-react';
+import {
+  Home,
+  Lock,
+  Minus,
+  MousePointer2,
+  PenTool,
+  Plus,
+  Search,
+  Shapes,
+  Unlock,
+} from 'lucide-react';
 import HotspotLayer from './HotspotLayer';
 import SearchBox from './SearchBox';
 import DrawTools from './DrawTools';
@@ -134,6 +144,27 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
   const zoomIn = useCallback(() => viewer?.viewport.zoomBy(1.5), [viewer]);
   const zoomOut = useCallback(() => viewer?.viewport.zoomBy(0.667), [viewer]);
   const goHome = useCallback(() => viewer?.viewport.goHome(), [viewer]);
+  const openSearch = useCallback(() => {
+    setLeftSidebarCollapsed(true);
+    setFloatingTool(null);
+    setShowQuickSearch(true);
+    window.dispatchEvent(new Event('map-search-focus'));
+  }, [setLeftSidebarCollapsed]);
+  const openGroupTool = useCallback(() => {
+    setLeftSidebarCollapsed(true);
+    setShowQuickSearch(false);
+    setFloatingTool('group');
+    setGroupBuilderFocusSignal((value) => value + 1);
+  }, [setLeftSidebarCollapsed]);
+  const openPolylineTool = useCallback(() => {
+    setLeftSidebarCollapsed(true);
+    setShowQuickSearch(false);
+    setFloatingTool('polyline');
+    setSelectedPrimitiveId(null);
+    setEditorMode('polygon');
+    window.dispatchEvent(new Event('map-search-clear'));
+    containerRef.current?.focus({ preventScroll: true });
+  }, [setEditorMode, setLeftSidebarCollapsed, setSelectedPrimitiveId]);
 
   const handleWheelZoom = useCallback(
     (event: React.WheelEvent<HTMLDivElement>) => {
@@ -233,10 +264,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
           handled = cycleSelection(1);
           break;
         case '5':
-          setLeftSidebarCollapsed(true);
-          setFloatingTool(null);
-          setShowQuickSearch(true);
-          window.dispatchEvent(new Event('map-search-focus'));
+          openSearch();
           break;
         case '6':
           setLeftSidebarCollapsed(true);
@@ -248,19 +276,10 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
           container.focus({ preventScroll: true });
           break;
         case '7':
-          setLeftSidebarCollapsed(true);
-          setShowQuickSearch(false);
-          setFloatingTool('group');
-          setGroupBuilderFocusSignal((value) => value + 1);
+          openGroupTool();
           break;
         case '8':
-          setLeftSidebarCollapsed(true);
-          setShowQuickSearch(false);
-          setFloatingTool('polyline');
-          setSelectedPrimitiveId(null);
-          setEditorMode('polygon');
-          window.dispatchEvent(new Event('map-search-clear'));
-          container.focus({ preventScroll: true });
+          openPolylineTool();
           break;
         case '9':
           toggleZoomLock();
@@ -346,6 +365,9 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
     editorMode,
     clearDraftGroup,
     clearDraftPolygon,
+    openGroupTool,
+    openPolylineTool,
+    openSearch,
     setEditorMode,
   ]);
 
@@ -448,6 +470,39 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
             <MousePointer2 size={15} />
           </button>
         )}
+        <button
+          onClick={openSearch}
+          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+            showQuickSearch
+              ? 'bg-sky-500 text-white hover:bg-sky-600'
+              : 'bg-white/90 text-gray-700 hover:bg-white'
+          }`}
+          title="Search (5)"
+        >
+          <Search size={15} />
+        </button>
+        <button
+          onClick={openGroupTool}
+          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+            floatingTool === 'group'
+              ? 'bg-sky-500 text-white hover:bg-sky-600'
+              : 'bg-white/90 text-gray-700 hover:bg-white'
+          }`}
+          title="Group (7)"
+        >
+          <Shapes size={15} />
+        </button>
+        <button
+          onClick={openPolylineTool}
+          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+            floatingTool === 'polyline' || editorMode === 'polygon'
+              ? 'bg-sky-500 text-white hover:bg-sky-600'
+              : 'bg-white/90 text-gray-700 hover:bg-white'
+          }`}
+          title="Polyline (8)"
+        >
+          <PenTool size={15} />
+        </button>
       </div>
 
       {showQuickSearch && (

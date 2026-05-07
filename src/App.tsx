@@ -123,6 +123,7 @@ function MapPage() {
   const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
   const rightPaneOpen = useEditorStore((s) => s.rightPaneOpen);
   const leftSidebarCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
+  const setLeftSidebarCollapsed = useEditorStore((s) => s.setLeftSidebarCollapsed);
   const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
   const activeRasterUrl = useMapStore((s) => s.activeRasterUrl);
   const [showHelp, setShowHelp] = useState(false);
@@ -141,11 +142,16 @@ function MapPage() {
       }
       if (event.key === 'Escape' && showHelp) {
         setShowHelp(false);
+        return;
+      }
+      if (event.key === 'Escape' && !editing && !leftSidebarCollapsed) {
+        event.preventDefault();
+        setLeftSidebarCollapsed(true);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [showHelp]);
+  }, [showHelp, leftSidebarCollapsed, setLeftSidebarCollapsed]);
 
   useEffect(() => {
     if (!dropError) return;
