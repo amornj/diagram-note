@@ -1,7 +1,7 @@
 import { deleteObject, getBlob, ref, uploadBytes } from 'firebase/storage';
 import { storage } from './firebase';
 
-function mapSourcePath(uid: string, mapId: string) {
+export function mapSourcePath(uid: string, mapId: string) {
   return `users/${uid}/maps/${mapId}/source`;
 }
 

@@ -6,7 +6,12 @@ import { detectSourceType, rasterizeSource } from './pdf';
 import { useEditorStore } from './store';
 import { makeRelatedPrimitiveKey } from './workspace';
 import { auth } from './firebase';
-import { deleteMapSource, downloadMapSource, uploadMapSource } from './cloudStorage';
+import {
+  deleteMapSource,
+  downloadMapSource,
+  mapSourcePath,
+  uploadMapSource,
+} from './cloudStorage';
 
 const ACTIVE_MAP_STORAGE_KEY = 'diagram-note-active-map';
 const DEFAULT_MAP_ASSET = '/metabolic-map.pdf';
@@ -102,17 +107,33 @@ async function resolveSourceBlob(map: DiagramMap): Promise<Blob | null> {
     }
   }
 
-  if (!map.sourceStoragePath) return null;
-  try {
-    sourceBlob = await downloadMapSource(map.sourceStoragePath);
-    if (sourceBlob) {
-      await idb.putPdfBlob(map.id, sourceBlob);
+  const storagePaths = new Set<string>();
+  if (map.sourceStoragePath) storagePaths.add(map.sourceStoragePath);
+  const uid = auth?.currentUser?.uid;
+  if (uid) storagePaths.add(mapSourcePath(uid, map.id));
+
+  for (const path of storagePaths) {
+    try {
+      sourceBlob = await downloadMapSource(path);
+      if (sourceBlob) {
+        await idb.putPdfBlob(map.id, sourceBlob);
+        if (map.sourceStoragePath !== path) {
+          const updated = { ...map, sourceStoragePath: path, updatedAt: Date.now() };
+          await idb.putMap(updated);
+          setTimeout(() => {
+            useMapStore.setState((state) => ({
+              maps: state.maps.map((entry) => (entry.id === updated.id ? updated : entry)),
+            }));
+          }, 0);
+        }
+        return sourceBlob;
+      }
+    } catch (error) {
+      console.error(`[storage] source download failed for ${path}:`, error);
     }
-    return sourceBlob;
-  } catch (error) {
-    console.error('[storage] source download failed:', error);
-    return null;
   }
+
+  return null;
 }
 
 /**
