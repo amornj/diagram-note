@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Columns2, Trash2 } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import type { DiagramMap, Primitive } from '../types';
@@ -83,7 +83,23 @@ const KIND_DOT_COLORS: Record<Primitive['kind'], string> = {
   group: '#3b82f6',
 };
 
-export default function LeftPane() {
+interface LeftPaneProps {
+  splitMode?: boolean;
+  splitTarget?: 1 | 2;
+  splitAssignments?: { 1: string | null; 2: string | null };
+  onToggleSplitMode?: () => void;
+  onSetSplitTarget?: (target: 1 | 2) => void;
+  onAssignMapToSplit?: (mapId: string) => void;
+}
+
+export default function LeftPane({
+  splitMode = false,
+  splitTarget = 1,
+  splitAssignments = { 1: null, 2: null },
+  onToggleSplitMode,
+  onSetSplitTarget,
+  onAssignMapToSplit,
+}: LeftPaneProps) {
   const leftSidebarCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
   const toggleLeftSidebar = useEditorStore((s) => s.toggleLeftSidebar);
   const workspace = useEditorStore((s) => s.workspace);
@@ -193,9 +209,46 @@ export default function LeftPane() {
           <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
             Maps
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setAndPersistSortMode('recent')}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onToggleSplitMode}
+            className={`rounded-full p-1.5 transition ${
+              splitMode
+                ? 'bg-slate-900 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title={splitMode ? 'Exit split compare' : 'Enter split compare'}
+          >
+            <Columns2 size={12} />
+          </button>
+          {splitMode && (
+            <>
+              <button
+                onClick={() => onSetSplitTarget?.(1)}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                  splitTarget === 1
+                    ? 'bg-sky-600 text-white'
+                    : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
+                }`}
+                title="Assign next map to window 1"
+              >
+                W1
+              </button>
+              <button
+                onClick={() => onSetSplitTarget?.(2)}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                  splitTarget === 2
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                }`}
+                title="Assign next map to window 2"
+              >
+                W2
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => setAndPersistSortMode('recent')}
               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
                 mapSortMode === 'recent'
                   ? 'bg-slate-900 text-white'
@@ -268,7 +321,13 @@ export default function LeftPane() {
                   />
                 ) : (
                   <button
-                    onClick={() => setActiveMap(map.id)}
+                    onClick={() => {
+                      if (splitMode) {
+                        onAssignMapToSplit?.(map.id);
+                        return;
+                      }
+                      void setActiveMap(map.id);
+                    }}
                     onDoubleClick={() => {
                       setRenamingId(map.id);
                       setRenameDraft(map.name);
@@ -278,6 +337,20 @@ export default function LeftPane() {
                   >
                     {map.name}
                   </button>
+                )}
+                {splitMode && (
+                  <div className="flex items-center gap-1">
+                    {splitAssignments[1] === map.id && (
+                      <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
+                        W1
+                      </span>
+                    )}
+                    {splitAssignments[2] === map.id && (
+                      <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        W2
+                      </span>
+                    )}
+                  </div>
                 )}
                 {!map.isDefault && (
                   confirmDeleteId === map.id ? (
@@ -315,7 +388,7 @@ export default function LeftPane() {
         </div>
       </div>
 
-      {allTags.length > 0 && (
+      {!splitMode && allTags.length > 0 && (
         <div className="border-b border-gray-100 px-3 py-3">
           <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
             Tags
@@ -348,6 +421,7 @@ export default function LeftPane() {
         </div>
       )}
 
+      {!splitMode && (
       <div className="flex-1 overflow-y-auto px-3 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -406,6 +480,7 @@ export default function LeftPane() {
           })}
         </div>
       </div>
+      )}
 
       <GoogleAuthButton />
     </div>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import OpenSeadragon from 'openseadragon';
 import {
+  ChevronLeft,
+  ChevronRight,
   Eye,
   Home,
   Lock,
@@ -21,6 +23,7 @@ import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import { fitBBox, type SourceDims } from '../lib/coords';
 import * as idb from '../lib/idb';
+import type { MapWorkspace } from '../types';
 
 interface EditorProps {
   rasterUrl: string;
@@ -28,6 +31,11 @@ interface EditorProps {
   pageIndex: number;
   pageCount: number;
   leftInset?: number;
+  compareOnly?: boolean;
+  title?: string;
+  sourceType?: 'pdf' | 'image';
+  onComparePageChange?: (pageIndex: number) => void;
+  workspaceOverride?: MapWorkspace;
 }
 
 export default function Editor({
@@ -36,6 +44,10 @@ export default function Editor({
   pageIndex,
   pageCount,
   leftInset = 0,
+  compareOnly = false,
+  title,
+  onComparePageChange,
+  workspaceOverride,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
@@ -76,7 +88,7 @@ export default function Editor({
 
   // Load PDF blob when entering text-select mode (PDF sources only)
   useEffect(() => {
-    if (editorMode !== 'textSelect') { setPdfBlob(null); return; }
+    if (compareOnly || editorMode !== 'textSelect') { setPdfBlob(null); return; }
     if (!activeMapId || activeMap?.sourceType !== 'pdf') return;
     idb.getPdfBlob(activeMapId).then((blob) => setPdfBlob(blob));
   }, [editorMode, activeMapId, activeMap?.sourceType]);
@@ -145,7 +157,7 @@ export default function Editor({
   }, [activeMapId]);
 
   useEffect(() => {
-    if (!viewer || !zoomTarget) return;
+    if (!viewer || !zoomTarget || compareOnly) return;
     fitBBox(viewer, zoomTarget.bbox, dims, {
       immediate: zoomTarget.immediate ?? false,
       locked: zoomTarget.lockZoom ?? zoomLocked,
@@ -226,6 +238,40 @@ export default function Editor({
         target?.tagName === 'INPUT' ||
         target?.tagName === 'TEXTAREA' ||
         target?.isContentEditable;
+
+      if (compareOnly) {
+        let handled = true;
+        switch (event.key) {
+          case '+':
+          case '=':
+            viewer.viewport.zoomBy(1.3);
+            break;
+          case '-':
+          case '_':
+            viewer.viewport.zoomBy(0.77);
+            break;
+          case 'ArrowUp':
+            viewer.viewport.panBy(new OpenSeadragon.Point(0, -0.08));
+            break;
+          case 'ArrowDown':
+            viewer.viewport.panBy(new OpenSeadragon.Point(0, 0.08));
+            break;
+          case 'ArrowLeft':
+            viewer.viewport.panBy(new OpenSeadragon.Point(-0.08, 0));
+            break;
+          case 'ArrowRight':
+            viewer.viewport.panBy(new OpenSeadragon.Point(0.08, 0));
+            break;
+          case '0':
+          case 'Home':
+            viewer.viewport.goHome();
+            break;
+          default:
+            handled = false;
+        }
+        if (handled) event.preventDefault();
+        return;
+      }
 
       if (event.key === ' ' && !editing) {
         event.preventDefault();
@@ -390,6 +436,7 @@ export default function Editor({
     openSearch,
     setEditorMode,
     toggleShowAllPrimitivesVisible,
+    compareOnly,
   ]);
 
   return (
@@ -430,10 +477,12 @@ export default function Editor({
           dims={dims}
           mapDragActive={mapDragActive || spaceDragActive}
           onMapDragActiveChange={setMapDragActive}
+          compareOnly={compareOnly}
+          workspaceOverride={workspaceOverride}
         />
       )}
 
-      {viewerReady && viewer && editorMode === 'textSelect' && pdfBlob && (
+      {viewerReady && viewer && !compareOnly && editorMode === 'textSelect' && pdfBlob && (
         <TextLayer
           pdfBlob={pdfBlob}
           pageIndex={pageIndex}
@@ -445,6 +494,11 @@ export default function Editor({
         className="absolute top-4 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-white/10 bg-black/45 px-2 py-2 shadow-lg backdrop-blur transition-[left] duration-200"
         style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
       >
+        {compareOnly && title && (
+          <div className="mr-2 rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-white/90">
+            {title}
+          </div>
+        )}
         <button
           onClick={zoomIn}
           className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
@@ -481,7 +535,7 @@ export default function Editor({
         >
           <Home size={16} />
         </button>
-        {activeMap?.sourceType === 'pdf' && (
+        {!compareOnly && activeMap?.sourceType === 'pdf' && (
           <button
             onClick={() => setEditorMode(editorMode === 'textSelect' ? 'none' : 'textSelect')}
             className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
@@ -494,7 +548,8 @@ export default function Editor({
             <span className="text-[13px] font-bold leading-none">T</span>
           </button>
         )}
-        <button
+        {!compareOnly && (
+          <button
           onClick={openSearch}
           className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             showQuickSearch
@@ -504,8 +559,10 @@ export default function Editor({
           title="Search (5)"
         >
           <Search size={15} />
-        </button>
-        <button
+          </button>
+        )}
+        {!compareOnly && (
+          <button
           onClick={openStudyBoxTool}
           className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             floatingTool === 'studybox' || editorMode === 'rectangle'
@@ -515,8 +572,10 @@ export default function Editor({
           title="Study box (6)"
         >
           <Square size={15} />
-        </button>
-        <button
+          </button>
+        )}
+        {!compareOnly && (
+          <button
           onClick={openGroupTool}
           className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             floatingTool === 'group'
@@ -526,8 +585,10 @@ export default function Editor({
           title="Group (7)"
         >
           <Shapes size={15} />
-        </button>
-        <button
+          </button>
+        )}
+        {!compareOnly && (
+          <button
           onClick={openPolylineTool}
           className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             floatingTool === 'polyline' || editorMode === 'polygon'
@@ -537,8 +598,10 @@ export default function Editor({
           title="Polyline (8)"
         >
           <PenTool size={15} />
-        </button>
-        <button
+          </button>
+        )}
+        {!compareOnly && (
+          <button
           onClick={toggleShowAllPrimitivesVisible}
           className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             showAllPrimitivesVisible
@@ -548,10 +611,11 @@ export default function Editor({
           title={showAllPrimitivesVisible ? 'Hide all overlays (\\)' : 'Show all overlays (\\)'}
         >
           <Eye size={15} />
-        </button>
+          </button>
+        )}
       </div>
 
-      {showQuickSearch && (
+      {!compareOnly && showQuickSearch && (
         <div
           className="absolute top-16 z-20 -translate-x-1/2 origin-top transition-all duration-300"
           style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
@@ -564,7 +628,7 @@ export default function Editor({
         </div>
       )}
 
-      {floatingTool === 'group' && (
+      {!compareOnly && floatingTool === 'group' && (
         <div
           className="absolute top-16 z-20 w-80 max-w-[calc(100vw-5rem)] -translate-x-1/2"
           style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
@@ -577,7 +641,7 @@ export default function Editor({
         </div>
       )}
 
-      {floatingTool === 'studybox' && (
+      {!compareOnly && floatingTool === 'studybox' && (
         <div
           className="absolute top-16 z-20 w-fit max-w-[calc(100vw-5rem)] -translate-x-1/2"
           style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
@@ -589,7 +653,7 @@ export default function Editor({
         </div>
       )}
 
-      {floatingTool === 'polyline' && (
+      {!compareOnly && floatingTool === 'polyline' && (
         <div
           className="absolute top-16 z-20 w-fit max-w-[calc(100vw-5rem)] -translate-x-1/2"
           style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
@@ -606,9 +670,35 @@ export default function Editor({
         style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
       >
         <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
-          1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · \ overlays · ? help
+          {compareOnly
+            ? '+ zoom in · - zoom out · 0 home · drag pan'
+            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · \\ overlays · ? help'}
         </div>
-        {pageCount > 1 && <PagePicker pageIndex={pageIndex} pageCount={pageCount} inline />}
+        {compareOnly && onComparePageChange && pageCount > 1 ? (
+          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur">
+            <button
+              onClick={() => onComparePageChange(pageIndex - 1)}
+              disabled={pageIndex <= 0}
+              className="rounded-full p-1 transition hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent"
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={12} />
+            </button>
+            <span className="px-2 tabular-nums">
+              Page {pageIndex + 1} / {pageCount}
+            </span>
+            <button
+              onClick={() => onComparePageChange(pageIndex + 1)}
+              disabled={pageIndex >= pageCount - 1}
+              className="rounded-full p-1 transition hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent"
+              aria-label="Next page"
+            >
+              <ChevronRight size={12} />
+            </button>
+          </div>
+        ) : (
+          pageCount > 1 && <PagePicker pageIndex={pageIndex} pageCount={pageCount} inline />
+        )}
       </div>
     </div>
   );

@@ -59,6 +59,14 @@ export interface MapStoreState {
   saveActiveWorkspace: (workspace: MapWorkspace) => Promise<void>;
 }
 
+export interface MapPageView {
+  map: DiagramMap;
+  pageIndex: number;
+  pageCount: number;
+  rasterBlob: Blob;
+  dims: { width: number; height: number };
+}
+
 let lastObjectUrl: string | null = null;
 
 function setObjectUrl(url: string | null) {
@@ -249,6 +257,52 @@ function updatePrimitiveOnPage(
       ),
     },
   });
+}
+
+export async function loadMapPageView(
+  mapId: string,
+  requestedPageIndex?: number
+): Promise<MapPageView | null> {
+  const map = await idb.getMap(mapId);
+  if (!map) return null;
+  const pageIndex = Math.min(
+    Math.max(requestedPageIndex ?? map.pageIndex, 0),
+    Math.max(0, map.pageCount - 1)
+  );
+  let raster = await idb.getRaster(map.id, map.renderScale, pageIndex);
+  if (!raster) {
+    const sourceBlob = await resolveSourceBlob(map);
+    if (!sourceBlob) return null;
+    const result = await rasterizeSource(sourceBlob, {
+      sourceType: map.sourceType ?? 'pdf',
+      scale: map.renderScale,
+      pageIndex,
+    });
+    await idb.putRaster(
+      map.id,
+      map.renderScale,
+      pageIndex,
+      result.blob,
+      result.width,
+      result.height
+    );
+    raster = {
+      key: '',
+      mapId: map.id,
+      scale: map.renderScale,
+      pageIndex,
+      blob: result.blob,
+      width: result.width,
+      height: result.height,
+    };
+  }
+  return {
+    map,
+    pageIndex,
+    pageCount: map.pageCount,
+    rasterBlob: raster.blob,
+    dims: { width: raster.width, height: raster.height },
+  };
 }
 
 export const useMapStore = create<MapStoreState>((set, get) => ({

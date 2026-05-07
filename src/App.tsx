@@ -8,7 +8,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import HotkeyHelp from './components/HotkeyHelp';
 import DropOverlay from './components/DropOverlay';
 import { useEditorStore } from './lib/store';
-import { useMapStore } from './lib/mapStore';
+import { loadMapPageView, useMapStore } from './lib/mapStore';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
 import {
@@ -20,7 +20,7 @@ import {
 } from './lib/cloudSync';
 import { uploadMapSource } from './lib/cloudStorage';
 import * as idb from './lib/idb';
-import type { DiagramMap } from './types';
+import type { DiagramMap, MapWorkspace } from './types';
 
 /** Keep only one map per pdfHash — prefer isDefault, then most-recently updated. */
 function dedupByHash(maps: DiagramMap[]): DiagramMap[] {
@@ -222,6 +222,96 @@ function useCloudSync(): SyncStatus {
   return status;
 }
 
+function workspaceForPage(map: DiagramMap, pageIndex: number): MapWorkspace {
+  return map.pages?.[pageIndex]?.workspace ?? map.workspace;
+}
+
+function ComparePane({
+  mapId,
+  pageIndex,
+  title,
+  onPageChange,
+}: {
+  mapId: string | null;
+  pageIndex: number;
+  title: string;
+  onPageChange: (pageIndex: number) => void;
+}) {
+  const [state, setState] = useState<{
+    rasterUrl: string | null;
+    dims: { width: number; height: number } | null;
+    pageCount: number;
+    pageIndex: number;
+    workspace: MapWorkspace | null;
+    mapName: string;
+  }>({
+    rasterUrl: null,
+    dims: null,
+    pageCount: 1,
+    pageIndex: 0,
+    workspace: null,
+    mapName: title,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    if (!mapId) {
+      setState({
+        rasterUrl: null,
+        dims: null,
+        pageCount: 1,
+        pageIndex: 0,
+        workspace: null,
+        mapName: title,
+      });
+      return;
+    }
+    void (async () => {
+      const view = await loadMapPageView(mapId, pageIndex);
+      if (!view || cancelled) return;
+      objectUrl = URL.createObjectURL(view.rasterBlob);
+      setState({
+        rasterUrl: objectUrl,
+        dims: view.dims,
+        pageCount: view.pageCount,
+        pageIndex: view.pageIndex,
+        workspace: workspaceForPage(view.map, view.pageIndex),
+        mapName: view.map.name,
+      });
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [mapId, pageIndex, title]);
+
+  return (
+    <div className="relative h-full w-full border-l border-white/10 first:border-l-0">
+      {state.rasterUrl && state.dims && state.workspace ? (
+        <Editor
+          rasterUrl={state.rasterUrl}
+          dims={state.dims}
+          pageIndex={state.pageIndex}
+          pageCount={state.pageCount}
+          compareOnly
+          title={`${title} · ${state.mapName}`}
+          workspaceOverride={state.workspace}
+          onComparePageChange={onPageChange}
+        />
+      ) : (
+        <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,#1e293b,#020617)] text-white">
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-center backdrop-blur">
+            <div className="text-sm font-medium tracking-wide text-white/90">
+              Loading {title.toLowerCase()}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MapPage() {
   const syncStatus = useCloudSync();
 
@@ -235,6 +325,15 @@ function MapPage() {
   const activeRasterUrl = useMapStore((s) => s.activeRasterUrl);
   const [showHelp, setShowHelp] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
+  const [splitMode, setSplitMode] = useState(false);
+  const [splitTarget, setSplitTarget] = useState<1 | 2>(1);
+  const [splitMaps, setSplitMaps] = useState<{
+    1: { mapId: string | null; pageIndex: number };
+    2: { mapId: string | null; pageIndex: number };
+  }>({
+    1: { mapId: activeMap?.id ?? null, pageIndex: activeMap?.pageIndex ?? 0 },
+    2: { mapId: activeMap?.id ?? null, pageIndex: activeMap?.pageIndex ?? 0 },
+  });
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -255,7 +354,7 @@ function MapPage() {
       if (event.key === 'Escape' && !editing && (!leftSidebarCollapsed || rightPaneOpen)) {
         event.preventDefault();
         if (!leftSidebarCollapsed) setLeftSidebarCollapsed(true);
-        if (rightPaneOpen) toggleRightPane();
+        if (rightPaneOpen && !splitMode) toggleRightPane();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -266,7 +365,16 @@ function MapPage() {
     rightPaneOpen,
     setLeftSidebarCollapsed,
     toggleRightPane,
+    splitMode,
   ]);
+
+  useEffect(() => {
+    if (splitMode || !activeMap) return;
+    setSplitMaps({
+      1: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
+      2: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
+    });
+  }, [activeMap?.id, activeMap?.pageIndex, splitMode]);
 
   useEffect(() => {
     if (!dropError) return;
@@ -326,6 +434,31 @@ function MapPage() {
     window.addEventListener('mouseup', handleUp);
   };
 
+  const toggleSplitMode = () => {
+    setSplitMode((current) => {
+      const next = !current;
+      if (next && activeMap) {
+        useEditorStore.getState().setSelectedPrimitiveId(null);
+        setSplitMaps({
+          1: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
+          2: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
+        });
+      }
+      return next;
+    });
+  };
+
+  const assignSplitMap = (mapId: string) => {
+    const map = useMapStore.getState().maps.find((entry) => entry.id === mapId);
+    setSplitMaps((current) => ({
+      ...current,
+      [splitTarget]: {
+        mapId,
+        pageIndex: map?.pageIndex ?? 0,
+      },
+    }));
+  };
+
   if (!activeMap || !activeRasterUrl) {
     return (
       <SyncStatusContext.Provider value={syncStatus}>
@@ -340,20 +473,57 @@ function MapPage() {
     <SyncStatusContext.Provider value={syncStatus}>
       <div className="relative h-screen w-screen overflow-hidden bg-gray-50">
         <div className="absolute inset-0">
-          <Editor
-            rasterUrl={activeRasterUrl}
-            dims={dims}
-            pageIndex={activeMap.pageIndex}
-            pageCount={activeMap.pageCount}
-            leftInset={leftSidebarCollapsed ? 0 : leftPaneWidth}
-          />
+          {splitMode ? (
+            <div className="grid h-full w-full grid-cols-2">
+              <ComparePane
+                mapId={splitMaps[1].mapId}
+                pageIndex={splitMaps[1].pageIndex}
+                title="Window 1"
+                onPageChange={(page) =>
+                  setSplitMaps((current) => ({
+                    ...current,
+                    1: { ...current[1], pageIndex: page },
+                  }))
+                }
+              />
+              <ComparePane
+                mapId={splitMaps[2].mapId}
+                pageIndex={splitMaps[2].pageIndex}
+                title="Window 2"
+                onPageChange={(page) =>
+                  setSplitMaps((current) => ({
+                    ...current,
+                    2: { ...current[2], pageIndex: page },
+                  }))
+                }
+              />
+            </div>
+          ) : (
+            <Editor
+              rasterUrl={activeRasterUrl}
+              dims={dims}
+              pageIndex={activeMap.pageIndex}
+              pageCount={activeMap.pageCount}
+              leftInset={leftSidebarCollapsed ? 0 : leftPaneWidth}
+            />
+          )}
         </div>
         <div className="pointer-events-none absolute inset-y-0 left-0 z-30">
           <div
             className="pointer-events-auto relative h-full"
             style={{ width: leftSidebarCollapsed ? undefined : leftPaneWidth }}
           >
-            <LeftPane />
+            <LeftPane
+              splitMode={splitMode}
+              splitTarget={splitTarget}
+              splitAssignments={{
+                1: splitMaps[1].mapId,
+                2: splitMaps[2].mapId,
+              }}
+              onToggleSplitMode={toggleSplitMode}
+              onSetSplitTarget={setSplitTarget}
+              onAssignMapToSplit={assignSplitMap}
+            />
             {!leftSidebarCollapsed && (
               <div
                 className="absolute inset-y-0 right-0 hidden w-2 cursor-col-resize lg:block"
@@ -369,7 +539,7 @@ function MapPage() {
           </div>
         </div>
 
-        {selectedPrimitive && !rightPaneOpen && (
+        {!splitMode && selectedPrimitive && !rightPaneOpen && (
           <button
             onClick={toggleRightPane}
             className="fixed right-0 top-1/2 z-40 -translate-y-1/2 rounded-l-xl border border-gray-200 bg-white px-2 py-4 shadow-md transition hover:bg-gray-50"
@@ -379,7 +549,7 @@ function MapPage() {
           </button>
         )}
 
-        {selectedPrimitive && rightPaneOpen && (
+        {!splitMode && selectedPrimitive && rightPaneOpen && (
           <>
             <button
               onClick={toggleRightPane}

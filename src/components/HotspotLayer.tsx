@@ -15,7 +15,7 @@ import {
   makeMemberKey,
   parseMemberKey,
 } from '../lib/workspace';
-import type { Point, Primitive } from '../types';
+import type { MapWorkspace, Point, Primitive } from '../types';
 import { useMapStore } from '../lib/mapStore';
 
 interface HotspotLayerProps {
@@ -23,6 +23,8 @@ interface HotspotLayerProps {
   dims: SourceDims;
   mapDragActive: boolean;
   onMapDragActiveChange: (active: boolean) => void;
+  compareOnly?: boolean;
+  workspaceOverride?: MapWorkspace;
 }
 
 const FOCUS_PADDING = 16;
@@ -32,6 +34,8 @@ export default function HotspotLayer({
   dims,
   mapDragActive,
   onMapDragActiveChange,
+  compareOnly = false,
+  workspaceOverride,
 }: HotspotLayerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewportSize, setViewportSize] = useState({ w: 1, h: 1 });
@@ -52,7 +56,8 @@ export default function HotspotLayer({
   const selectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
   const hoveredPrimitiveId = useEditorStore((s) => s.hoveredPrimitiveId);
   const selectedOccurrenceIndex = useEditorStore((s) => s.selectedOccurrenceIndex);
-  const workspace = useEditorStore((s) => s.workspace);
+  const storeWorkspace = useEditorStore((s) => s.workspace);
+  const workspace = workspaceOverride ?? storeWorkspace;
   const editorMode = useEditorStore((s) => s.editorMode);
   const showAllPrimitivesVisible = useEditorStore((s) => s.showAllPrimitivesVisible);
   const draftOverlayColor = useEditorStore((s) => s.draftOverlayColor);
@@ -187,6 +192,7 @@ export default function HotspotLayer({
     : null;
 
   useEffect(() => {
+    if (compareOnly) return;
     if (zoomTarget) return;
     if (!selectedPrimitive) return;
     if (selectedPrimitive.kind === 'group' && selectedGroupTargets.length) {
@@ -210,7 +216,7 @@ export default function HotspotLayer({
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPrimitiveId, selectedOccurrenceIndex, selectionGeomKey, viewer, zoomLocked, zoomTarget, dims.width, dims.height]);
+  }, [selectedPrimitiveId, selectedOccurrenceIndex, selectionGeomKey, viewer, zoomLocked, zoomTarget, dims.width, dims.height, compareOnly]);
 
   useEffect(() => {
     if (editorMode !== 'polygon') return;
@@ -450,9 +456,9 @@ export default function HotspotLayer({
       } catch {
         // ignore
       }
-      if (!drag.moved) drag.activate();
+      if (!drag.moved && !compareOnly) drag.activate();
     },
-    [onMapDragActiveChange]
+    [onMapDragActiveChange, compareOnly]
   );
 
   const cancelInteractiveDrag = useCallback(
@@ -505,7 +511,7 @@ export default function HotspotLayer({
   // re-render markers when viewport changes
   void viewTick;
 
-  if (editorMode === 'textSelect') return null;
+  if (!compareOnly && editorMode === 'textSelect') return null;
 
   return (
     <svg
@@ -540,6 +546,7 @@ export default function HotspotLayer({
             selectedPrimitive.showMemberNumbers === true;
           const groupEntry = selectedGroupTargets.find((e) => e.id === primitive.id);
           const isVisible =
+            compareOnly ||
             showAllPrimitivesVisible ||
             primitive.showOnLoad === true ||
             isSelected ||
@@ -597,6 +604,7 @@ export default function HotspotLayer({
 
           const interactiveStyle = {
             pointerEvents:
+              compareOnly ||
               spacePanActive ||
               (editorMode !== 'none' && !overlaySelectionMode) ||
               (primitive.kind === 'group' && isSelected)
@@ -873,7 +881,8 @@ export default function HotspotLayer({
         </g>
       )}
 
-      {editorMode !== 'none' &&
+      {!compareOnly &&
+        editorMode !== 'none' &&
         editorMode !== 'groupCollect' &&
         editorMode !== 'overlayNeighborPick' && (
           <g>
