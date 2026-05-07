@@ -198,7 +198,7 @@ export default function ImportExportBar() {
     try {
       await setMapRenderScale(activeMap.id, scale);
     } catch (err) {
-      setError((err as Error).message ?? 'Failed to change raster factor');
+      setError((err as Error).message ?? 'Failed to change resolution');
     }
     setBusy(null);
   };
@@ -309,7 +309,7 @@ export default function ImportExportBar() {
           </button>
           <div className="my-2 border-t border-gray-100" />
           <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
-            Raster factor
+            Resolution
           </div>
           <div className="px-2 pb-1">
             <div className="grid grid-cols-3 gap-2">
@@ -332,8 +332,7 @@ export default function ImportExportBar() {
               })}
             </div>
             <p className="mt-2 px-1 text-[11px] leading-4 text-gray-500">
-              Current maps import at 2x by default. Large maps may still be capped lower to keep pan
-              and zoom responsive.
+              New maps import at 2x by default. Lower values are faster, higher values are sharper.
             </p>
           </div>
           {(busy || error) && <div className="my-2 border-t border-gray-100" />}
