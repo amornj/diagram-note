@@ -64,6 +64,7 @@ export default function HotspotLayer({
   const addPrimitive = useEditorStore((s) => s.addPrimitive);
   const setEditorMode = useEditorStore((s) => s.setEditorMode);
   const zoomLocked = useEditorStore((s) => s.zoomLocked);
+  const zoomTarget = useEditorStore((s) => s.zoomTarget);
   const spacePanActive = useEditorStore((s) => s.spacePanActive);
   const addDraftGroupMember = useEditorStore((s) => s.addDraftGroupMember);
   const addGroupMember = useEditorStore((s) => s.addGroupMember);
@@ -170,6 +171,7 @@ export default function HotspotLayer({
     : null;
 
   useEffect(() => {
+    if (zoomTarget) return;
     if (!selectedPrimitive) return;
     if (selectedPrimitive.kind === 'group' && selectedGroupTargets.length) {
       const target =
@@ -192,7 +194,7 @@ export default function HotspotLayer({
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPrimitiveId, selectedOccurrenceIndex, selectionGeomKey, viewer, zoomLocked, dims.width, dims.height]);
+  }, [selectedPrimitiveId, selectedOccurrenceIndex, selectionGeomKey, viewer, zoomLocked, zoomTarget, dims.width, dims.height]);
 
   useEffect(() => {
     if (editorMode !== 'polygon') return;
