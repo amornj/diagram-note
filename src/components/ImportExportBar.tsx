@@ -5,6 +5,7 @@ import { useEditorStore } from '../lib/store';
 import { downloadBlob, exportDnote, importDnote } from '../lib/bundle';
 import * as idb from '../lib/idb';
 import type { MapWorkspace } from '../types';
+import { EMPTY_WORKSPACE } from '../lib/workspace';
 
 function escapeMarkdown(value: string) {
   return value.replace(/([\\`*_{}\[\]()#+\-.!|>])/g, '\\$1');
@@ -43,10 +44,21 @@ function buildNotesMarkdown(
   return `${sections.join('\n')}\n`;
 }
 
+function isMapWorkspace(value: unknown): value is MapWorkspace {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'version' in value &&
+    'primitives' in value &&
+    Array.isArray((value as MapWorkspace).primitives)
+  );
+}
+
 export default function ImportExportBar() {
   const rootRef = useRef<HTMLDivElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const dnoteInputRef = useRef<HTMLInputElement>(null);
+  const jsonInputRef = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +66,9 @@ export default function ImportExportBar() {
   const maps = useMapStore((s) => s.maps);
   const createMapFromPdf = useMapStore((s) => s.createMapFromPdf);
   const importDnoteMap = useMapStore((s) => s.importDnoteMap);
+  const saveActiveWorkspace = useMapStore((s) => s.saveActiveWorkspace);
   const workspace = useEditorStore((s) => s.workspace);
+  const setWorkspace = useEditorStore((s) => s.setWorkspace);
 
   const activeMap = maps.find((m) => m.id === activeMapId);
 
@@ -131,6 +145,25 @@ export default function ImportExportBar() {
     setMenuOpen(false);
   };
 
+  const handleJsonPick = async (file: File) => {
+    if (!activeMap) return;
+    setBusy('Loading JSON…');
+    setError(null);
+    try {
+      const raw = JSON.parse(await file.text()) as unknown;
+      const nextWorkspace = isMapWorkspace(raw) ? raw : EMPTY_WORKSPACE;
+      if (!isMapWorkspace(raw)) {
+        throw new Error('Invalid workspace JSON');
+      }
+      setWorkspace(nextWorkspace);
+      await saveActiveWorkspace(nextWorkspace);
+      setMenuOpen(false);
+    } catch (err) {
+      setError((err as Error).message ?? 'Failed to load JSON');
+    }
+    setBusy(null);
+  };
+
   const handleExportNotes = () => {
     if (!activeMap) return;
 
@@ -182,6 +215,18 @@ export default function ImportExportBar() {
           if (dnoteInputRef.current) dnoteInputRef.current.value = '';
         }}
       />
+      <input
+        ref={jsonInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          await handleJsonPick(file);
+          if (jsonInputRef.current) jsonInputRef.current.value = '';
+        }}
+      />
       <button
         onClick={() => setMenuOpen((value) => !value)}
         className={`rounded-md p-1.5 transition-colors ${
@@ -211,6 +256,15 @@ export default function ImportExportBar() {
           >
             <Upload size={14} />
             Load .dnote
+          </button>
+          <button
+            onClick={() => jsonInputRef.current?.click()}
+            disabled={!activeMap}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            role="menuitem"
+          >
+            <Upload size={14} />
+            Load JSON
           </button>
           <button
             onClick={handleExportDnote}

@@ -11,7 +11,13 @@ import { useEditorStore } from './lib/store';
 import { useMapStore } from './lib/mapStore';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
-import { loadCloudMaps, saveCloudMaps, subscribeCloudMaps } from './lib/cloudSync';
+import {
+  deleteCloudMap,
+  loadCloudMaps,
+  saveCloudMap,
+  saveCloudMaps,
+  subscribeCloudMaps,
+} from './lib/cloudSync';
 import { uploadMapSource } from './lib/cloudStorage';
 import * as idb from './lib/idb';
 import type { DiagramMap } from './types';
@@ -29,6 +35,10 @@ function dedupByHash(maps: DiagramMap[]): DiagramMap[] {
     seen.set(m.pdfHash, keep);
   }
   return dupeIds.size ? maps.filter((m) => !dupeIds.has(m.id)) : maps;
+}
+
+function snapshotMaps(maps: DiagramMap[]) {
+  return new Map(maps.map((map) => [map.id, JSON.stringify(map)]));
 }
 
 async function backfillCloudSourcePaths(
@@ -109,6 +119,7 @@ function useCloudSync(): SyncStatus {
   const { user } = useAuth();
   const syncReadyRef = useRef(false);
   const prevUidRef = useRef<string | null>(null);
+  const persistedRef = useRef<Map<string, string>>(new Map());
   const [status, setStatus] = useState<SyncStatus>('idle');
   const [syncReady, setSyncReady] = useState(false);
 
@@ -117,6 +128,7 @@ function useCloudSync(): SyncStatus {
     if (!user) {
       prevUidRef.current = null;
       syncReadyRef.current = false;
+      persistedRef.current = new Map();
       setSyncReady(false);
       setStatus('idle');
       return;
@@ -134,6 +146,7 @@ function useCloudSync(): SyncStatus {
         return;
       }
       if (cloud && cloud.length > 0) {
+        persistedRef.current = snapshotMaps(cloud);
         await mergeCloudMaps(cloud);
       } else if (!cloud) {
         // First login — push local maps to cloud
@@ -142,7 +155,9 @@ function useCloudSync(): SyncStatus {
           useMapStore.getState().maps
         );
         if (localMaps.length > 0) {
-          saveCloudMaps(user.uid, dedupByHash(localMaps));
+          const deduped = dedupByHash(localMaps);
+          const ok = await saveCloudMaps(user.uid, deduped);
+          if (ok) persistedRef.current = snapshotMaps(deduped);
         }
       }
       syncReadyRef.current = true;
@@ -157,6 +172,7 @@ function useCloudSync(): SyncStatus {
       onData: (cloud) => {
         if (!cloud || cloud.length === 0) return;
         setStatus('loading');
+        persistedRef.current = snapshotMaps(cloud);
         void mergeCloudMaps(cloud).then(() => setStatus('synced'));
       },
       onError: (error) => {
@@ -171,14 +187,34 @@ function useCloudSync(): SyncStatus {
   useEffect(() => {
     if (!user || !syncReadyRef.current) return;
     const uid = user.uid;
-    setStatus('saving');
     const timer = setTimeout(async () => {
-      const syncedMaps = await backfillCloudSourcePaths(
+      const syncedMaps = dedupByHash(await backfillCloudSourcePaths(
         uid,
         useMapStore.getState().maps
-      );
-      const ok = await saveCloudMaps(uid, dedupByHash(syncedMaps));
-      setStatus(ok ? 'synced' : 'error');
+      ));
+      const previous = persistedRef.current;
+      const next = snapshotMaps(syncedMaps);
+
+      const changed = syncedMaps.filter((map) => previous.get(map.id) !== next.get(map.id));
+      const removed = [...previous.keys()].filter((id) => !next.has(id));
+      if (changed.length === 0 && removed.length === 0) return;
+
+      setStatus('saving');
+      let ok = true;
+      for (const map of changed) {
+        const saved = await saveCloudMap(uid, map);
+        ok = ok && saved;
+      }
+      for (const id of removed) {
+        const deleted = await deleteCloudMap(uid, id);
+        ok = ok && deleted;
+      }
+      if (ok) {
+        persistedRef.current = next;
+        setStatus('synced');
+      } else {
+        setStatus('error');
+      }
     }, 3000);
     return () => clearTimeout(timer);
   }, [user, maps]);
