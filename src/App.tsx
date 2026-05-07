@@ -345,6 +345,7 @@ function MapPage() {
             dims={dims}
             pageIndex={activeMap.pageIndex}
             pageCount={activeMap.pageCount}
+            leftInset={leftSidebarCollapsed ? 0 : leftPaneWidth}
           />
         </div>
         <div className="pointer-events-none absolute inset-y-0 left-0 z-30">

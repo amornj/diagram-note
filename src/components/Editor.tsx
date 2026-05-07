@@ -27,9 +27,16 @@ interface EditorProps {
   dims: SourceDims;
   pageIndex: number;
   pageCount: number;
+  leftInset?: number;
 }
 
-export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: EditorProps) {
+export default function Editor({
+  rasterUrl,
+  dims,
+  pageIndex,
+  pageCount,
+  leftInset = 0,
+}: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
   const [viewer, setViewer] = useState<OpenSeadragon.Viewer | null>(null);
@@ -434,24 +441,27 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
         />
       )}
 
-      <div className="absolute top-4 left-4 z-10 flex flex-col gap-1">
+      <div
+        className="absolute top-4 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-white/10 bg-black/45 px-2 py-2 shadow-lg backdrop-blur transition-[left] duration-200"
+        style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
+      >
         <button
           onClick={zoomIn}
-          className="w-8 h-8 bg-white/90 hover:bg-white rounded shadow flex items-center justify-center text-gray-700"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
           title="Zoom in (+)"
         >
           <Plus size={17} />
         </button>
         <button
           onClick={zoomOut}
-          className="w-8 h-8 bg-white/90 hover:bg-white rounded shadow flex items-center justify-center text-gray-700"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
           title="Zoom out (-)"
         >
           <Minus size={17} />
         </button>
         <button
           onClick={toggleZoomLock}
-          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             zoomLocked
               ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
               : 'bg-white/90 text-gray-700 hover:bg-white'
@@ -466,7 +476,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
         </button>
         <button
           onClick={goHome}
-          className="w-8 h-8 bg-white/90 hover:bg-white rounded shadow flex items-center justify-center text-gray-700"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
           title="Reset view (0)"
         >
           <Home size={16} />
@@ -474,7 +484,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
         {activeMap?.sourceType === 'pdf' && (
           <button
             onClick={() => setEditorMode(editorMode === 'textSelect' ? 'none' : 'textSelect')}
-            className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
               editorMode === 'textSelect'
                 ? 'bg-sky-500 text-white hover:bg-sky-600'
                 : 'bg-white/90 text-gray-700 hover:bg-white'
@@ -486,7 +496,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
         )}
         <button
           onClick={openSearch}
-          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             showQuickSearch
               ? 'bg-sky-500 text-white hover:bg-sky-600'
               : 'bg-white/90 text-gray-700 hover:bg-white'
@@ -497,7 +507,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
         </button>
         <button
           onClick={openStudyBoxTool}
-          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             floatingTool === 'studybox' || editorMode === 'rectangle'
               ? 'bg-sky-500 text-white hover:bg-sky-600'
               : 'bg-white/90 text-gray-700 hover:bg-white'
@@ -508,7 +518,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
         </button>
         <button
           onClick={openGroupTool}
-          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             floatingTool === 'group'
               ? 'bg-sky-500 text-white hover:bg-sky-600'
               : 'bg-white/90 text-gray-700 hover:bg-white'
@@ -519,7 +529,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
         </button>
         <button
           onClick={openPolylineTool}
-          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             floatingTool === 'polyline' || editorMode === 'polygon'
               ? 'bg-sky-500 text-white hover:bg-sky-600'
               : 'bg-white/90 text-gray-700 hover:bg-white'
@@ -530,7 +540,7 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
         </button>
         <button
           onClick={toggleShowAllPrimitivesVisible}
-          className={`w-8 h-8 rounded shadow flex items-center justify-center transition ${
+          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
             showAllPrimitivesVisible
               ? 'bg-sky-500 text-white hover:bg-sky-600'
               : 'bg-white/90 text-gray-700 hover:bg-white'
@@ -542,7 +552,10 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
       </div>
 
       {showQuickSearch && (
-        <div className="absolute left-14 top-4 z-20 origin-left transition-all duration-300">
+        <div
+          className="absolute top-16 z-20 -translate-x-1/2 origin-top transition-all duration-300"
+          style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
+        >
           <SearchBox
             floating
             autoFocus
@@ -552,7 +565,10 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
       )}
 
       {floatingTool === 'group' && (
-        <div className="absolute left-14 top-4 z-20 w-80 max-w-[calc(100vw-5rem)]">
+        <div
+          className="absolute top-16 z-20 w-80 max-w-[calc(100vw-5rem)] -translate-x-1/2"
+          style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
+        >
           <DrawTools
             mode="group"
             groupBuilderFocusSignal={groupBuilderFocusSignal}
@@ -562,7 +578,10 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
       )}
 
       {floatingTool === 'studybox' && (
-        <div className="absolute left-14 top-4 z-20 w-fit max-w-[calc(100vw-5rem)]">
+        <div
+          className="absolute top-16 z-20 w-fit max-w-[calc(100vw-5rem)] -translate-x-1/2"
+          style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
+        >
           <DrawTools
             mode="studybox"
             onRequestClose={() => setFloatingTool(null)}
@@ -571,7 +590,10 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
       )}
 
       {floatingTool === 'polyline' && (
-        <div className="absolute left-14 top-4 z-20 w-fit max-w-[calc(100vw-5rem)]">
+        <div
+          className="absolute top-16 z-20 w-fit max-w-[calc(100vw-5rem)] -translate-x-1/2"
+          style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
+        >
           <DrawTools
             mode="polyline"
             onRequestClose={() => setFloatingTool(null)}
@@ -579,11 +601,15 @@ export default function Editor({ rasterUrl, dims, pageIndex, pageCount }: Editor
         </div>
       )}
 
-      <div className="absolute bottom-4 left-4 z-10 rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
-        1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · \ overlays · ? help
+      <div
+        className="absolute bottom-4 z-10 flex -translate-x-1/2 items-center gap-3"
+        style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
+      >
+        <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
+          1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · \ overlays · ? help
+        </div>
+        {pageCount > 1 && <PagePicker pageIndex={pageIndex} pageCount={pageCount} inline />}
       </div>
-
-      <PagePicker pageIndex={pageIndex} pageCount={pageCount} />
     </div>
   );
 }
