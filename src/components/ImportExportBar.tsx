@@ -63,11 +63,14 @@ export default function ImportExportBar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deleteAllInput, setDeleteAllInput] = useState('');
   const activeMapId = useMapStore((s) => s.activeMapId);
   const maps = useMapStore((s) => s.maps);
   const createMapFromPdf = useMapStore((s) => s.createMapFromPdf);
   const setMapRenderScale = useMapStore((s) => s.setMapRenderScale);
   const importDnoteMap = useMapStore((s) => s.importDnoteMap);
+  const clearMapOverlays = useMapStore((s) => s.clearMapOverlays);
   const saveActiveWorkspace = useMapStore((s) => s.saveActiveWorkspace);
   const workspace = useEditorStore((s) => s.workspace);
   const setWorkspace = useEditorStore((s) => s.setWorkspace);
@@ -79,10 +82,16 @@ export default function ImportExportBar() {
     const handlePointerDown = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
         setMenuOpen(false);
+        setShowDeleteAllConfirm(false);
+        setDeleteAllInput('');
       }
     };
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOpen(false);
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+        setShowDeleteAllConfirm(false);
+        setDeleteAllInput('');
+      }
     };
     window.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('keydown', handleEscape);
@@ -199,6 +208,21 @@ export default function ImportExportBar() {
       await setMapRenderScale(activeMap.id, scale);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to change resolution');
+    }
+    setBusy(null);
+  };
+
+  const handleDeleteAllOverlays = async () => {
+    if (!activeMap || deleteAllInput !== 'Delete all') return;
+    setBusy('Deleting all overlays…');
+    setError(null);
+    try {
+      await clearMapOverlays(activeMap.id);
+      setDeleteAllInput('');
+      setShowDeleteAllConfirm(false);
+      setMenuOpen(false);
+    } catch (err) {
+      setError((err as Error).message ?? 'Failed to delete overlays');
     }
     setBusy(null);
   };
@@ -335,6 +359,49 @@ export default function ImportExportBar() {
               New maps import at 2x by default. Lower values are faster, higher values are sharper.
             </p>
           </div>
+          <div className="my-2 border-t border-gray-100" />
+          {!showDeleteAllConfirm ? (
+            <button
+              onClick={() => setShowDeleteAllConfirm(true)}
+              disabled={!activeMap || busy !== null}
+              className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              role="menuitem"
+            >
+              <span>Remove all overlays</span>
+              <span className="text-[10px] uppercase tracking-[0.14em] text-red-400">Hidden</span>
+            </button>
+          ) : (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+              <div className="text-xs font-semibold text-red-800">Delete all overlays on this map</div>
+              <p className="mt-1 text-[11px] leading-4 text-red-700">
+                Type <span className="font-semibold">Delete all</span> to confirm. This clears every page in the current map.
+              </p>
+              <input
+                value={deleteAllInput}
+                onChange={(event) => setDeleteAllInput(event.target.value)}
+                placeholder="Delete all"
+                className="mt-2 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-red-300"
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowDeleteAllConfirm(false);
+                    setDeleteAllInput('');
+                  }}
+                  className="flex-1 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void handleDeleteAllOverlays()}
+                  disabled={deleteAllInput !== 'Delete all' || busy !== null}
+                  className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Delete all
+                </button>
+              </div>
+            </div>
+          )}
           {(busy || error) && <div className="my-2 border-t border-gray-100" />}
           {busy && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">

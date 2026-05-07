@@ -40,6 +40,7 @@ export interface MapStoreState {
     map: DiagramMap;
     sourceBlob: Blob;
   }) => Promise<string>;
+  clearMapOverlays: (id: string) => Promise<void>;
   addPrimitiveBacklink: (
     sourcePageIndex: number,
     sourceId: string,
@@ -663,6 +664,43 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     set({ maps: [...get().maps.filter((m) => m.id !== syncedMap.id), syncedMap] });
     await get().setActiveMap(syncedMap.id);
     return syncedMap.id;
+  },
+
+  clearMapOverlays: async (id) => {
+    const map = await idb.getMap(id);
+    if (!map) return;
+    const pageIndexes = new Set<number>([map.pageIndex]);
+    for (const key of Object.keys(map.pages ?? {})) {
+      pageIndexes.add(Number(key));
+    }
+    const clearedPages: Record<number, PageMeta> = {};
+    for (const pageIndex of pageIndexes) {
+      const meta = getPageMeta(map, pageIndex);
+      clearedPages[pageIndex] = {
+        ...meta,
+        workspace: EMPTY_WORKSPACE,
+      };
+    }
+    const activeMeta = clearedPages[map.pageIndex] ?? {
+      workspace: EMPTY_WORKSPACE,
+      sourceWidth: map.sourceWidth,
+      sourceHeight: map.sourceHeight,
+    };
+    const updated: DiagramMap = {
+      ...map,
+      workspace: EMPTY_WORKSPACE,
+      pages: clearedPages,
+      sourceWidth: activeMeta.sourceWidth,
+      sourceHeight: activeMeta.sourceHeight,
+      updatedAt: Date.now(),
+    };
+    await idb.putMap(updated);
+    set({
+      maps: get().maps.map((entry) => (entry.id === id ? updated : entry)),
+    });
+    if (get().activeMapId === id) {
+      useEditorStore.getState().setWorkspace(EMPTY_WORKSPACE);
+    }
   },
 
   addPrimitiveBacklink: async (sourcePageIndex, sourceId, targetPageIndex, targetId) => {
