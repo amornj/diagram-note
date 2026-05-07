@@ -17,6 +17,11 @@ const ACTIVE_MAP_STORAGE_KEY = 'diagram-note-active-map';
 const DEFAULT_MAP_ASSET = '/metabolic-map.pdf';
 const DEFAULT_MAP_NAME = 'metabolic-map';
 
+function debugMap(message: string, details?: Record<string, unknown>) {
+  if (details) console.info(`[map] ${message}`, details);
+  else console.info(`[map] ${message}`);
+}
+
 export interface MapStoreState {
   maps: DiagramMap[];
   activeMapId: string | null;
@@ -70,6 +75,13 @@ async function ensureRemoteSource(
   sourceBlob: Blob
 ): Promise<DiagramMap> {
   const uid = auth?.currentUser?.uid;
+  debugMap('ensure remote source', {
+    mapId: map.id,
+    name: map.name,
+    uid: uid ?? null,
+    hasSourceStoragePath: Boolean(map.sourceStoragePath),
+    sourceSize: sourceBlob.size,
+  });
   if (!uid || map.sourceStoragePath) return map;
   try {
     const sourceStoragePath = await uploadMapSource(
@@ -91,15 +103,38 @@ async function ensureRemoteSource(
 }
 
 async function resolveSourceBlob(map: DiagramMap): Promise<Blob | null> {
+  debugMap('resolve source start', {
+    mapId: map.id,
+    name: map.name,
+    isDefault: Boolean(map.isDefault),
+    sourceStoragePath: map.sourceStoragePath ?? null,
+    uid: auth?.currentUser?.uid ?? null,
+  });
   let sourceBlob = await idb.getPdfBlob(map.id);
-  if (sourceBlob) return sourceBlob;
+  if (sourceBlob) {
+    debugMap('resolved source from idb', {
+      mapId: map.id,
+      size: sourceBlob.size,
+      type: sourceBlob.type,
+    });
+    return sourceBlob;
+  }
 
   if (map.isDefault) {
     try {
+      debugMap('fetching bundled default source', {
+        mapId: map.id,
+        asset: DEFAULT_MAP_ASSET,
+      });
       const response = await fetch(DEFAULT_MAP_ASSET);
       if (!response.ok) return null;
       sourceBlob = await response.blob();
       await idb.putPdfBlob(map.id, sourceBlob);
+      debugMap('resolved source from bundled default', {
+        mapId: map.id,
+        size: sourceBlob.size,
+        type: sourceBlob.type,
+      });
       return sourceBlob;
     } catch (error) {
       console.error('[map] default source fetch failed:', error);
@@ -111,12 +146,23 @@ async function resolveSourceBlob(map: DiagramMap): Promise<Blob | null> {
   if (map.sourceStoragePath) storagePaths.add(map.sourceStoragePath);
   const uid = auth?.currentUser?.uid;
   if (uid) storagePaths.add(mapSourcePath(uid, map.id));
+  debugMap('trying storage paths', {
+    mapId: map.id,
+    paths: Array.from(storagePaths),
+  });
 
   for (const path of storagePaths) {
     try {
+      debugMap('trying storage source path', { mapId: map.id, path });
       sourceBlob = await downloadMapSource(path);
       if (sourceBlob) {
         await idb.putPdfBlob(map.id, sourceBlob);
+        debugMap('resolved source from storage', {
+          mapId: map.id,
+          path,
+          size: sourceBlob.size,
+          type: sourceBlob.type,
+        });
         if (map.sourceStoragePath !== path) {
           const updated = { ...map, sourceStoragePath: path, updatedAt: Date.now() };
           await idb.putMap(updated);
@@ -133,6 +179,12 @@ async function resolveSourceBlob(map: DiagramMap): Promise<Blob | null> {
     }
   }
 
+  debugMap('resolve source failed', {
+    mapId: map.id,
+    name: map.name,
+    sourceStoragePath: map.sourceStoragePath ?? null,
+    uid: auth?.currentUser?.uid ?? null,
+  });
   return null;
 }
 
@@ -294,6 +346,10 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
   },
 
   setActiveMap: async (id) => {
+    debugMap('set active map start', {
+      requestedMapId: id,
+      currentActiveMapId: get().activeMapId,
+    });
     saveActiveId(id);
     if (!id) {
       setObjectUrl(null);
@@ -303,18 +359,31 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     }
     const map = await idb.getMap(id);
     if (!map) {
+      debugMap('set active map missing map record', { requestedMapId: id });
       saveActiveId(null);
       setObjectUrl(null);
       set({ activeMapId: null, activeRasterUrl: null });
       useEditorStore.getState().setWorkspace(EMPTY_WORKSPACE);
       return false;
     }
+    debugMap('set active map loaded record', {
+      mapId: map.id,
+      name: map.name,
+      pageIndex: map.pageIndex,
+      pageCount: map.pageCount,
+      sourceStoragePath: map.sourceStoragePath ?? null,
+    });
     const pageIndex = map.pageIndex;
     const openedAt = Date.now();
     const openedMap: DiagramMap = { ...map, lastOpenedAt: openedAt };
     await idb.putMap(openedMap);
     let raster = await idb.getRaster(id, openedMap.renderScale, pageIndex);
     if (!raster) {
+      debugMap('raster cache miss', {
+        mapId: id,
+        pageIndex,
+        scale: openedMap.renderScale,
+      });
       const sourceBlob = await resolveSourceBlob(openedMap);
       if (!sourceBlob) return false;
       const result = await rasterizeSource(sourceBlob, {
@@ -339,6 +408,19 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         width: result.width,
         height: result.height,
       };
+      debugMap('rasterized source for active map', {
+        mapId: id,
+        pageIndex,
+        width: result.width,
+        height: result.height,
+      });
+    } else {
+      debugMap('raster cache hit', {
+        mapId: id,
+        pageIndex,
+        width: raster.width,
+        height: raster.height,
+      });
     }
     const url = URL.createObjectURL(raster.blob);
     setObjectUrl(url);
@@ -357,6 +439,13 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       maps: get().maps.map((m) => (m.id === id ? synced : m)),
     });
     useEditorStore.getState().setWorkspace(meta.workspace);
+    debugMap('set active map complete', {
+      mapId: id,
+      name: openedMap.name,
+      pageIndex,
+      width: raster.width,
+      height: raster.height,
+    });
     return true;
   },
 
