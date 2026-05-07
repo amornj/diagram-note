@@ -67,6 +67,17 @@ export interface MapPageView {
   dims: { width: number; height: number };
 }
 
+interface LoadedMapPage {
+  map: DiagramMap;
+  pageIndex: number;
+  pageCount: number;
+  raster: {
+    blob: Blob;
+    width: number;
+    height: number;
+  };
+}
+
 let lastObjectUrl: string | null = null;
 
 function setObjectUrl(url: string | null) {
@@ -78,6 +89,88 @@ function saveActiveId(id: string | null) {
   if (typeof window === 'undefined') return;
   if (id) window.localStorage.setItem(ACTIVE_MAP_STORAGE_KEY, id);
   else window.localStorage.removeItem(ACTIVE_MAP_STORAGE_KEY);
+}
+
+async function loadMapPage(
+  mapId: string,
+  requestedPageIndex?: number,
+  options?: { touchLastOpened?: boolean }
+): Promise<LoadedMapPage | null> {
+  const map = await idb.getMap(mapId);
+  if (!map) return null;
+  const pageIndex = Math.min(
+    Math.max(requestedPageIndex ?? map.pageIndex, 0),
+    Math.max(0, map.pageCount - 1)
+  );
+  let workingMap = map;
+  if (options?.touchLastOpened) {
+    workingMap = { ...workingMap, lastOpenedAt: Date.now() };
+    await idb.putMap(workingMap);
+  }
+
+  let raster = await idb.getRaster(workingMap.id, workingMap.renderScale, pageIndex);
+  if (!raster) {
+    const sourceBlob = await resolveSourceBlob(workingMap);
+    if (!sourceBlob) return null;
+    const result = await rasterizeSource(sourceBlob, {
+      sourceType: workingMap.sourceType ?? 'pdf',
+      scale: workingMap.renderScale,
+      pageIndex,
+    });
+    await idb.putRaster(
+      workingMap.id,
+      workingMap.renderScale,
+      pageIndex,
+      result.blob,
+      result.width,
+      result.height
+    );
+    raster = {
+      key: '',
+      mapId: workingMap.id,
+      scale: workingMap.renderScale,
+      pageIndex,
+      blob: result.blob,
+      width: result.width,
+      height: result.height,
+    };
+  }
+
+  const meta = getPageMeta(workingMap, pageIndex);
+  const pageDimsChanged =
+    meta.sourceWidth !== raster.width || meta.sourceHeight !== raster.height;
+  const topLevelDimsChanged =
+    pageIndex === workingMap.pageIndex &&
+    (workingMap.sourceWidth !== raster.width || workingMap.sourceHeight !== raster.height);
+
+  if (pageDimsChanged || topLevelDimsChanged) {
+    workingMap = {
+      ...workingMap,
+      sourceWidth: pageIndex === workingMap.pageIndex ? raster.width : workingMap.sourceWidth,
+      sourceHeight: pageIndex === workingMap.pageIndex ? raster.height : workingMap.sourceHeight,
+      pages: {
+        ...(workingMap.pages ?? {}),
+        [pageIndex]: {
+          ...meta,
+          sourceWidth: raster.width,
+          sourceHeight: raster.height,
+        },
+      },
+      updatedAt: Date.now(),
+    };
+    await idb.putMap(workingMap);
+  }
+
+  return {
+    map: workingMap,
+    pageIndex,
+    pageCount: workingMap.pageCount,
+    raster: {
+      blob: raster.blob,
+      width: raster.width,
+      height: raster.height,
+    },
+  };
 }
 
 async function ensureRemoteSource(
@@ -263,45 +356,14 @@ export async function loadMapPageView(
   mapId: string,
   requestedPageIndex?: number
 ): Promise<MapPageView | null> {
-  const map = await idb.getMap(mapId);
-  if (!map) return null;
-  const pageIndex = Math.min(
-    Math.max(requestedPageIndex ?? map.pageIndex, 0),
-    Math.max(0, map.pageCount - 1)
-  );
-  let raster = await idb.getRaster(map.id, map.renderScale, pageIndex);
-  if (!raster) {
-    const sourceBlob = await resolveSourceBlob(map);
-    if (!sourceBlob) return null;
-    const result = await rasterizeSource(sourceBlob, {
-      sourceType: map.sourceType ?? 'pdf',
-      scale: map.renderScale,
-      pageIndex,
-    });
-    await idb.putRaster(
-      map.id,
-      map.renderScale,
-      pageIndex,
-      result.blob,
-      result.width,
-      result.height
-    );
-    raster = {
-      key: '',
-      mapId: map.id,
-      scale: map.renderScale,
-      pageIndex,
-      blob: result.blob,
-      width: result.width,
-      height: result.height,
-    };
-  }
+  const loaded = await loadMapPage(mapId, requestedPageIndex);
+  if (!loaded) return null;
   return {
-    map,
-    pageIndex,
-    pageCount: map.pageCount,
-    rasterBlob: raster.blob,
-    dims: { width: raster.width, height: raster.height },
+    map: loaded.map,
+    pageIndex: loaded.pageIndex,
+    pageCount: loaded.pageCount,
+    rasterBlob: loaded.raster.blob,
+    dims: { width: loaded.raster.width, height: loaded.raster.height },
   };
 }
 
@@ -432,81 +494,12 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       pageCount: map.pageCount,
       sourceStoragePath: map.sourceStoragePath ?? null,
     });
-    const pageIndex = map.pageIndex;
-    const openedAt = Date.now();
-    const openedMap: DiagramMap = { ...map, lastOpenedAt: openedAt };
-    await idb.putMap(openedMap);
-    let raster = await idb.getRaster(id, openedMap.renderScale, pageIndex);
-    if (!raster) {
-      debugMap('raster cache miss', {
-        mapId: id,
-        pageIndex,
-        scale: openedMap.renderScale,
-      });
-      const sourceBlob = await resolveSourceBlob(openedMap);
-      if (!sourceBlob) return false;
-      const result = await rasterizeSource(sourceBlob, {
-        sourceType: openedMap.sourceType ?? 'pdf',
-        scale: openedMap.renderScale,
-        pageIndex,
-      });
-      await idb.putRaster(
-        id,
-        openedMap.renderScale,
-        pageIndex,
-        result.blob,
-        result.width,
-        result.height
-      );
-      raster = {
-        key: '',
-        mapId: id,
-        scale: openedMap.renderScale,
-        pageIndex,
-        blob: result.blob,
-        width: result.width,
-        height: result.height,
-      };
-      debugMap('rasterized source for active map', {
-        mapId: id,
-        pageIndex,
-        width: result.width,
-        height: result.height,
-      });
-    } else {
-      debugMap('raster cache hit', {
-        mapId: id,
-        pageIndex,
-        width: raster.width,
-        height: raster.height,
-      });
-    }
-    const url = URL.createObjectURL(raster.blob);
+    const loaded = await loadMapPage(id, map.pageIndex, { touchLastOpened: true });
+    if (!loaded) return false;
+    const pageIndex = loaded.pageIndex;
+    const url = URL.createObjectURL(loaded.raster.blob);
     setObjectUrl(url);
-
-    const meta = getPageMeta(openedMap, pageIndex);
-    let synced = openedMap;
-    const pageDimsChanged =
-      meta.sourceWidth !== raster.width || meta.sourceHeight !== raster.height;
-    const topLevelDimsChanged =
-      openedMap.sourceWidth !== raster.width || openedMap.sourceHeight !== raster.height;
-    if (pageDimsChanged || topLevelDimsChanged) {
-      synced = {
-        ...openedMap,
-        sourceWidth: raster.width,
-        sourceHeight: raster.height,
-        pages: {
-          ...(openedMap.pages ?? {}),
-          [pageIndex]: {
-            ...meta,
-            sourceWidth: raster.width,
-            sourceHeight: raster.height,
-          },
-        },
-        updatedAt: Date.now(),
-      };
-      await idb.putMap(synced);
-    }
+    const synced = loaded.map;
 
     set({
       activeMapId: id,
@@ -516,10 +509,10 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     useEditorStore.getState().setWorkspace(getPageMeta(synced, pageIndex).workspace);
     debugMap('set active map complete', {
       mapId: id,
-      name: openedMap.name,
+      name: synced.name,
       pageIndex,
-      width: raster.width,
-      height: raster.height,
+      width: loaded.raster.width,
+      height: loaded.raster.height,
     });
     return true;
   },
