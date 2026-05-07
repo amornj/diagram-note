@@ -46,7 +46,7 @@ Without Firebase credentials the app runs fully offline with IndexedDB persisten
 | `9` | Lock zoom |
 | `0` / `Home` | Reset view |
 | `+` `−` `wheel` | Zoom |
-| `Space` + drag | Pan |
+|  drag | Pan |
 | `/` | Focus search |
 | `?` | Hotkey help |
 | `Esc` | Cancel current draw / close popup |
