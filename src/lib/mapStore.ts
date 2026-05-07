@@ -5,6 +5,8 @@ import * as idb from './idb';
 import { detectSourceType, rasterizeSource } from './pdf';
 import { useEditorStore } from './store';
 import { makeRelatedPrimitiveKey } from './workspace';
+import { auth } from './firebase';
+import { deleteMapSource, downloadMapSource, uploadMapSource } from './cloudStorage';
 
 const ACTIVE_MAP_STORAGE_KEY = 'diagram-note-active-map';
 const DEFAULT_MAP_ASSET = '/metabolic-map.pdf';
@@ -56,6 +58,26 @@ function saveActiveId(id: string | null) {
   if (typeof window === 'undefined') return;
   if (id) window.localStorage.setItem(ACTIVE_MAP_STORAGE_KEY, id);
   else window.localStorage.removeItem(ACTIVE_MAP_STORAGE_KEY);
+}
+
+async function ensureRemoteSource(
+  map: DiagramMap,
+  sourceBlob: Blob
+): Promise<DiagramMap> {
+  const uid = auth?.currentUser?.uid;
+  if (!uid || map.sourceStoragePath) return map;
+  const sourceStoragePath = await uploadMapSource(
+    uid,
+    map.id,
+    sourceBlob,
+    map.sourceMimeType
+  );
+  if (!sourceStoragePath) return map;
+  return {
+    ...map,
+    sourceStoragePath,
+    updatedAt: Date.now(),
+  };
 }
 
 /**
@@ -232,7 +254,13 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     await idb.putMap(openedMap);
     let raster = await idb.getRaster(id, openedMap.renderScale, pageIndex);
     if (!raster) {
-      const sourceBlob = await idb.getPdfBlob(id);
+      let sourceBlob = await idb.getPdfBlob(id);
+      if (!sourceBlob && openedMap.sourceStoragePath) {
+        sourceBlob = await downloadMapSource(openedMap.sourceStoragePath);
+        if (sourceBlob) {
+          await idb.putPdfBlob(id, sourceBlob);
+        }
+      }
       if (!sourceBlob) return;
       const result = await rasterizeSource(sourceBlob, {
         sourceType: openedMap.sourceType ?? 'pdf',
@@ -295,7 +323,13 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     // 2) Ensure the destination page has a raster.
     let raster = await idb.getRaster(id, map.renderScale, pageIndex);
     if (!raster) {
-      const sourceBlob = await idb.getPdfBlob(id);
+      let sourceBlob = await idb.getPdfBlob(id);
+      if (!sourceBlob && map.sourceStoragePath) {
+        sourceBlob = await downloadMapSource(map.sourceStoragePath);
+        if (sourceBlob) {
+          await idb.putPdfBlob(id, sourceBlob);
+        }
+      }
       if (!sourceBlob) return;
       const result = await rasterizeSource(sourceBlob, {
         sourceType: map.sourceType ?? 'pdf',
@@ -395,11 +429,12 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       createdAt: now,
       updatedAt: now,
     };
-    await idb.putMap(map);
+    const syncedMap = await ensureRemoteSource(map, blob);
+    await idb.putMap(syncedMap);
     await idb.putPdfBlob(id, blob);
     await idb.putRaster(id, scale, 0, result.blob, result.width, result.height);
 
-    set({ maps: [...get().maps, map] });
+    set({ maps: [...get().maps, syncedMap] });
     await get().setActiveMap(id);
     return id;
   },
@@ -424,12 +459,13 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         sortOrder: existing.sortOrder ?? map.sortOrder,
         lastOpenedAt: Date.now(),
       };
-      await idb.putMap(merged);
+      const syncedMerged = await ensureRemoteSource(merged, sourceBlob);
+      await idb.putMap(syncedMerged);
       set({
-        maps: [merged, ...get().maps.filter((m) => m.id !== merged.id)],
+        maps: [syncedMerged, ...get().maps.filter((m) => m.id !== syncedMerged.id)],
       });
-      await get().setActiveMap(merged.id);
-      return merged.id;
+      await get().setActiveMap(syncedMerged.id);
+      return syncedMerged.id;
     }
     // Fresh import — render the active page's raster from the pdf at requested scale.
     const sourceType = map.sourceType ?? 'pdf';
@@ -455,7 +491,8 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         },
       },
     };
-    await idb.putMap(filledMap);
+    const syncedMap = await ensureRemoteSource(filledMap, sourceBlob);
+    await idb.putMap(syncedMap);
     await idb.putPdfBlob(filledMap.id, sourceBlob);
     await idb.putRaster(
       filledMap.id,
@@ -465,9 +502,9 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       result.width,
       result.height
     );
-    set({ maps: [...get().maps.filter((m) => m.id !== filledMap.id), filledMap] });
-    await get().setActiveMap(filledMap.id);
-    return filledMap.id;
+    set({ maps: [...get().maps.filter((m) => m.id !== syncedMap.id), syncedMap] });
+    await get().setActiveMap(syncedMap.id);
+    return syncedMap.id;
   },
 
   addPrimitiveBacklink: async (sourcePageIndex, sourceId, targetPageIndex, targetId) => {
@@ -523,7 +560,11 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
   },
 
   deleteMap: async (id) => {
-    if (get().maps.find((m) => m.id === id)?.isDefault) return;
+    const map = get().maps.find((m) => m.id === id);
+    if (map?.isDefault) return;
+    if (map?.sourceStoragePath) {
+      await deleteMapSource(map.sourceStoragePath);
+    }
     await idb.deleteMap(id);
     const next = get().maps.filter((m) => m.id !== id);
     set({ maps: next });

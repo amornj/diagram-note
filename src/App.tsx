@@ -12,6 +12,7 @@ import { useMapStore } from './lib/mapStore';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
 import { loadCloudMaps, saveCloudMaps } from './lib/cloudSync';
+import { uploadMapSource } from './lib/cloudStorage';
 import * as idb from './lib/idb';
 import type { DiagramMap } from './types';
 
@@ -28,6 +29,39 @@ function dedupByHash(maps: DiagramMap[]): DiagramMap[] {
     seen.set(m.pdfHash, keep);
   }
   return dupeIds.size ? maps.filter((m) => !dupeIds.has(m.id)) : maps;
+}
+
+async function backfillCloudSourcePaths(
+  uid: string,
+  maps: DiagramMap[]
+): Promise<DiagramMap[]> {
+  let changed = false;
+  const nextMaps = [...maps];
+  for (let index = 0; index < nextMaps.length; index += 1) {
+    const map = nextMaps[index];
+    if (map.isDefault || map.sourceStoragePath) continue;
+    const sourceBlob = await idb.getPdfBlob(map.id);
+    if (!sourceBlob) continue;
+    const sourceStoragePath = await uploadMapSource(
+      uid,
+      map.id,
+      sourceBlob,
+      map.sourceMimeType
+    );
+    if (!sourceStoragePath) continue;
+    const nextMap = { ...map, sourceStoragePath, updatedAt: Date.now() };
+    await idb.putMap(nextMap);
+    nextMaps[index] = nextMap;
+    changed = true;
+  }
+  if (changed) {
+    useMapStore.setState((state) => ({
+      maps: state.maps.map(
+        (map) => nextMaps.find((entry) => entry.id === map.id) ?? map
+      ),
+    }));
+  }
+  return nextMaps;
 }
 
 function useCloudSync(): SyncStatus {
@@ -90,7 +124,10 @@ function useCloudSync(): SyncStatus {
         }
       } else if (!cloud) {
         // First login — push local maps to cloud
-        const localMaps = useMapStore.getState().maps;
+        const localMaps = await backfillCloudSourcePaths(
+          user.uid,
+          useMapStore.getState().maps
+        );
         if (localMaps.length > 0) {
           saveCloudMaps(user.uid, dedupByHash(localMaps));
         }
@@ -106,7 +143,11 @@ function useCloudSync(): SyncStatus {
     const uid = user.uid;
     setStatus('saving');
     const timer = setTimeout(async () => {
-      const ok = await saveCloudMaps(uid, dedupByHash(useMapStore.getState().maps));
+      const syncedMaps = await backfillCloudSourcePaths(
+        uid,
+        useMapStore.getState().maps
+      );
+      const ok = await saveCloudMaps(uid, dedupByHash(syncedMaps));
       setStatus(ok ? 'synced' : 'error');
     }, 3000);
     return () => clearTimeout(timer);

@@ -161,8 +161,9 @@ export default function Landing() {
           <Hint kbd="8" label="Polyline / shape" />
           <Hint kbd="7" label="Group" />
           <Hint kbd="5" label="Search" />
+          <Hint kbd="T" label="Text mode" />
+          <Hint kbd="\\" label="Overlays" />
           <Hint kbd="?" label="Hotkey help" />
-          <Hint kbd="Space" label="Pan" />
         </div>
       </div>
     </div>

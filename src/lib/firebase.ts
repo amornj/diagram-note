@@ -1,6 +1,7 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
 const apiKey = import.meta.env.VITE_FIREBASE_API_KEY as string | undefined;
 const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined;
@@ -10,6 +11,7 @@ export const isFirebaseConfigured = Boolean(apiKey && authDomain && projectId);
 
 let _auth: Auth | null = null;
 let _db: Firestore | null = null;
+let _storage: FirebaseStorage | null = null;
 
 if (isFirebaseConfigured) {
   const app: FirebaseApp = initializeApp({
@@ -22,7 +24,9 @@ if (isFirebaseConfigured) {
   });
   _auth = getAuth(app);
   _db = getFirestore(app);
+  _storage = getStorage(app);
 }
 
 export const auth = _auth;
 export const db = _db;
+export const storage = _storage;

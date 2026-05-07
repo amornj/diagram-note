@@ -56,6 +56,7 @@ export interface DiagramMap {
   sourceType?: 'pdf' | 'image';
   sourceName?: string;
   sourceMimeType?: string;
+  sourceStoragePath?: string;
   sortOrder?: number;
   /** Currently-active page index (0-based). */
   pageIndex: number;
