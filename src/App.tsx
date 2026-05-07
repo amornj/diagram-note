@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { PanelRightOpen } from 'lucide-react';
+import { PanelRightOpen, X } from 'lucide-react';
 import Editor from './components/Editor';
 import LeftPane from './components/LeftPane';
 import Landing from './components/Landing';
@@ -362,6 +362,7 @@ function MapPage() {
   const [dropError, setDropError] = useState<string | null>(null);
   const [splitMode, setSplitMode] = useState(false);
   const [splitTarget, setSplitTarget] = useState<1 | 2>(1);
+  const [splitRatio, setSplitRatio] = useState(0.5);
   const [splitMaps, setSplitMaps] = useState<{
     1: { mapId: string | null; pageIndex: number };
     2: { mapId: string | null; pageIndex: number };
@@ -474,6 +475,7 @@ function MapPage() {
       const next = !current;
       if (next && activeMap) {
         useEditorStore.getState().setSelectedPrimitiveId(null);
+        setSplitRatio(0.5);
         setSplitMaps({
           1: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
           2: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
@@ -494,6 +496,20 @@ function MapPage() {
     }));
   };
 
+  const startSplitResize = (startX: number, startRatio: number) => {
+    const handleMove = (event: MouseEvent) => {
+      const width = window.innerWidth || 1;
+      const deltaRatio = (event.clientX - startX) / width;
+      setSplitRatio(Math.min(0.8, Math.max(0.2, startRatio + deltaRatio)));
+    };
+    const handleUp = () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+  };
+
   if (!activeMap || !activeRasterUrl) {
     return (
       <SyncStatusContext.Provider value={syncStatus}>
@@ -509,29 +525,57 @@ function MapPage() {
       <div className="relative h-screen w-screen overflow-hidden bg-gray-50">
         <div className="absolute inset-0">
           {splitMode ? (
-            <div className="grid h-full w-full grid-cols-2">
-              <ComparePane
-                mapId={splitMaps[1].mapId}
-                pageIndex={splitMaps[1].pageIndex}
-                title="Window 1"
-                onPageChange={(page) =>
-                  setSplitMaps((current) => ({
-                    ...current,
-                    1: { ...current[1], pageIndex: page },
-                  }))
-                }
-              />
-              <ComparePane
-                mapId={splitMaps[2].mapId}
-                pageIndex={splitMaps[2].pageIndex}
-                title="Window 2"
-                onPageChange={(page) =>
-                  setSplitMaps((current) => ({
-                    ...current,
-                    2: { ...current[2], pageIndex: page },
-                  }))
-                }
-              />
+            <div className="relative flex h-full w-full">
+              <div className="relative h-full" style={{ width: `${splitRatio * 100}%` }}>
+                <ComparePane
+                  mapId={splitMaps[1].mapId}
+                  pageIndex={splitMaps[1].pageIndex}
+                  title="Window 1"
+                  onPageChange={(page) =>
+                    setSplitMaps((current) => ({
+                      ...current,
+                      1: { ...current[1], pageIndex: page },
+                    }))
+                  }
+                />
+                <button
+                  onClick={() => setSplitMode(false)}
+                  className="absolute right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/90 shadow transition hover:bg-black/80"
+                  title="Close split compare"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div
+                className="relative z-20 w-3 shrink-0 cursor-col-resize bg-transparent"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  startSplitResize(event.clientX, splitRatio);
+                }}
+              >
+                <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-white/20" />
+                <div className="absolute left-1/2 top-1/2 h-20 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/50 shadow" />
+              </div>
+              <div className="relative h-full flex-1">
+                <ComparePane
+                  mapId={splitMaps[2].mapId}
+                  pageIndex={splitMaps[2].pageIndex}
+                  title="Window 2"
+                  onPageChange={(page) =>
+                    setSplitMaps((current) => ({
+                      ...current,
+                      2: { ...current[2], pageIndex: page },
+                    }))
+                  }
+                />
+                <button
+                  onClick={() => setSplitMode(false)}
+                  className="absolute right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/90 shadow transition hover:bg-black/80"
+                  title="Close split compare"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
           ) : (
             <Editor
