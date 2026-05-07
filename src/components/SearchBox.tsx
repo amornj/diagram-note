@@ -21,6 +21,13 @@ const KIND_LABELS: Record<Primitive['kind'], string> = {
 type SearchTypeFilter = 'studybox' | 'group' | 'region' | 'map';
 type SearchContentFilter = 'note' | 'tag';
 
+type PrimitiveSearchGroup = {
+  key: string;
+  name: string;
+  representative: Primitive;
+  primitives: Primitive[];
+};
+
 const TYPE_FILTERS: Array<{
   key: SearchTypeFilter;
   label: string;
@@ -52,7 +59,10 @@ export default function SearchBox({
   const deferredQuery = useDeferredValue(query);
 
   const workspace = useEditorStore((s) => s.workspace);
+  const selectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
+  const selectedOccurrenceIndex = useEditorStore((s) => s.selectedOccurrenceIndex);
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
+  const setSelectedOccurrenceIndex = useEditorStore((s) => s.setSelectedOccurrenceIndex);
   const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
   const maps = useMapStore((s) => s.maps);
   const activeMapId = useMapStore((s) => s.activeMapId);
@@ -74,7 +84,7 @@ export default function SearchBox({
   const results = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
     if (!q || activeTypeFilters.includes('map')) return [];
-    return workspace.primitives
+    const matches = workspace.primitives
       .filter((p) => {
         const matchesType =
           activeTypeFilters.length === 0 ||
@@ -100,11 +110,39 @@ export default function SearchBox({
               ];
         return searchableFields.join(' ').toLowerCase().includes(q);
       })
-      .slice(0, 20);
+      .slice(0, 100);
+
+    const grouped = new Map<string, PrimitiveSearchGroup>();
+    for (const primitive of matches) {
+      const normalizedName = primitive.name.trim().toLowerCase();
+      const key = normalizedName || primitive.id;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.primitives.push(primitive);
+      } else {
+        grouped.set(key, {
+          key,
+          name: primitive.name.trim() || 'Untitled primitive',
+          representative: primitive,
+          primitives: [primitive],
+        });
+      }
+    }
+
+    return Array.from(grouped.values()).slice(0, 20);
   }, [deferredQuery, workspace.primitives, activeTypeFilters, activeContentFilters]);
 
-  const handleSelect = (primitive: Primitive) => {
+  const handleSelect = (group: PrimitiveSearchGroup) => {
+    const currentIndex = group.primitives.findIndex(
+      (primitive) => primitive.id === selectedPrimitiveId
+    );
+    const nextIndex =
+      group.primitives.length > 1 && currentIndex !== -1
+        ? (selectedOccurrenceIndex + 1) % group.primitives.length
+        : 0;
+    const primitive = group.primitives[nextIndex] ?? group.representative;
     setSelectedPrimitiveId(primitive.id);
+    setSelectedOccurrenceIndex(nextIndex);
     const bbox = getPrimitiveBounds(primitive, primitivesById);
     if (bbox) setZoomTarget({ bbox, immediate: false, padding: 16 });
   };
@@ -272,27 +310,37 @@ export default function SearchBox({
 
       {results.length > 0 && (
         <div className="mt-2 max-h-80 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
-          {results.map((primitive) => (
+          {results.map((group) => (
             <button
-              key={primitive.id}
-              onClick={() => handleSelect(primitive)}
+              key={group.key}
+              onClick={() => handleSelect(group)}
               className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
             >
               <div className="flex items-center gap-2">
                 <span
                   className="inline-block h-3 w-3 rounded-full"
-                  style={{ backgroundColor: primitive.color }}
+                  style={{ backgroundColor: group.representative.color }}
                 />
                 <span className="truncate text-sm font-medium text-gray-900">
-                  {primitive.name}
+                  {group.name}
                 </span>
-                <span className="ml-auto text-[11px] text-gray-400">
-                  {KIND_LABELS[primitive.kind]}
-                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  {group.primitives.length > 1 && (
+                    <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                      {selectedPrimitiveId &&
+                      group.primitives.some((primitive) => primitive.id === selectedPrimitiveId)
+                        ? `${(selectedOccurrenceIndex % group.primitives.length) + 1}/${group.primitives.length}`
+                        : `${group.primitives.length}`}
+                    </span>
+                  )}
+                  <span className="text-[11px] text-gray-400">
+                    {KIND_LABELS[group.representative.kind]}
+                  </span>
+                </div>
               </div>
-              {primitive.tags && primitive.tags.length > 0 && (
+              {group.representative.tags && group.representative.tags.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {primitive.tags.slice(0, 4).map((tag) => (
+                  {group.representative.tags.slice(0, 4).map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600"
