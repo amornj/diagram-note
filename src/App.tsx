@@ -11,7 +11,7 @@ import { useEditorStore } from './lib/store';
 import { useMapStore } from './lib/mapStore';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
-import { loadCloudMaps, saveCloudMaps } from './lib/cloudSync';
+import { loadCloudMaps, saveCloudMaps, subscribeCloudMaps } from './lib/cloudSync';
 import { uploadMapSource } from './lib/cloudStorage';
 import * as idb from './lib/idb';
 import type { DiagramMap } from './types';
@@ -69,18 +69,55 @@ async function backfillCloudSourcePaths(
   return nextMaps;
 }
 
+async function mergeCloudMaps(cloud: DiagramMap[]) {
+  const localMaps = useMapStore.getState().maps;
+  const localById = new Map(localMaps.map((m) => [m.id, m]));
+  const toMerge = cloud.filter((cm) => {
+    const local = localById.get(cm.id);
+    return !local || cm.updatedAt > local.updatedAt;
+  });
+  if (toMerge.length === 0) return;
+
+  for (const map of toMerge) await idb.putMap(map);
+  const mergeById = new Map(toMerge.map((map) => [map.id, map]));
+  const updated = useMapStore.getState().maps.map((map) => mergeById.get(map.id) ?? map);
+  const added = toMerge.filter((map) => !localById.has(map.id));
+  useMapStore.setState(() => {
+    const merged = [...updated, ...added].sort((a, b) => {
+      const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return b.updatedAt - a.updatedAt;
+    });
+    return { maps: dedupByHash(merged) };
+  });
+
+  const afterIds = new Set(useMapStore.getState().maps.map((map) => map.id));
+  const removedByDedup = [...updated, ...added].filter((map) => !afterIds.has(map.id));
+  await Promise.all(removedByDedup.map((map) => idb.deleteMap(map.id)));
+
+  const activeId = useMapStore.getState().activeMapId;
+  if (activeId && mergeById.has(activeId)) {
+    const activeMap = mergeById.get(activeId)!;
+    useEditorStore.getState().setWorkspace(activeMap.workspace);
+    await useMapStore.getState().setActiveMap(activeId);
+  }
+}
+
 function useCloudSync(): SyncStatus {
   const maps = useMapStore((s) => s.maps);
   const { user } = useAuth();
   const syncReadyRef = useRef(false);
   const prevUidRef = useRef<string | null>(null);
   const [status, setStatus] = useState<SyncStatus>('idle');
+  const [syncReady, setSyncReady] = useState(false);
 
   // On login: load cloud maps and merge (newer updatedAt wins)
   useEffect(() => {
     if (!user) {
       prevUidRef.current = null;
       syncReadyRef.current = false;
+      setSyncReady(false);
       setStatus('idle');
       return;
     }
@@ -92,41 +129,12 @@ function useCloudSync(): SyncStatus {
     loadCloudMaps(user.uid).then(async (cloud) => {
       if (cloud === 'error') {
         syncReadyRef.current = true;
+        setSyncReady(true);
         setStatus('error');
         return;
       }
       if (cloud && cloud.length > 0) {
-        const localMaps = useMapStore.getState().maps;
-        const localById = new Map(localMaps.map((m) => [m.id, m]));
-        const toMerge = cloud.filter((cm) => {
-          const local = localById.get(cm.id);
-          return !local || cm.updatedAt > local.updatedAt;
-        });
-        if (toMerge.length > 0) {
-          for (const m of toMerge) await idb.putMap(m);
-          const mergeById = new Map(toMerge.map((m) => [m.id, m]));
-          const updated = useMapStore.getState().maps.map((m) => mergeById.get(m.id) ?? m);
-          const added = toMerge.filter((m) => !localById.has(m.id));
-          useMapStore.setState(() => {
-            const merged = [...updated, ...added].sort((a, b) => {
-              const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
-              const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
-              if (orderA !== orderB) return orderA - orderB;
-              return b.updatedAt - a.updatedAt;
-            });
-            return { maps: dedupByHash(merged) };
-          });
-          // Delete any maps that dedup removed from IDB
-          const afterIds = new Set(useMapStore.getState().maps.map((m) => m.id));
-          const removedByDedup = [...updated, ...added]
-            .filter((m) => !afterIds.has(m.id));
-          await Promise.all(removedByDedup.map((m) => idb.deleteMap(m.id)));
-          // If the active map was updated, refresh its editor workspace
-          const activeId = useMapStore.getState().activeMapId;
-          if (activeId && mergeById.has(activeId)) {
-            useEditorStore.getState().setWorkspace(mergeById.get(activeId)!.workspace);
-          }
-        }
+        await mergeCloudMaps(cloud);
       } else if (!cloud) {
         // First login — push local maps to cloud
         const localMaps = await backfillCloudSourcePaths(
@@ -138,9 +146,26 @@ function useCloudSync(): SyncStatus {
         }
       }
       syncReadyRef.current = true;
+      setSyncReady(true);
       setStatus('synced');
     });
   }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user || !syncReady) return;
+    const unsubscribe = subscribeCloudMaps(user.uid, {
+      onData: (cloud) => {
+        if (!cloud || cloud.length === 0) return;
+        setStatus('loading');
+        void mergeCloudMaps(cloud).then(() => setStatus('synced'));
+      },
+      onError: (error) => {
+        console.error('[cloud] subscribe failed:', error);
+        setStatus('error');
+      },
+    });
+    return unsubscribe;
+  }, [user?.uid, syncReady]);
 
   // On maps change: debounce-save to cloud
   useEffect(() => {
