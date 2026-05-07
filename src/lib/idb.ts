@@ -151,3 +151,14 @@ export async function putRaster(
   };
   await asPromise(store.put(record));
 }
+
+export async function deleteMapRasters(mapId: string): Promise<void> {
+  const db = await openDb();
+  const store = tx(db, [STORE_RASTERS], 'readwrite').objectStore(STORE_RASTERS);
+  const keys = (await asPromise(store.getAllKeys())) as string[];
+  for (const key of keys) {
+    if (typeof key === 'string' && key.startsWith(`${mapId}:`)) {
+      await asPromise(store.delete(key));
+    }
+  }
+}

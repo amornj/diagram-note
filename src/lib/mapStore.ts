@@ -35,6 +35,7 @@ export interface MapStoreState {
     file: File | Blob,
     options?: { scale?: number; name?: string }
   ) => Promise<string>;
+  setMapRenderScale: (id: string, scale: number) => Promise<void>;
   importDnoteMap: (args: {
     map: DiagramMap;
     sourceBlob: Blob;
@@ -576,6 +577,24 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     set({ maps: [...get().maps, syncedMap] });
     await get().setActiveMap(id);
     return id;
+  },
+
+  setMapRenderScale: async (id, scale) => {
+    const map = await idb.getMap(id);
+    if (!map || map.renderScale === scale) return;
+    const updated: DiagramMap = {
+      ...map,
+      renderScale: scale,
+      updatedAt: Date.now(),
+    };
+    await idb.putMap(updated);
+    await idb.deleteMapRasters(id);
+    set({
+      maps: get().maps.map((entry) => (entry.id === id ? updated : entry)),
+    });
+    if (get().activeMapId === id) {
+      await get().setActiveMap(id);
+    }
   },
 
   importDnoteMap: async ({ map, sourceBlob }) => {
