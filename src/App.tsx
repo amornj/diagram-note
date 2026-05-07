@@ -38,7 +38,12 @@ function dedupByHash(maps: DiagramMap[]): DiagramMap[] {
 }
 
 function snapshotMaps(maps: DiagramMap[]) {
-  return new Map(maps.map((map) => [map.id, JSON.stringify(map)]));
+  return new Map(maps.map((map) => [map.id, JSON.stringify(mapForCloud(map))]));
+}
+
+function mapForCloud(map: DiagramMap): DiagramMap {
+  const { lastOpenedAt: _lastOpenedAt, ...rest } = map;
+  return rest;
 }
 
 async function backfillCloudSourcePaths(
@@ -81,16 +86,40 @@ async function backfillCloudSourcePaths(
 
 async function mergeCloudMaps(cloud: DiagramMap[]) {
   const localMaps = useMapStore.getState().maps;
-  const localById = new Map(localMaps.map((m) => [m.id, m]));
+  const cloudIds = new Set(cloud.map((map) => map.id));
+  const toDelete = localMaps.filter((map) => !map.isDefault && !cloudIds.has(map.id));
+  if (toDelete.length > 0) {
+    await Promise.all(toDelete.map((map) => idb.deleteMap(map.id)));
+  }
+  const survivingLocalMaps =
+    toDelete.length > 0
+      ? localMaps.filter((map) => !toDelete.some((entry) => entry.id === map.id))
+      : localMaps;
+  const localById = new Map(survivingLocalMaps.map((m) => [m.id, m]));
   const toMerge = cloud.filter((cm) => {
     const local = localById.get(cm.id);
     return !local || cm.updatedAt > local.updatedAt;
   });
-  if (toMerge.length === 0) return;
+  if (toMerge.length === 0 && toDelete.length === 0) return;
 
-  for (const map of toMerge) await idb.putMap(map);
-  const mergeById = new Map(toMerge.map((map) => [map.id, map]));
-  const updated = useMapStore.getState().maps.map((map) => mergeById.get(map.id) ?? map);
+  for (const map of toMerge) {
+    const local = localById.get(map.id);
+    await idb.putMap(
+      local?.lastOpenedAt !== undefined
+        ? { ...map, lastOpenedAt: local.lastOpenedAt }
+        : map
+    );
+  }
+  const mergeById = new Map(
+    toMerge.map((map) => {
+      const local = localById.get(map.id);
+      return [
+        map.id,
+        local?.lastOpenedAt !== undefined ? { ...map, lastOpenedAt: local.lastOpenedAt } : map,
+      ];
+    })
+  );
+  const updated = survivingLocalMaps.map((map) => mergeById.get(map.id) ?? map);
   const added = toMerge.filter((map) => !localById.has(map.id));
   useMapStore.setState(() => {
     const merged = [...updated, ...added].sort((a, b) => {
@@ -107,7 +136,10 @@ async function mergeCloudMaps(cloud: DiagramMap[]) {
   await Promise.all(removedByDedup.map((map) => idb.deleteMap(map.id)));
 
   const activeId = useMapStore.getState().activeMapId;
-  if (activeId && mergeById.has(activeId)) {
+  if (activeId && !afterIds.has(activeId)) {
+    const fallbackId = useMapStore.getState().maps[0]?.id ?? null;
+    await useMapStore.getState().setActiveMap(fallbackId);
+  } else if (activeId && mergeById.has(activeId)) {
     const activeMap = mergeById.get(activeId)!;
     useEditorStore.getState().setWorkspace(activeMap.workspace);
     await useMapStore.getState().setActiveMap(activeId);
@@ -156,7 +188,10 @@ function useCloudSync(): SyncStatus {
         );
         if (localMaps.length > 0) {
           const deduped = dedupByHash(localMaps);
-          const ok = await saveCloudMaps(user.uid, deduped);
+          const ok = await saveCloudMaps(
+            user.uid,
+            deduped.map((map) => mapForCloud(map))
+          );
           if (ok) persistedRef.current = snapshotMaps(deduped);
         }
       }
@@ -170,10 +205,10 @@ function useCloudSync(): SyncStatus {
     if (!user || !syncReady) return;
     const unsubscribe = subscribeCloudMaps(user.uid, {
       onData: (cloud) => {
-        if (!cloud || cloud.length === 0) return;
         setStatus('loading');
-        persistedRef.current = snapshotMaps(cloud);
-        void mergeCloudMaps(cloud).then(() => setStatus('synced'));
+        const nextCloud = cloud ?? [];
+        persistedRef.current = snapshotMaps(nextCloud);
+        void mergeCloudMaps(nextCloud).then(() => setStatus('synced'));
       },
       onError: (error) => {
         console.error('[cloud] subscribe failed:', error);
@@ -202,7 +237,7 @@ function useCloudSync(): SyncStatus {
       setStatus('saving');
       let ok = true;
       for (const map of changed) {
-        const saved = await saveCloudMap(uid, map);
+        const saved = await saveCloudMap(uid, mapForCloud(map));
         ok = ok && saved;
       }
       for (const id of removed) {

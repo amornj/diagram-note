@@ -484,20 +484,36 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     const url = URL.createObjectURL(raster.blob);
     setObjectUrl(url);
 
-    // Sync map record dims with raster (in case of re-render mismatch)
     const meta = getPageMeta(openedMap, pageIndex);
-    const synced = withPageMeta(openedMap, pageIndex, {
-      ...meta,
-      sourceWidth: raster.width,
-      sourceHeight: raster.height,
-    });
+    let synced = openedMap;
+    const pageDimsChanged =
+      meta.sourceWidth !== raster.width || meta.sourceHeight !== raster.height;
+    const topLevelDimsChanged =
+      openedMap.sourceWidth !== raster.width || openedMap.sourceHeight !== raster.height;
+    if (pageDimsChanged || topLevelDimsChanged) {
+      synced = {
+        ...openedMap,
+        sourceWidth: raster.width,
+        sourceHeight: raster.height,
+        pages: {
+          ...(openedMap.pages ?? {}),
+          [pageIndex]: {
+            ...meta,
+            sourceWidth: raster.width,
+            sourceHeight: raster.height,
+          },
+        },
+        updatedAt: Date.now(),
+      };
+      await idb.putMap(synced);
+    }
 
     set({
       activeMapId: id,
       activeRasterUrl: url,
       maps: get().maps.map((m) => (m.id === id ? synced : m)),
     });
-    useEditorStore.getState().setWorkspace(meta.workspace);
+    useEditorStore.getState().setWorkspace(getPageMeta(synced, pageIndex).workspace);
     debugMap('set active map complete', {
       mapId: id,
       name: openedMap.name,
