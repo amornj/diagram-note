@@ -42,12 +42,17 @@ async function backfillCloudSourcePaths(
     if (map.isDefault || map.sourceStoragePath) continue;
     const sourceBlob = await idb.getPdfBlob(map.id);
     if (!sourceBlob) continue;
-    const sourceStoragePath = await uploadMapSource(
-      uid,
-      map.id,
-      sourceBlob,
-      map.sourceMimeType
-    );
+    let sourceStoragePath: string | null = null;
+    try {
+      sourceStoragePath = await uploadMapSource(
+        uid,
+        map.id,
+        sourceBlob,
+        map.sourceMimeType
+      );
+    } catch (error) {
+      console.error('[storage] source backfill failed:', error);
+    }
     if (!sourceStoragePath) continue;
     const nextMap = { ...map, sourceStoragePath, updatedAt: Date.now() };
     await idb.putMap(nextMap);

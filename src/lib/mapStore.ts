@@ -66,18 +66,23 @@ async function ensureRemoteSource(
 ): Promise<DiagramMap> {
   const uid = auth?.currentUser?.uid;
   if (!uid || map.sourceStoragePath) return map;
-  const sourceStoragePath = await uploadMapSource(
-    uid,
-    map.id,
-    sourceBlob,
-    map.sourceMimeType
-  );
-  if (!sourceStoragePath) return map;
-  return {
-    ...map,
-    sourceStoragePath,
-    updatedAt: Date.now(),
-  };
+  try {
+    const sourceStoragePath = await uploadMapSource(
+      uid,
+      map.id,
+      sourceBlob,
+      map.sourceMimeType
+    );
+    if (!sourceStoragePath) return map;
+    return {
+      ...map,
+      sourceStoragePath,
+      updatedAt: Date.now(),
+    };
+  } catch (error) {
+    console.error('[storage] source upload failed:', error);
+    return map;
+  }
 }
 
 /**
