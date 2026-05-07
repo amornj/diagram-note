@@ -152,10 +152,6 @@ export default function LeftPane({
     setAndPersistSortMode(mapSortMode === 'alphaAsc' ? 'alphaDesc' : 'alphaAsc');
   };
 
-  const toggleCreatedSort = () => {
-    setAndPersistSortMode(mapSortMode === 'createdDesc' ? 'createdAsc' : 'createdDesc');
-  };
-
   const togglePrimitiveAlphaSort = () => {
     const nextMode =
       primitiveSortMode === 'alphaAsc'
@@ -255,17 +251,6 @@ export default function LeftPane({
               title="Sort by name"
             >
               {mapSortMode === 'alphaDesc' ? 'Z-A' : 'A-Z'}
-            </button>
-            <button
-              onClick={toggleCreatedSort}
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
-                mapSortMode === 'createdDesc' || mapSortMode === 'createdAsc'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title="Sort by created date"
-            >
-              {mapSortMode === 'createdAsc' ? 'Oldest' : 'Newest'}
             </button>
           </div>
         </div>
