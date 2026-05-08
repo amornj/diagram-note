@@ -227,8 +227,11 @@ export default function Editor({
     setLeftSidebarCollapsed(true);
     setShowQuickSearch(false);
     setFloatingTool('group');
+    setEditorMode('groupCollect');
+    setSelectedPrimitiveId(null);
+    window.dispatchEvent(new Event('map-search-clear'));
     setGroupBuilderFocusSignal((value) => value + 1);
-  }, [setLeftSidebarCollapsed]);
+  }, [setEditorMode, setLeftSidebarCollapsed, setSelectedPrimitiveId]);
   const openPolylineTool = useCallback(() => {
     setLeftSidebarCollapsed(true);
     setShowQuickSearch(false);

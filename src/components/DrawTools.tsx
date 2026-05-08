@@ -1,7 +1,7 @@
-import { Plus, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../lib/store';
-import { normalizeTagInput, parseMemberKey } from '../lib/workspace';
+import { parseMemberKey } from '../lib/workspace';
 import { COLOR_SWATCHES } from './sharedControls';
 
 interface DrawToolsProps {
@@ -16,9 +16,6 @@ export default function DrawTools({
   onRequestClose,
 }: DrawToolsProps) {
   const [groupName, setGroupName] = useState('');
-  const [groupTagsInput, setGroupTagsInput] = useState('');
-  const [showGroupNumbers, setShowGroupNumbers] = useState(false);
-  const [showGroupOnLoad, setShowGroupOnLoad] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const groupNameInputRef = useRef<HTMLInputElement>(null);
 
@@ -38,30 +35,14 @@ export default function DrawTools({
   const primitivesById = new Map(workspace.primitives.map((p) => [p.id, p]));
 
   const handleCreateGroup = () => {
-    const created = createGroupPrimitive(
-      groupName,
-      [],
-      normalizeTagInput(groupTagsInput),
-      showGroupNumbers,
-      showGroupOnLoad
-    );
+    const created = createGroupPrimitive(groupName, [], []);
     if (!created) return;
     setGroupName('');
-    setGroupTagsInput('');
-    setShowGroupNumbers(false);
-    setShowGroupOnLoad(false);
-  };
-
-  const handleStartGroupCollect = () => {
-    setEditorMode(editorMode === 'groupCollect' ? 'none' : 'groupCollect');
   };
 
   const handleCancelGroupCollect = () => {
     clearDraftGroup();
     setGroupName('');
-    setGroupTagsInput('');
-    setShowGroupNumbers(false);
-    setShowGroupOnLoad(false);
     setEditorMode('none');
   };
 
@@ -94,6 +75,13 @@ export default function DrawTools({
   const showGroupSection = mode === 'group';
   const showStudyBoxSection = mode === 'studybox';
   const showPolylineSection = mode === 'polyline';
+  useEffect(() => {
+    if (!showGroupSection) return;
+    if (editorMode !== 'groupCollect') {
+      setEditorMode('groupCollect');
+    }
+  }, [editorMode, setEditorMode, showGroupSection]);
+
   const headerLabel = showGroupSection
     ? 'Group builder'
     : showStudyBoxSection
@@ -124,26 +112,14 @@ export default function DrawTools({
             placeholder="Group name"
             className="mt-3 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-sky-300"
           />
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+            <span>Click study boxes on the map to add them to this group.</span>
             <button
-              onClick={handleStartGroupCollect}
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                editorMode === 'groupCollect'
-                  ? 'bg-slate-900 text-white'
-                  : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
-              }`}
+              onClick={handleCancelGroupCollect}
+              className="rounded-full border border-sky-200 bg-white px-3 py-1 font-semibold text-sky-700 transition hover:bg-sky-100"
             >
-              <Plus className="h-3.5 w-3.5" />
-              Collecting on map
+              Cancel
             </button>
-            {editorMode === 'groupCollect' && (
-              <button
-                onClick={handleCancelGroupCollect}
-                className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600"
-              >
-                Cancel
-              </button>
-            )}
           </div>
           {draftGroupKeys.length > 0 ? (
             <div className="mt-3">
@@ -190,35 +166,9 @@ export default function DrawTools({
             </div>
           ) : (
             <div className="mt-3 text-xs text-gray-400">
-              {editorMode === 'groupCollect'
-                ? 'Click primitives on the map to add them.'
-                : 'Pick primitives on the map.'}
+              Click primitives on the map to add them.
             </div>
           )}
-          <input
-            value={groupTagsInput}
-            onChange={(event) => setGroupTagsInput(event.target.value)}
-            placeholder="Tags, separated by commas"
-            className="mt-3 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-sky-300"
-          />
-          <label className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-gray-700">
-            <input
-              type="checkbox"
-              checked={showGroupNumbers}
-              onChange={(event) => setShowGroupNumbers(event.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
-            />
-            Show member numbers on map
-          </label>
-          <label className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-gray-700">
-            <input
-              type="checkbox"
-              checked={showGroupOnLoad}
-              onChange={(event) => setShowGroupOnLoad(event.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
-            />
-            Show on load
-          </label>
           <div className="mt-3 flex gap-2">
             <button
               onClick={handleCreateGroup}
