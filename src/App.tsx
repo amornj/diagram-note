@@ -699,7 +699,13 @@ function MapPage() {
                 onPageChange={handleComparePageChange1}
               />
                 <button
-                  onClick={() => setSplitMode(false)}
+                  onClick={() => {
+                    const paneMapId = splitMaps[focusedSplitPane].mapId;
+                    if (paneMapId) {
+                      void useMapStore.getState().setActiveMap(paneMapId);
+                    }
+                    setSplitMode(false);
+                  }}
                   className="absolute right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/90 shadow transition hover:bg-black/80"
                   title="Close split compare"
                 >
@@ -732,7 +738,13 @@ function MapPage() {
                 onPageChange={handleComparePageChange2}
               />
                 <button
-                  onClick={() => setSplitMode(false)}
+                  onClick={() => {
+                    const paneMapId = splitMaps[focusedSplitPane].mapId;
+                    if (paneMapId) {
+                      void useMapStore.getState().setActiveMap(paneMapId);
+                    }
+                    setSplitMode(false);
+                  }}
                   className="absolute right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/90 shadow transition hover:bg-black/80"
                   title="Close split compare"
                 >
