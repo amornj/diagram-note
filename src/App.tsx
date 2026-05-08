@@ -10,6 +10,7 @@ import DropOverlay from './components/DropOverlay';
 import { useEditorStore } from './lib/store';
 import { loadMapPageView, useMapStore } from './lib/mapStore';
 import { getPrimitiveBounds } from './lib/workspace';
+import { EMPTY_WORKSPACE } from './lib/workspace';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
 import {
@@ -259,7 +260,7 @@ function useCloudSync(): SyncStatus {
 }
 
 function workspaceForPage(map: DiagramMap, pageIndex: number): MapWorkspace {
-  return map.pages?.[pageIndex]?.workspace ?? map.workspace;
+  return map.pages?.[pageIndex]?.workspace ?? map.workspace ?? EMPTY_WORKSPACE;
 }
 
 function ComparePane({
@@ -298,14 +299,14 @@ function ComparePane({
     dims: { width: number; height: number } | null;
     pageCount: number;
     pageIndex: number;
-    workspace: MapWorkspace | null;
+    workspace: MapWorkspace;
     mapName: string;
   }>({
     rasterUrl: null,
     dims: null,
     pageCount: 1,
     pageIndex: 0,
-    workspace: null,
+    workspace: EMPTY_WORKSPACE,
     mapName: title,
   });
 
@@ -319,7 +320,7 @@ function ComparePane({
         dims: null,
         pageCount: 1,
         pageIndex: 0,
-        workspace: null,
+        workspace: EMPTY_WORKSPACE,
         mapName: title,
       });
       return;
@@ -347,7 +348,7 @@ function ComparePane({
 
   return (
     <div className="relative h-full w-full border-l border-white/10 first:border-l-0">
-      {state.rasterUrl && state.dims && state.workspace ? (
+      {state.rasterUrl && state.dims ? (
         <Editor
           rasterUrl={state.rasterUrl}
           dims={state.dims}
