@@ -30,6 +30,14 @@ interface HotspotLayerProps {
 
 const FOCUS_PADDING = 16;
 
+function isStudyBoxPrimitive(primitive: Primitive) {
+  return primitive.kind === 'rectangle';
+}
+
+function isMapSelectablePrimitive(primitive: Primitive) {
+  return primitive.kind !== 'group';
+}
+
 export default function HotspotLayer({
   viewer,
   dims,
@@ -108,8 +116,7 @@ export default function HotspotLayer({
         (entry): entry is { primitive: Primitive; bounds: import('../types').BBox } =>
           entry !== null
       );
-    // Groups rendered first (lower z-index) so member primitives are on top
-    // and catch clicks before the group's transparent hit rect
+    // Groups rendered first so member primitives and user-drawn regions stay on top.
     entries.sort((a, b) => {
       if (a.primitive.kind === 'group' && b.primitive.kind !== 'group') return -1;
       if (a.primitive.kind !== 'group' && b.primitive.kind === 'group') return 1;
@@ -361,11 +368,13 @@ export default function HotspotLayer({
 
   const activatePrimitive = useCallback(
     (primitive: Primitive) => {
+      if (!isMapSelectablePrimitive(primitive)) return;
       if (
         overlaySelectionMode &&
         primitive.id !== overlayNeighborTargetId
       ) {
         if (editorMode === 'groupCollect') {
+          if (!isStudyBoxPrimitive(primitive)) return;
           if (groupCollectTargetId) {
             addGroupMember(groupCollectTargetId, makeMemberKey(primitive.id));
           } else {
@@ -617,9 +626,9 @@ export default function HotspotLayer({
               compareOnly ||
               spacePanActive ||
               (editorMode !== 'none' && !overlaySelectionMode) ||
-              (primitive.kind === 'group' && isSelected)
+              !isMapSelectablePrimitive(primitive)
                 ? ('none' as const)
-                : ('auto' as const),
+                : ('all' as const),
             cursor: mapDragActive ? 'grabbing' : 'pointer',
           };
 
@@ -725,25 +734,6 @@ export default function HotspotLayer({
           if (primitive.kind === 'group') {
             return (
               <g key={primitive.id}>
-                <rect
-                  x={boundsRect.x}
-                  y={boundsRect.y}
-                  width={boundsRect.width}
-                  height={boundsRect.height}
-                  rx={12}
-                  fill="transparent"
-                  stroke="transparent"
-                  strokeWidth={18}
-                  style={interactiveStyle}
-                  onPointerDown={(event) =>
-                    beginInteractiveDrag(event, () => activatePrimitive(primitive))
-                  }
-                  onPointerMove={continueInteractiveDrag}
-                  onPointerUp={endInteractiveDrag}
-                  onPointerCancel={cancelInteractiveDrag}
-                  onMouseEnter={() => setHoveredPrimitiveId(primitive.id)}
-                  onMouseLeave={() => setHoveredPrimitiveId(null)}
-                />
                 {focusDot}
                 {!simplifyOverlay && isVisible && primitive.showLabel === true && (
                   <text
