@@ -112,14 +112,8 @@ export default function DrawTools({
             placeholder="Group name"
             className="mt-3 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-sky-300"
           />
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-700">
-            <span>Click study boxes on the map to add them to this group.</span>
-            <button
-              onClick={handleCancelGroupCollect}
-              className="rounded-full border border-sky-200 bg-white px-3 py-1 font-semibold text-sky-700 transition hover:bg-sky-100"
-            >
-              Cancel
-            </button>
+          <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+            Click study boxes on the map to add them to this group.
           </div>
           {draftGroupKeys.length > 0 ? (
             <div className="mt-3">
