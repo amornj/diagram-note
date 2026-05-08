@@ -291,6 +291,10 @@ function ComparePane({
   isFocusedPane,
   showAllOverlays,
   onToggleOverlays,
+  zoomLocked,
+  onToggleZoomLock,
+  panLocked,
+  onTogglePanLock,
   mapOptions,
   onSelectMap,
   focusTarget,
@@ -308,6 +312,10 @@ function ComparePane({
   isFocusedPane?: boolean;
   showAllOverlays: boolean;
   onToggleOverlays: () => void;
+  zoomLocked: boolean;
+  onToggleZoomLock: () => void;
+  panLocked: boolean;
+  onTogglePanLock: () => void;
   mapOptions: Array<{ id: string; name: string }>;
   onSelectMap: (mapId: string) => void;
   focusTarget: { bbox: import('./types').BBox; nonce: number } | null;
@@ -380,6 +388,10 @@ function ComparePane({
           onComparePageChange={onPageChange}
           compareShowAllOverlays={showAllOverlays}
           onToggleCompareOverlays={onToggleOverlays}
+          compareZoomLocked={zoomLocked}
+          onToggleCompareZoomLock={onToggleZoomLock}
+          comparePanLocked={panLocked}
+          onToggleComparePanLock={onTogglePanLock}
           mapOptions={mapOptions}
           selectedMapId={mapId}
           onSelectMap={onSelectMap}
@@ -428,6 +440,13 @@ function MapPage() {
   const [compareOverlayVisible, setCompareOverlayVisible] = useState<{ 1: boolean; 2: boolean }>({
     1: false,
     2: false,
+  });
+  const [compareViewportLocks, setCompareViewportLocks] = useState<{
+    1: { zoomLocked: boolean; panLocked: boolean };
+    2: { zoomLocked: boolean; panLocked: boolean };
+  }>({
+    1: { zoomLocked: false, panLocked: false },
+    2: { zoomLocked: false, panLocked: false },
   });
   const [comparePaneData, setComparePaneData] = useState<{
     1: { mapId: string | null; mapName: string; workspace: MapWorkspace | null };
@@ -585,6 +604,10 @@ function MapPage() {
         setSplitRatio(0.5);
         setFocusedSplitPane(1);
         setCompareOverlayVisible({ 1: false, 2: false });
+        setCompareViewportLocks({
+          1: { zoomLocked: false, panLocked: false },
+          2: { zoomLocked: false, panLocked: false },
+        });
         setCompareSelectedPrimitiveId({ 1: null, 2: null });
         setSplitMaps({
           1: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
@@ -649,6 +672,34 @@ function MapPage() {
     setCompareOverlayVisible((current) => ({ ...current, 2: !current[2] }));
   }, []);
 
+  const handleToggleCompareZoomLock1 = useCallback(() => {
+    setCompareViewportLocks((current) => ({
+      ...current,
+      1: { ...current[1], zoomLocked: !current[1].zoomLocked },
+    }));
+  }, []);
+
+  const handleToggleCompareZoomLock2 = useCallback(() => {
+    setCompareViewportLocks((current) => ({
+      ...current,
+      2: { ...current[2], zoomLocked: !current[2].zoomLocked },
+    }));
+  }, []);
+
+  const handleToggleComparePanLock1 = useCallback(() => {
+    setCompareViewportLocks((current) => ({
+      ...current,
+      1: { ...current[1], panLocked: !current[1].panLocked },
+    }));
+  }, []);
+
+  const handleToggleComparePanLock2 = useCallback(() => {
+    setCompareViewportLocks((current) => ({
+      ...current,
+      2: { ...current[2], panLocked: !current[2].panLocked },
+    }));
+  }, []);
+
   const handleSelectCompareMap1 = useCallback((mapId: string) => {
     assignSplitMapToPane(1, mapId);
   }, []);
@@ -711,6 +762,10 @@ function MapPage() {
                 isFocusedPane={focusedSplitPane === 1}
                 showAllOverlays={compareOverlayVisible[1]}
                 onToggleOverlays={handleToggleCompareOverlays1}
+                zoomLocked={compareViewportLocks[1].zoomLocked}
+                onToggleZoomLock={handleToggleCompareZoomLock1}
+                panLocked={compareViewportLocks[1].panLocked}
+                onTogglePanLock={handleToggleComparePanLock1}
                 mapOptions={mapOptions}
                 onSelectMap={handleSelectCompareMap1}
                 focusTarget={compareFocusTargets[1]}
@@ -750,6 +805,10 @@ function MapPage() {
                 isFocusedPane={focusedSplitPane === 2}
                 showAllOverlays={compareOverlayVisible[2]}
                 onToggleOverlays={handleToggleCompareOverlays2}
+                zoomLocked={compareViewportLocks[2].zoomLocked}
+                onToggleZoomLock={handleToggleCompareZoomLock2}
+                panLocked={compareViewportLocks[2].panLocked}
+                onTogglePanLock={handleToggleComparePanLock2}
                 mapOptions={mapOptions}
                 onSelectMap={handleSelectCompareMap2}
                 focusTarget={compareFocusTargets[2]}
