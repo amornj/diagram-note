@@ -25,6 +25,7 @@ interface HotspotLayerProps {
   onMapDragActiveChange: (active: boolean) => void;
   compareOnly?: boolean;
   workspaceOverride?: MapWorkspace;
+  compareShowAllOverlays?: boolean;
 }
 
 const FOCUS_PADDING = 16;
@@ -36,6 +37,7 @@ export default function HotspotLayer({
   onMapDragActiveChange,
   compareOnly = false,
   workspaceOverride,
+  compareShowAllOverlays = false,
 }: HotspotLayerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewportSize, setViewportSize] = useState({ w: 1, h: 1 });
@@ -546,7 +548,7 @@ export default function HotspotLayer({
             selectedPrimitive.showMemberNumbers === true;
           const groupEntry = selectedGroupTargets.find((e) => e.id === primitive.id);
           const isVisible =
-            compareOnly ||
+            (compareOnly ? compareShowAllOverlays : false) ||
             showAllPrimitivesVisible ||
             primitive.showOnLoad === true ||
             isSelected ||

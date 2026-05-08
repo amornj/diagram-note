@@ -9,6 +9,7 @@ import HotkeyHelp from './components/HotkeyHelp';
 import DropOverlay from './components/DropOverlay';
 import { useEditorStore } from './lib/store';
 import { loadMapPageView, useMapStore } from './lib/mapStore';
+import { getPrimitiveBounds } from './lib/workspace';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
 import {
@@ -266,11 +267,29 @@ function ComparePane({
   pageIndex,
   title,
   onPageChange,
+  onLoaded,
+  onActivate,
+  showAllOverlays,
+  onToggleOverlays,
+  mapOptions,
+  onSelectMap,
+  focusTarget,
 }: {
   mapId: string | null;
   pageIndex: number;
   title: string;
   onPageChange: (pageIndex: number) => void;
+  onLoaded: (state: {
+    mapId: string | null;
+    mapName: string;
+    workspace: MapWorkspace | null;
+  }) => void;
+  onActivate: () => void;
+  showAllOverlays: boolean;
+  onToggleOverlays: () => void;
+  mapOptions: Array<{ id: string; name: string }>;
+  onSelectMap: (mapId: string) => void;
+  focusTarget: { bbox: import('./types').BBox; nonce: number } | null;
 }) {
   const [state, setState] = useState<{
     rasterUrl: string | null;
@@ -292,6 +311,7 @@ function ComparePane({
     let cancelled = false;
     let objectUrl: string | null = null;
     if (!mapId) {
+      onLoaded({ mapId: null, mapName: title, workspace: null });
       setState({
         rasterUrl: null,
         dims: null,
@@ -306,12 +326,14 @@ function ComparePane({
       const view = await loadMapPageView(mapId, pageIndex);
       if (!view || cancelled) return;
       objectUrl = URL.createObjectURL(view.rasterBlob);
+      const workspace = workspaceForPage(view.map, view.pageIndex);
+      onLoaded({ mapId: view.map.id, mapName: view.map.name, workspace });
       setState({
         rasterUrl: objectUrl,
         dims: view.dims,
         pageCount: view.pageCount,
         pageIndex: view.pageIndex,
-        workspace: workspaceForPage(view.map, view.pageIndex),
+        workspace,
         mapName: view.map.name,
       });
     })();
@@ -319,7 +341,7 @@ function ComparePane({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [mapId, pageIndex, title]);
+  }, [mapId, pageIndex, title, onLoaded]);
 
   return (
     <div className="relative h-full w-full border-l border-white/10 first:border-l-0">
@@ -333,6 +355,13 @@ function ComparePane({
           title={`${title} · ${state.mapName}`}
           workspaceOverride={state.workspace}
           onComparePageChange={onPageChange}
+          compareShowAllOverlays={showAllOverlays}
+          onToggleCompareOverlays={onToggleOverlays}
+          mapOptions={mapOptions}
+          selectedMapId={mapId}
+          onSelectMap={onSelectMap}
+          compareFocusTarget={focusTarget}
+          onActivatePane={onActivate}
         />
       ) : (
         <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,#1e293b,#020617)] text-white">
@@ -356,12 +385,14 @@ function MapPage() {
   const rightPaneOpen = useEditorStore((s) => s.rightPaneOpen);
   const leftSidebarCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
   const setLeftSidebarCollapsed = useEditorStore((s) => s.setLeftSidebarCollapsed);
+  const maps = useMapStore((s) => s.maps);
   const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
   const activeRasterUrl = useMapStore((s) => s.activeRasterUrl);
   const [showHelp, setShowHelp] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
   const [splitMode, setSplitMode] = useState(false);
   const [splitTarget, setSplitTarget] = useState<1 | 2>(1);
+  const [focusedSplitPane, setFocusedSplitPane] = useState<1 | 2>(1);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [splitMaps, setSplitMaps] = useState<{
     1: { mapId: string | null; pageIndex: number };
@@ -370,6 +401,22 @@ function MapPage() {
     1: { mapId: activeMap?.id ?? null, pageIndex: activeMap?.pageIndex ?? 0 },
     2: { mapId: activeMap?.id ?? null, pageIndex: activeMap?.pageIndex ?? 0 },
   });
+  const [compareOverlayVisible, setCompareOverlayVisible] = useState<{ 1: boolean; 2: boolean }>({
+    1: false,
+    2: false,
+  });
+  const [comparePaneData, setComparePaneData] = useState<{
+    1: { mapId: string | null; mapName: string; workspace: MapWorkspace | null };
+    2: { mapId: string | null; mapName: string; workspace: MapWorkspace | null };
+  }>({
+    1: { mapId: activeMap?.id ?? null, mapName: activeMap?.name ?? 'Window 1', workspace: workspace },
+    2: { mapId: activeMap?.id ?? null, mapName: activeMap?.name ?? 'Window 2', workspace: workspace },
+  });
+  const [compareSelectedPrimitiveId, setCompareSelectedPrimitiveId] = useState<{
+    1: string | null;
+    2: string | null;
+  }>({ 1: null, 2: null });
+  const [compareFocusNonce, setCompareFocusNonce] = useState(0);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -389,9 +436,6 @@ function MapPage() {
       }
       if ((event.key === 'b' || event.key === 'B') && !editing) {
         event.preventDefault();
-        if (!splitMode) {
-          setLeftSidebarCollapsed(false);
-        }
         toggleSplitModeRef.current();
         return;
       }
@@ -418,6 +462,10 @@ function MapPage() {
       1: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
       2: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
     });
+    setComparePaneData({
+      1: { mapId: activeMap.id, mapName: activeMap.name, workspace },
+      2: { mapId: activeMap.id, mapName: activeMap.name, workspace },
+    });
   }, [activeMap?.id, activeMap?.pageIndex, splitMode]);
 
   useEffect(() => {
@@ -443,6 +491,28 @@ function MapPage() {
     if (!selectedPrimitiveId) return null;
     return workspace.primitives.find((p) => p.id === selectedPrimitiveId) ?? null;
   }, [selectedPrimitiveId, workspace.primitives]);
+
+  const compareFocusTargets = useMemo(() => {
+    const result: {
+      1: { bbox: import('./types').BBox; nonce: number } | null;
+      2: { bbox: import('./types').BBox; nonce: number } | null;
+    } = { 1: null, 2: null };
+    ([
+      1,
+      2,
+    ] as const).forEach((pane) => {
+      const workspaceForPane = comparePaneData[pane].workspace;
+      const primitiveId = compareSelectedPrimitiveId[pane];
+      if (!workspaceForPane || !primitiveId) return;
+      const primitivesById = new Map(workspaceForPane.primitives.map((primitive) => [primitive.id, primitive]));
+      const primitive = primitivesById.get(primitiveId);
+      if (!primitive) return;
+      const bbox = getPrimitiveBounds(primitive, primitivesById);
+      if (!bbox) return;
+      result[pane] = { bbox, nonce: compareFocusNonce };
+    });
+    return result;
+  }, [comparePaneData, compareSelectedPrimitiveId, compareFocusNonce]);
 
   useEffect(() => {
     window.localStorage.setItem('diagram-note-left-pane-width', String(leftPaneWidth));
@@ -484,9 +554,16 @@ function MapPage() {
       if (next && activeMap) {
         useEditorStore.getState().setSelectedPrimitiveId(null);
         setSplitRatio(0.5);
+        setFocusedSplitPane(1);
+        setCompareOverlayVisible({ 1: false, 2: false });
+        setCompareSelectedPrimitiveId({ 1: null, 2: null });
         setSplitMaps({
           1: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
           2: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
+        });
+        setComparePaneData({
+          1: { mapId: activeMap.id, mapName: activeMap.name, workspace },
+          2: { mapId: activeMap.id, mapName: activeMap.name, workspace },
         });
       }
       return next;
@@ -495,15 +572,20 @@ function MapPage() {
   const toggleSplitModeRef = useRef(toggleSplitMode);
   toggleSplitModeRef.current = toggleSplitMode;
 
-  const assignSplitMap = (mapId: string) => {
+  const assignSplitMapToPane = (pane: 1 | 2, mapId: string) => {
     const map = useMapStore.getState().maps.find((entry) => entry.id === mapId);
+    setFocusedSplitPane(pane);
+    setCompareSelectedPrimitiveId((current) => ({ ...current, [pane]: null }));
     setSplitMaps((current) => ({
       ...current,
-      [splitTarget]: {
+      [pane]: {
         mapId,
         pageIndex: map?.pageIndex ?? 0,
       },
     }));
+  };
+  const assignSplitMap = (mapId: string) => {
+    assignSplitMapToPane(splitTarget, mapId);
   };
 
   const startSplitResize = (startX: number, startRatio: number) => {
@@ -537,13 +619,24 @@ function MapPage() {
           {splitMode ? (
             <div className="relative flex h-full w-full">
               <div className="relative h-full" style={{ width: `${splitRatio * 100}%` }}>
-                <ComparePane
-                  mapId={splitMaps[1].mapId}
-                  pageIndex={splitMaps[1].pageIndex}
-                  title="Window 1"
-                  onPageChange={(page) =>
-                    setSplitMaps((current) => ({
-                      ...current,
+              <ComparePane
+                mapId={splitMaps[1].mapId}
+                pageIndex={splitMaps[1].pageIndex}
+                title="Window 1"
+                onLoaded={(state) =>
+                  setComparePaneData((current) => ({ ...current, 1: state }))
+                }
+                onActivate={() => setFocusedSplitPane(1)}
+                showAllOverlays={compareOverlayVisible[1]}
+                onToggleOverlays={() =>
+                  setCompareOverlayVisible((current) => ({ ...current, 1: !current[1] }))
+                }
+                mapOptions={maps.map((map) => ({ id: map.id, name: map.name }))}
+                onSelectMap={(mapId) => assignSplitMapToPane(1, mapId)}
+                focusTarget={compareFocusTargets[1]}
+                onPageChange={(page) =>
+                  setSplitMaps((current) => ({
+                    ...current,
                       1: { ...current[1], pageIndex: page },
                     }))
                   }
@@ -567,13 +660,24 @@ function MapPage() {
                 <div className="absolute left-1/2 top-1/2 h-20 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-800/85 shadow" />
               </div>
               <div className="relative h-full flex-1">
-                <ComparePane
-                  mapId={splitMaps[2].mapId}
-                  pageIndex={splitMaps[2].pageIndex}
-                  title="Window 2"
-                  onPageChange={(page) =>
-                    setSplitMaps((current) => ({
-                      ...current,
+              <ComparePane
+                mapId={splitMaps[2].mapId}
+                pageIndex={splitMaps[2].pageIndex}
+                title="Window 2"
+                onLoaded={(state) =>
+                  setComparePaneData((current) => ({ ...current, 2: state }))
+                }
+                onActivate={() => setFocusedSplitPane(2)}
+                showAllOverlays={compareOverlayVisible[2]}
+                onToggleOverlays={() =>
+                  setCompareOverlayVisible((current) => ({ ...current, 2: !current[2] }))
+                }
+                mapOptions={maps.map((map) => ({ id: map.id, name: map.name }))}
+                onSelectMap={(mapId) => assignSplitMapToPane(2, mapId)}
+                focusTarget={compareFocusTargets[2]}
+                onPageChange={(page) =>
+                  setSplitMaps((current) => ({
+                    ...current,
                       2: { ...current[2], pageIndex: page },
                     }))
                   }
@@ -595,9 +699,11 @@ function MapPage() {
               pageCount={activeMap.pageCount}
               leftInset={leftSidebarCollapsed ? 0 : leftPaneWidth}
               splitMode={splitMode}
-              onToggleSplitMode={() => {
-                setLeftSidebarCollapsed(false);
-                toggleSplitMode();
+              onToggleSplitMode={toggleSplitMode}
+              mapOptions={maps.map((map) => ({ id: map.id, name: map.name }))}
+              selectedMapId={activeMap.id}
+              onSelectMap={(mapId) => {
+                void useMapStore.getState().setActiveMap(mapId);
               }}
             />
           )}
@@ -616,6 +722,24 @@ function MapPage() {
               }}
               onSetSplitTarget={setSplitTarget}
               onAssignMapToSplit={assignSplitMap}
+              workspaceOverride={splitMode ? comparePaneData[focusedSplitPane].workspace : undefined}
+              selectedPrimitiveIdOverride={splitMode ? compareSelectedPrimitiveId[focusedSplitPane] : undefined}
+              onSelectPrimitiveOverride={
+                splitMode
+                  ? (primitiveId) => {
+                      setCompareSelectedPrimitiveId((current) => ({
+                        ...current,
+                        [focusedSplitPane]: primitiveId,
+                      }));
+                      setCompareFocusNonce((value) => value + 1);
+                    }
+                  : undefined
+              }
+              paneLabel={
+                splitMode
+                  ? `W${focusedSplitPane} · ${comparePaneData[focusedSplitPane].mapName}`
+                  : undefined
+              }
             />
             {!leftSidebarCollapsed && (
               <div

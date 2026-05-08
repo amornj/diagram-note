@@ -7,6 +7,7 @@ import {
   Eye,
   Home,
   Lock,
+  Map,
   Minus,
   PenTool,
   Plus,
@@ -24,7 +25,7 @@ import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import { fitBBox, type SourceDims } from '../lib/coords';
 import * as idb from '../lib/idb';
-import type { MapWorkspace } from '../types';
+import type { BBox, MapWorkspace } from '../types';
 
 interface EditorProps {
   rasterUrl: string;
@@ -39,6 +40,13 @@ interface EditorProps {
   workspaceOverride?: MapWorkspace;
   splitMode?: boolean;
   onToggleSplitMode?: () => void;
+  mapOptions?: Array<{ id: string; name: string }>;
+  selectedMapId?: string | null;
+  onSelectMap?: (mapId: string) => void;
+  compareShowAllOverlays?: boolean;
+  onToggleCompareOverlays?: () => void;
+  compareFocusTarget?: { bbox: BBox; nonce: number } | null;
+  onActivatePane?: () => void;
 }
 
 export default function Editor({
@@ -53,6 +61,13 @@ export default function Editor({
   workspaceOverride,
   splitMode = false,
   onToggleSplitMode,
+  mapOptions,
+  selectedMapId,
+  onSelectMap,
+  compareShowAllOverlays = false,
+  onToggleCompareOverlays,
+  compareFocusTarget,
+  onActivatePane,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
@@ -61,6 +76,7 @@ export default function Editor({
   const [mapDragActive, setMapDragActive] = useState(false);
   const [spaceDragActive, setSpaceDragActive] = useState(false);
   const [showQuickSearch, setShowQuickSearch] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const [floatingTool, setFloatingTool] = useState<
     null | 'studybox' | 'group' | 'polyline'
   >(null);
@@ -158,6 +174,7 @@ export default function Editor({
   // Reset transient UI when map switches
   useEffect(() => {
     setShowQuickSearch(false);
+    setShowMapPicker(false);
     setFloatingTool(null);
   }, [activeMapId]);
 
@@ -171,15 +188,30 @@ export default function Editor({
     setZoomTarget(null);
   }, [viewer, zoomTarget, setZoomTarget, zoomLocked, dims]);
 
+  useEffect(() => {
+    if (!viewer || !compareOnly || !compareFocusTarget) return;
+    fitBBox(viewer, compareFocusTarget.bbox, dims, {
+      immediate: false,
+      locked: false,
+      padding: 16,
+    });
+  }, [viewer, compareOnly, compareFocusTarget, dims]);
+
   const zoomIn = useCallback(() => viewer?.viewport.zoomBy(1.5), [viewer]);
   const zoomOut = useCallback(() => viewer?.viewport.zoomBy(0.667), [viewer]);
   const goHome = useCallback(() => viewer?.viewport.goHome(), [viewer]);
   const openSearch = useCallback(() => {
     setLeftSidebarCollapsed(true);
     setFloatingTool(null);
+    setShowMapPicker(false);
     setShowQuickSearch(true);
     window.dispatchEvent(new Event('map-search-focus'));
   }, [setLeftSidebarCollapsed]);
+  const toggleMapPicker = useCallback(() => {
+    setShowQuickSearch(false);
+    setFloatingTool(null);
+    setShowMapPicker((value) => !value);
+  }, []);
   const openStudyBoxTool = useCallback(() => {
     setLeftSidebarCollapsed(true);
     setShowQuickSearch(false);
@@ -245,8 +277,18 @@ export default function Editor({
         target?.isContentEditable;
 
       if (compareOnly) {
+        if (event.key === 'Escape') {
+          setShowMapPicker(false);
+        }
         let handled = true;
         switch (event.key) {
+          case 'm':
+          case 'M':
+            setShowMapPicker((value) => !value);
+            break;
+          case '\\':
+            onToggleCompareOverlays?.();
+            break;
           case '+':
           case '=':
             viewer.viewport.zoomBy(1.3);
@@ -286,6 +328,7 @@ export default function Editor({
       }
 
       if (event.key === 'Escape') {
+        setShowMapPicker(false);
         setShowQuickSearch(false);
         setFloatingTool(null);
         if (editorMode === 'textSelect') {
@@ -312,6 +355,10 @@ export default function Editor({
       const panSpeed = 0.08;
       let handled = true;
       switch (event.key) {
+        case 'm':
+        case 'M':
+          toggleMapPicker();
+          break;
         case 't':
         case 'T':
           setEditorMode(editorMode === 'textSelect' ? 'none' : 'textSelect');
@@ -439,15 +486,18 @@ export default function Editor({
     openGroupTool,
     openPolylineTool,
     openSearch,
+    toggleMapPicker,
     setEditorMode,
     toggleShowAllPrimitivesVisible,
     compareOnly,
+    onToggleCompareOverlays,
   ]);
 
   return (
     <div
       className="relative h-full w-full overflow-hidden bg-gray-900"
       onWheel={handleWheelZoom}
+      onPointerDown={() => onActivatePane?.()}
       style={{
         cursor:
           editorMode === 'textSelect'
@@ -484,6 +534,7 @@ export default function Editor({
           onMapDragActiveChange={setMapDragActive}
           compareOnly={compareOnly}
           workspaceOverride={workspaceOverride}
+          compareShowAllOverlays={compareShowAllOverlays}
         />
       )}
 
@@ -607,6 +658,19 @@ export default function Editor({
         )}
         {!compareOnly && (
           <button
+            onClick={toggleMapPicker}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+              showMapPicker
+                ? 'bg-sky-500 text-white hover:bg-sky-600'
+                : 'bg-white/90 text-gray-700 hover:bg-white'
+            }`}
+            title="Maps (M)"
+          >
+            <Map size={15} />
+          </button>
+        )}
+        {!compareOnly && (
+          <button
             onClick={onToggleSplitMode}
             className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
               splitMode
@@ -631,7 +695,62 @@ export default function Editor({
           <Eye size={15} />
           </button>
         )}
+        {compareOnly && (
+          <>
+            <button
+              onClick={toggleMapPicker}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                showMapPicker
+                  ? 'bg-sky-500 text-white hover:bg-sky-600'
+                  : 'bg-white/90 text-gray-700 hover:bg-white'
+              }`}
+              title="Maps (M)"
+            >
+              <Map size={15} />
+            </button>
+            <button
+              onClick={onToggleCompareOverlays}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                compareShowAllOverlays
+                  ? 'bg-sky-500 text-white hover:bg-sky-600'
+                  : 'bg-white/90 text-gray-700 hover:bg-white'
+              }`}
+              title={compareShowAllOverlays ? 'Hide overlays (\\)' : 'Show overlays (\\)'}
+            >
+              <Eye size={15} />
+            </button>
+          </>
+        )}
       </div>
+
+      {showMapPicker && (
+        <div
+          className="absolute top-16 z-20 -translate-x-1/2 origin-top transition-all duration-300"
+          style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
+        >
+          <div className="w-80 rounded-2xl border border-gray-200 bg-white p-2 shadow-lg">
+            <div className="max-h-80 overflow-y-auto">
+              {(mapOptions ?? []).map((map) => (
+                <button
+                  key={map.id}
+                  onClick={() => {
+                    onSelectMap?.(map.id);
+                    setShowMapPicker(false);
+                  }}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition ${
+                    selectedMapId === map.id ? 'bg-sky-50 text-sky-700' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="truncate">{map.name}</span>
+                  {selectedMapId === map.id && (
+                    <span className="text-[11px] font-semibold">active</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {!compareOnly && showQuickSearch && (
         <div
@@ -689,8 +808,8 @@ export default function Editor({
       >
         <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
           {compareOnly
-            ? '+ zoom in · - zoom out · 0 home · drag pan'
-            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · B split · \\ overlays · ? help'}
+            ? 'M maps · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
+            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · M maps · B split · \\ overlays · ? help'}
         </div>
         {compareOnly && onComparePageChange && pageCount > 1 ? (
           <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur">
