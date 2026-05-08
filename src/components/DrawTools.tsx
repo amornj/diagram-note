@@ -56,6 +56,15 @@ export default function DrawTools({
     setEditorMode(editorMode === 'groupCollect' ? 'none' : 'groupCollect');
   };
 
+  const handleCancelGroupCollect = () => {
+    clearDraftGroup();
+    setGroupName('');
+    setGroupTagsInput('');
+    setShowGroupNumbers(false);
+    setShowGroupOnLoad(false);
+    setEditorMode('none');
+  };
+
   const handleClose = () => {
     if (mode === 'group' && editorMode === 'groupCollect') {
       clearDraftGroup();
@@ -115,16 +124,24 @@ export default function DrawTools({
             placeholder="Group name"
             className="mt-3 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-sky-300"
           />
-          <div className="mt-3">
-            {editorMode === 'groupCollect' ? (
-              <span className="text-xs text-gray-500">click on map to add member</span>
-            ) : (
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={handleStartGroupCollect}
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                editorMode === 'groupCollect'
+                  ? 'bg-slate-900 text-white'
+                  : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Collecting on map
+            </button>
+            {editorMode === 'groupCollect' && (
               <button
-                onClick={handleStartGroupCollect}
-                className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-100 transition"
+                onClick={handleCancelGroupCollect}
+                className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600"
               >
-                <Plus className="h-3.5 w-3.5" />
-                Collecting on map
+                Cancel
               </button>
             )}
           </div>
