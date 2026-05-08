@@ -286,6 +286,9 @@ export default function Editor({
           case 'M':
             setShowMapPicker((value) => !value);
             break;
+          case '1':
+            toggleLeftSidebar();
+            break;
           case '\\':
             onToggleCompareOverlays?.();
             break;
