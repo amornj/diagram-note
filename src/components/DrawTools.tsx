@@ -40,12 +40,6 @@ export default function DrawTools({
     setGroupName('');
   };
 
-  const handleCancelGroupCollect = () => {
-    clearDraftGroup();
-    setGroupName('');
-    setEditorMode('none');
-  };
-
   const handleClose = () => {
     if (mode === 'group' && editorMode === 'groupCollect') {
       clearDraftGroup();
@@ -112,9 +106,6 @@ export default function DrawTools({
             placeholder="Group name"
             className="mt-3 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-sky-300"
           />
-          <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-700">
-            Click study boxes on the map to add them to this group.
-          </div>
           {draftGroupKeys.length > 0 ? (
             <div className="mt-3">
               <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
