@@ -3,7 +3,7 @@ import { Search, X } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import { getPrimitiveBounds } from '../lib/workspace';
-import type { Primitive } from '../types';
+import type { DiagramMap, Primitive } from '../types';
 
 interface SearchBoxProps {
   autoFocus?: boolean;
@@ -18,14 +18,24 @@ const KIND_LABELS: Record<Primitive['kind'], string> = {
   group: 'group',
 };
 
-type SearchTypeFilter = 'studybox' | 'group' | 'region' | 'map';
+type SearchTypeFilter = 'studybox' | 'group' | 'region' | 'map' | 'allmap';
 type SearchContentFilter = 'note' | 'tag';
 
-type PrimitiveSearchGroup = {
+type SearchPrimitiveMatch = {
+  primitive: Primitive;
+  mapId: string;
+  mapName: string;
+  pageIndex: number;
+};
+
+type SearchResultGroup = {
   key: string;
   name: string;
   representative: Primitive;
-  primitives: Primitive[];
+  matches: SearchPrimitiveMatch[];
+  mapId: string;
+  mapName: string;
+  pageIndex: number;
 };
 
 const TYPE_FILTERS: Array<{
@@ -37,6 +47,7 @@ const TYPE_FILTERS: Array<{
   { key: 'group', label: 'Group', matches: (primitive) => primitive.kind === 'group' },
   { key: 'region', label: 'Region', matches: (primitive) => primitive.kind === 'polygon' },
   { key: 'map', label: 'Map', matches: () => false },
+  { key: 'allmap', label: 'All map', matches: () => false },
 ];
 
 const CONTENT_FILTERS: Array<{
@@ -58,7 +69,6 @@ export default function SearchBox({
   const [activeContentFilters, setActiveContentFilters] = useState<SearchContentFilter[]>([]);
   const deferredQuery = useDeferredValue(query);
 
-  const workspace = useEditorStore((s) => s.workspace);
   const selectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
   const selectedOccurrenceIndex = useEditorStore((s) => s.selectedOccurrenceIndex);
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
@@ -67,11 +77,7 @@ export default function SearchBox({
   const maps = useMapStore((s) => s.maps);
   const activeMapId = useMapStore((s) => s.activeMapId);
   const setActiveMap = useMapStore((s) => s.setActiveMap);
-
-  const primitivesById = useMemo(
-    () => new Map(workspace.primitives.map((p) => [p.id, p])),
-    [workspace.primitives]
-  );
+  const setActivePage = useMapStore((s) => s.setActivePage);
 
   const mapResults = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
@@ -84,22 +90,34 @@ export default function SearchBox({
   const results = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
     if (!q || activeTypeFilters.includes('map')) return [];
-    const matches = workspace.primitives
-      .filter((p) => {
+    const searchAcrossAllMaps = activeTypeFilters.includes('allmap');
+    const sourceMaps = searchAcrossAllMaps
+      ? maps
+      : maps.filter((map) => map.id === activeMapId);
+
+    const primitiveTypeFilters = activeTypeFilters.filter(
+      (filter): filter is Exclude<SearchTypeFilter, 'map' | 'allmap'> =>
+        filter !== 'map' && filter !== 'allmap'
+    );
+
+    const matchList: SearchPrimitiveMatch[] = [];
+    for (const map of sourceMaps) {
+      for (const { pageIndex, primitive } of getSearchablePrimitivesForMap(map)) {
         const matchesType =
-          activeTypeFilters.length === 0 ||
+          primitiveTypeFilters.length === 0 ||
           TYPE_FILTERS.some(
             (filter) =>
               filter.key !== 'map' &&
-              activeTypeFilters.includes(filter.key) &&
-              filter.matches(p)
+              filter.key !== 'allmap' &&
+              primitiveTypeFilters.includes(filter.key as Exclude<SearchTypeFilter, 'map' | 'allmap'>) &&
+              filter.matches(primitive)
           );
 
-        if (!matchesType) return false;
+        if (!matchesType) continue;
 
-        const baseFields = [p.name, ...(p.aliases ?? [])];
-        const noteFields = p.notes?.map((n) => `${n.name} ${n.content}`) ?? [];
-        const tagFields = p.tags ?? [];
+        const baseFields = [primitive.name, ...(primitive.aliases ?? [])];
+        const noteFields = primitive.notes?.map((n) => `${n.name} ${n.content}`) ?? [];
+        const tagFields = primitive.tags ?? [];
         const searchableFields =
           activeContentFilters.length === 0
             ? [...baseFields, ...tagFields, ...noteFields]
@@ -108,42 +126,72 @@ export default function SearchBox({
                 ...(activeContentFilters.includes('tag') ? tagFields : []),
                 ...(activeContentFilters.includes('note') ? noteFields : []),
               ];
-        return searchableFields.join(' ').toLowerCase().includes(q);
-      })
-      .slice(0, 100);
+        if (!searchableFields.join(' ').toLowerCase().includes(q)) continue;
+        matchList.push({
+          primitive,
+          mapId: map.id,
+          mapName: map.name,
+          pageIndex,
+        });
+      }
+    }
 
-    const grouped = new Map<string, PrimitiveSearchGroup>();
-    for (const primitive of matches) {
+    const grouped = new Map<string, SearchResultGroup>();
+    for (const match of matchList.slice(0, 150)) {
+      const primitive = match.primitive;
       const normalizedName = primitive.name.trim().toLowerCase();
-      const key = normalizedName || primitive.id;
+      const key = searchAcrossAllMaps
+        ? `${match.mapId}:${normalizedName || primitive.id}`
+        : normalizedName || primitive.id;
       const existing = grouped.get(key);
       if (existing) {
-        existing.primitives.push(primitive);
+        existing.matches.push(match);
       } else {
         grouped.set(key, {
           key,
           name: primitive.name.trim() || 'Untitled primitive',
           representative: primitive,
-          primitives: [primitive],
+          matches: [match],
+          mapId: match.mapId,
+          mapName: match.mapName,
+          pageIndex: match.pageIndex,
         });
       }
     }
 
     return Array.from(grouped.values()).slice(0, 20);
-  }, [deferredQuery, workspace.primitives, activeTypeFilters, activeContentFilters]);
+  }, [deferredQuery, activeTypeFilters, activeContentFilters, maps, activeMapId]);
 
-  const handleSelect = (group: PrimitiveSearchGroup) => {
-    const currentIndex = group.primitives.findIndex(
-      (primitive) => primitive.id === selectedPrimitiveId
+  const handleSelect = async (group: SearchResultGroup) => {
+    const sameMapAndPage =
+      activeMapId === group.mapId &&
+      group.matches.some(
+        (match) =>
+          match.primitive.id === selectedPrimitiveId &&
+          match.pageIndex === group.pageIndex
+      );
+    const currentIndex = group.matches.findIndex(
+      (match) => match.primitive.id === selectedPrimitiveId
     );
     const nextIndex =
-      group.primitives.length > 1 && currentIndex !== -1
-        ? (selectedOccurrenceIndex + 1) % group.primitives.length
+      group.matches.length > 1 && sameMapAndPage && currentIndex !== -1
+        ? (selectedOccurrenceIndex + 1) % group.matches.length
         : 0;
-    const primitive = group.primitives[nextIndex] ?? group.representative;
+    const match = group.matches[nextIndex] ?? group.matches[0];
+    if (!match) return;
+    if (activeMapId !== match.mapId) {
+      await setActiveMap(match.mapId);
+    }
+    if (match.pageIndex !== getActivePageIndexForMap(maps, match.mapId)) {
+      await setActivePage(match.pageIndex);
+    }
+    const primitive = match.primitive;
     setSelectedPrimitiveId(primitive.id);
     setSelectedOccurrenceIndex(nextIndex);
-    const bbox = getPrimitiveBounds(primitive, primitivesById);
+    const boundsMap = new Map(
+      getWorkspaceForMapPage(maps, match.mapId, match.pageIndex).primitives.map((p) => [p.id, p])
+    );
+    const bbox = getPrimitiveBounds(primitive, boundsMap);
     if (bbox) setZoomTarget({ bbox, immediate: false, padding: 16 });
   };
 
@@ -232,7 +280,9 @@ export default function SearchBox({
           placeholder={
             activeTypeFilters.includes('map')
               ? 'Search map names…'
-              : 'Search primitives, tags, notes…'
+              : activeTypeFilters.includes('allmap')
+                ? 'Search all maps…'
+                : 'Search primitives, tags, notes…'
           }
           className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-9 text-sm text-gray-900 outline-none transition focus:border-sky-300 focus:bg-white"
         />
@@ -313,7 +363,7 @@ export default function SearchBox({
           {results.map((group) => (
             <button
               key={group.key}
-              onClick={() => handleSelect(group)}
+              onClick={() => void handleSelect(group)}
               className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
             >
               <div className="flex items-center gap-2">
@@ -325,12 +375,12 @@ export default function SearchBox({
                   {group.name}
                 </span>
                 <div className="ml-auto flex items-center gap-2">
-                  {group.primitives.length > 1 && (
+                  {group.matches.length > 1 && (
                     <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
                       {selectedPrimitiveId &&
-                      group.primitives.some((primitive) => primitive.id === selectedPrimitiveId)
-                        ? `${(selectedOccurrenceIndex % group.primitives.length) + 1}/${group.primitives.length}`
-                        : `${group.primitives.length}`}
+                      group.matches.some((match) => match.primitive.id === selectedPrimitiveId)
+                        ? `${(selectedOccurrenceIndex % group.matches.length) + 1}/${group.matches.length}`
+                        : `${group.matches.length}`}
                     </span>
                   )}
                   <span className="text-[11px] text-gray-400">
@@ -338,6 +388,14 @@ export default function SearchBox({
                   </span>
                 </div>
               </div>
+              {activeTypeFilters.includes('allmap') && (
+                <div className="mt-1 text-[11px] text-slate-500">
+                  {group.mapName}
+                  {group.matches.some((match) => match.pageIndex !== 0) && (
+                    <span>{` · Page ${group.pageIndex + 1}`}</span>
+                  )}
+                </div>
+              )}
               {group.representative.tags && group.representative.tags.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {group.representative.tags.slice(0, 4).map((tag) => (
@@ -356,4 +414,31 @@ export default function SearchBox({
       )}
     </div>
   );
+}
+
+function getSearchablePrimitivesForMap(map: DiagramMap) {
+  const pageIndexes = new Set<number>([map.pageIndex]);
+  for (const key of Object.keys(map.pages ?? {})) {
+    pageIndexes.add(Number(key));
+  }
+  return Array.from(pageIndexes)
+    .sort((a, b) => a - b)
+    .flatMap((pageIndex) =>
+      getWorkspaceForMapPage([map], map.id, pageIndex).primitives.map((primitive) => ({
+        pageIndex,
+        primitive,
+      }))
+    );
+}
+
+function getWorkspaceForMapPage(maps: DiagramMap[], mapId: string, pageIndex: number) {
+  const map = maps.find((entry) => entry.id === mapId);
+  if (!map) {
+    return { version: 1, primitives: [] as Primitive[] };
+  }
+  return map.pages?.[pageIndex]?.workspace ?? map.workspace;
+}
+
+function getActivePageIndexForMap(maps: DiagramMap[], mapId: string) {
+  return maps.find((map) => map.id === mapId)?.pageIndex ?? 0;
 }
