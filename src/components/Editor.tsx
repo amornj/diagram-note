@@ -47,6 +47,7 @@ interface EditorProps {
   onToggleCompareOverlays?: () => void;
   compareFocusTarget?: { bbox: BBox; nonce: number } | null;
   onActivatePane?: () => void;
+  isFocusedPane?: boolean;
 }
 
 export default function Editor({
@@ -68,6 +69,7 @@ export default function Editor({
   onToggleCompareOverlays,
   compareFocusTarget,
   onActivatePane,
+  isFocusedPane = false,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
@@ -287,7 +289,7 @@ export default function Editor({
             setShowMapPicker((value) => !value);
             break;
           case '1':
-            toggleLeftSidebar();
+            if (isFocusedPane) toggleLeftSidebar();
             break;
           case '\\':
             onToggleCompareOverlays?.();

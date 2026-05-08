@@ -270,6 +270,7 @@ function ComparePane({
   onPageChange,
   onLoaded,
   onActivate,
+  isFocusedPane,
   showAllOverlays,
   onToggleOverlays,
   mapOptions,
@@ -286,6 +287,7 @@ function ComparePane({
     workspace: MapWorkspace | null;
   }) => void;
   onActivate: () => void;
+  isFocusedPane?: boolean;
   showAllOverlays: boolean;
   onToggleOverlays: () => void;
   mapOptions: Array<{ id: string; name: string }>;
@@ -365,6 +367,7 @@ function ComparePane({
           onSelectMap={onSelectMap}
           compareFocusTarget={focusTarget}
           onActivatePane={onActivate}
+          isFocusedPane={isFocusedPane}
         />
       ) : (
         <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,#1e293b,#020617)] text-white">
@@ -687,6 +690,7 @@ function MapPage() {
                 title="Window 1"
                 onLoaded={handleCompareLoaded1}
                 onActivate={handleActivatePane1}
+                isFocusedPane={focusedSplitPane === 1}
                 showAllOverlays={compareOverlayVisible[1]}
                 onToggleOverlays={handleToggleCompareOverlays1}
                 mapOptions={mapOptions}
@@ -719,6 +723,7 @@ function MapPage() {
                 title="Window 2"
                 onLoaded={handleCompareLoaded2}
                 onActivate={handleActivatePane2}
+                isFocusedPane={focusedSplitPane === 2}
                 showAllOverlays={compareOverlayVisible[2]}
                 onToggleOverlays={handleToggleCompareOverlays2}
                 mapOptions={mapOptions}
