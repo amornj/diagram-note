@@ -98,7 +98,7 @@ export default function HotspotLayer({
     : null;
 
   const primitiveShapes = useMemo(() => {
-    return workspace.primitives
+    const entries = workspace.primitives
       .map((primitive) => {
         const bounds = getPrimitiveBounds(primitive, primitivesById);
         if (!bounds) return null;
@@ -108,6 +108,14 @@ export default function HotspotLayer({
         (entry): entry is { primitive: Primitive; bounds: import('../types').BBox } =>
           entry !== null
       );
+    // Groups rendered first (lower z-index) so member primitives are on top
+    // and catch clicks before the group's transparent hit rect
+    entries.sort((a, b) => {
+      if (a.primitive.kind === 'group' && b.primitive.kind !== 'group') return -1;
+      if (a.primitive.kind !== 'group' && b.primitive.kind === 'group') return 1;
+      return 0;
+    });
+    return entries;
   }, [workspace.primitives, primitivesById]);
 
   // Selected group children — to highlight + number on the map
