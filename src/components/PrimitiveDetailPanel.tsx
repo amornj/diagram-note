@@ -348,28 +348,26 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
                       setDraggedGroupIndex(null);
                     }}
                     onDragEnd={() => setDraggedGroupIndex(null)}
-                    className="group flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+                    onClick={() => {
+                      setSelectedPrimitiveId(member.id);
+                      const bbox = getPrimitiveBounds(memberPrim, primitivesById);
+                      if (bbox) {
+                        setZoomTarget({
+                          bbox,
+                          immediate: false,
+                          padding: 16,
+                        });
+                      }
+                    }}
+                    className="group flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 hover:bg-sky-50 hover:border-sky-200 cursor-pointer transition"
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-semibold text-white">
                         {index + 1}
                       </span>
-                      <button
-                        onClick={() => {
-                          setSelectedPrimitiveId(member.id);
-                          const bbox = getPrimitiveBounds(memberPrim, primitivesById);
-                          if (bbox) {
-                            setZoomTarget({
-                              bbox,
-                              immediate: false,
-                              padding: 16,
-                            });
-                          }
-                        }}
-                        className="truncate text-left"
-                      >
+                      <span className="truncate text-left">
                         {memberPrim.name}
-                      </button>
+                      </span>
                     </div>
                     <button
                       onClick={() => removeGroupMember(primitive.id, memberKey)}
