@@ -496,6 +496,7 @@ export default function Editor({
     toggleShowAllPrimitivesVisible,
     compareOnly,
     onToggleCompareOverlays,
+    isFocusedPane,
   ]);
 
   return (
