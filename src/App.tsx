@@ -700,9 +700,9 @@ function MapPage() {
               />
                 <button
                   onClick={() => {
-                    const paneMapId = splitMaps[focusedSplitPane].mapId;
-                    if (paneMapId) {
-                      void useMapStore.getState().setActiveMap(paneMapId);
+                    const otherPaneMapId = splitMaps[2].mapId;
+                    if (otherPaneMapId) {
+                      void useMapStore.getState().setActiveMap(otherPaneMapId);
                     }
                     setSplitMode(false);
                   }}
@@ -739,9 +739,9 @@ function MapPage() {
               />
                 <button
                   onClick={() => {
-                    const paneMapId = splitMaps[focusedSplitPane].mapId;
-                    if (paneMapId) {
-                      void useMapStore.getState().setActiveMap(paneMapId);
+                    const otherPaneMapId = splitMaps[1].mapId;
+                    if (otherPaneMapId) {
+                      void useMapStore.getState().setActiveMap(otherPaneMapId);
                     }
                     setSplitMode(false);
                   }}
