@@ -282,16 +282,20 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
                     {member.label}
                   </button>
                   <button
-                    onClick={() =>
-                      activeMap
-                        ? removePrimitiveBacklink(
-                            activeMap.pageIndex,
-                            primitive.id,
-                            member.pageIndex,
-                            member.id
-                          )
-                        : removeNeighborMember(primitive.id, member.key)
-                    }
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (activeMap) {
+                        void removePrimitiveBacklink(
+                          activeMap.pageIndex,
+                          primitive.id,
+                          member.pageIndex,
+                          member.id
+                        );
+                        return;
+                      }
+                      removeNeighborMember(primitive.id, member.key);
+                    }}
                     className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                     aria-label={`Remove ${member.label}`}
                   >
@@ -370,7 +374,11 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
                       </span>
                     </div>
                     <button
-                      onClick={() => removeGroupMember(primitive.id, memberKey)}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        removeGroupMember(primitive.id, memberKey);
+                      }}
                       className="rounded-full p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                       aria-label={`Remove ${memberPrim.name}`}
                     >
