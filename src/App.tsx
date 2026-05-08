@@ -48,6 +48,10 @@ function mapForCloud(map: DiagramMap): DiagramMap {
   return rest;
 }
 
+function getWorkspaceForMapPage(map: DiagramMap, pageIndex: number): MapWorkspace {
+  return map.pages?.[pageIndex]?.workspace ?? map.workspace ?? EMPTY_WORKSPACE;
+}
+
 async function backfillCloudSourcePaths(
   uid: string,
   maps: DiagramMap[]
@@ -143,8 +147,22 @@ async function mergeCloudMaps(cloud: DiagramMap[]) {
     await useMapStore.getState().setActiveMap(fallbackId);
   } else if (activeId && mergeById.has(activeId)) {
     const activeMap = mergeById.get(activeId)!;
-    useEditorStore.getState().setWorkspace(activeMap.workspace);
-    await useMapStore.getState().setActiveMap(activeId);
+    const localActiveMap = survivingLocalMaps.find((map) => map.id === activeId) ?? null;
+    const sameRenderedView =
+      localActiveMap !== null &&
+      localActiveMap.pageIndex === activeMap.pageIndex &&
+      localActiveMap.renderScale === activeMap.renderScale &&
+      localActiveMap.sourceWidth === activeMap.sourceWidth &&
+      localActiveMap.sourceHeight === activeMap.sourceHeight &&
+      localActiveMap.sourceStoragePath === activeMap.sourceStoragePath;
+
+    useEditorStore
+      .getState()
+      .setWorkspace(getWorkspaceForMapPage(activeMap, activeMap.pageIndex));
+
+    if (!sameRenderedView) {
+      await useMapStore.getState().setActiveMap(activeId);
+    }
   }
 }
 
@@ -260,7 +278,7 @@ function useCloudSync(): SyncStatus {
 }
 
 function workspaceForPage(map: DiagramMap, pageIndex: number): MapWorkspace {
-  return map.pages?.[pageIndex]?.workspace ?? map.workspace ?? EMPTY_WORKSPACE;
+  return getWorkspaceForMapPage(map, pageIndex);
 }
 
 function ComparePane({
