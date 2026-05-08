@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelRightOpen, X } from 'lucide-react';
 import Editor from './components/Editor';
 import LeftPane from './components/LeftPane';
@@ -291,6 +291,8 @@ function ComparePane({
   onSelectMap: (mapId: string) => void;
   focusTarget: { bbox: import('./types').BBox; nonce: number } | null;
 }) {
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
   const [state, setState] = useState<{
     rasterUrl: string | null;
     dims: { width: number; height: number } | null;
@@ -311,7 +313,7 @@ function ComparePane({
     let cancelled = false;
     let objectUrl: string | null = null;
     if (!mapId) {
-      onLoaded({ mapId: null, mapName: title, workspace: null });
+      onLoadedRef.current({ mapId: null, mapName: title, workspace: null });
       setState({
         rasterUrl: null,
         dims: null,
@@ -327,7 +329,7 @@ function ComparePane({
       if (!view || cancelled) return;
       objectUrl = URL.createObjectURL(view.rasterBlob);
       const workspace = workspaceForPage(view.map, view.pageIndex);
-      onLoaded({ mapId: view.map.id, mapName: view.map.name, workspace });
+      onLoadedRef.current({ mapId: view.map.id, mapName: view.map.name, workspace });
       setState({
         rasterUrl: objectUrl,
         dims: view.dims,
@@ -341,7 +343,7 @@ function ComparePane({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [mapId, pageIndex, title, onLoaded]);
+  }, [mapId, pageIndex, title]);
 
   return (
     <div className="relative h-full w-full border-l border-white/10 first:border-l-0">
@@ -514,6 +516,11 @@ function MapPage() {
     return result;
   }, [comparePaneData, compareSelectedPrimitiveId, compareFocusNonce]);
 
+  const mapOptions = useMemo(
+    () => maps.map((map) => ({ id: map.id, name: map.name })),
+    [maps]
+  );
+
   useEffect(() => {
     window.localStorage.setItem('diagram-note-left-pane-width', String(leftPaneWidth));
   }, [leftPaneWidth]);
@@ -588,6 +595,60 @@ function MapPage() {
     assignSplitMapToPane(splitTarget, mapId);
   };
 
+  const handleCompareLoaded1 = useCallback((state: {
+    mapId: string | null;
+    mapName: string;
+    workspace: MapWorkspace | null;
+  }) => {
+    setComparePaneData((current) => ({ ...current, 1: state }));
+  }, []);
+
+  const handleCompareLoaded2 = useCallback((state: {
+    mapId: string | null;
+    mapName: string;
+    workspace: MapWorkspace | null;
+  }) => {
+    setComparePaneData((current) => ({ ...current, 2: state }));
+  }, []);
+
+  const handleActivatePane1 = useCallback(() => {
+    setFocusedSplitPane(1);
+  }, []);
+
+  const handleActivatePane2 = useCallback(() => {
+    setFocusedSplitPane(2);
+  }, []);
+
+  const handleToggleCompareOverlays1 = useCallback(() => {
+    setCompareOverlayVisible((current) => ({ ...current, 1: !current[1] }));
+  }, []);
+
+  const handleToggleCompareOverlays2 = useCallback(() => {
+    setCompareOverlayVisible((current) => ({ ...current, 2: !current[2] }));
+  }, []);
+
+  const handleSelectCompareMap1 = useCallback((mapId: string) => {
+    assignSplitMapToPane(1, mapId);
+  }, []);
+
+  const handleSelectCompareMap2 = useCallback((mapId: string) => {
+    assignSplitMapToPane(2, mapId);
+  }, []);
+
+  const handleComparePageChange1 = useCallback((page: number) => {
+    setSplitMaps((current) => ({
+      ...current,
+      1: { ...current[1], pageIndex: page },
+    }));
+  }, []);
+
+  const handleComparePageChange2 = useCallback((page: number) => {
+    setSplitMaps((current) => ({
+      ...current,
+      2: { ...current[2], pageIndex: page },
+    }));
+  }, []);
+
   const startSplitResize = (startX: number, startRatio: number) => {
     const handleMove = (event: MouseEvent) => {
       const width = window.innerWidth || 1;
@@ -623,24 +684,15 @@ function MapPage() {
                 mapId={splitMaps[1].mapId}
                 pageIndex={splitMaps[1].pageIndex}
                 title="Window 1"
-                onLoaded={(state) =>
-                  setComparePaneData((current) => ({ ...current, 1: state }))
-                }
-                onActivate={() => setFocusedSplitPane(1)}
+                onLoaded={handleCompareLoaded1}
+                onActivate={handleActivatePane1}
                 showAllOverlays={compareOverlayVisible[1]}
-                onToggleOverlays={() =>
-                  setCompareOverlayVisible((current) => ({ ...current, 1: !current[1] }))
-                }
-                mapOptions={maps.map((map) => ({ id: map.id, name: map.name }))}
-                onSelectMap={(mapId) => assignSplitMapToPane(1, mapId)}
+                onToggleOverlays={handleToggleCompareOverlays1}
+                mapOptions={mapOptions}
+                onSelectMap={handleSelectCompareMap1}
                 focusTarget={compareFocusTargets[1]}
-                onPageChange={(page) =>
-                  setSplitMaps((current) => ({
-                    ...current,
-                      1: { ...current[1], pageIndex: page },
-                    }))
-                  }
-                />
+                onPageChange={handleComparePageChange1}
+              />
                 <button
                   onClick={() => setSplitMode(false)}
                   className="absolute right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/90 shadow transition hover:bg-black/80"
@@ -664,24 +716,15 @@ function MapPage() {
                 mapId={splitMaps[2].mapId}
                 pageIndex={splitMaps[2].pageIndex}
                 title="Window 2"
-                onLoaded={(state) =>
-                  setComparePaneData((current) => ({ ...current, 2: state }))
-                }
-                onActivate={() => setFocusedSplitPane(2)}
+                onLoaded={handleCompareLoaded2}
+                onActivate={handleActivatePane2}
                 showAllOverlays={compareOverlayVisible[2]}
-                onToggleOverlays={() =>
-                  setCompareOverlayVisible((current) => ({ ...current, 2: !current[2] }))
-                }
-                mapOptions={maps.map((map) => ({ id: map.id, name: map.name }))}
-                onSelectMap={(mapId) => assignSplitMapToPane(2, mapId)}
+                onToggleOverlays={handleToggleCompareOverlays2}
+                mapOptions={mapOptions}
+                onSelectMap={handleSelectCompareMap2}
                 focusTarget={compareFocusTargets[2]}
-                onPageChange={(page) =>
-                  setSplitMaps((current) => ({
-                    ...current,
-                      2: { ...current[2], pageIndex: page },
-                    }))
-                  }
-                />
+                onPageChange={handleComparePageChange2}
+              />
                 <button
                   onClick={() => setSplitMode(false)}
                   className="absolute right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/90 shadow transition hover:bg-black/80"
