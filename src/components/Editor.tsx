@@ -8,6 +8,7 @@ import {
   Home,
   Lock,
   Map,
+  Pin,
   Minus,
   PenTool,
   Plus,
@@ -111,6 +112,8 @@ export default function Editor({
   const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
   const zoomLocked = useEditorStore((s) => s.zoomLocked);
   const toggleZoomLock = useEditorStore((s) => s.toggleZoomLock);
+  const panLocked = useEditorStore((s) => s.panLocked);
+  const togglePanLock = useEditorStore((s) => s.togglePanLock);
   const toggleLeftSidebar = useEditorStore((s) => s.toggleLeftSidebar);
   const setLeftSidebarCollapsed = useEditorStore((s) => s.setLeftSidebarCollapsed);
   const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
@@ -205,10 +208,11 @@ export default function Editor({
     fitBBox(viewer, zoomTarget.bbox, dims, {
       immediate: zoomTarget.immediate ?? false,
       locked: zoomTarget.lockZoom ?? zoomLocked,
+      frozen: panLocked,
       padding: zoomTarget.padding,
     });
     setZoomTarget(null);
-  }, [viewer, zoomTarget, setZoomTarget, zoomLocked, dims]);
+  }, [viewer, zoomTarget, setZoomTarget, zoomLocked, panLocked, dims]);
 
   useEffect(() => {
     if (!viewer || !compareOnly || !compareFocusTarget) return;
@@ -219,8 +223,14 @@ export default function Editor({
     });
   }, [viewer, compareOnly, compareFocusTarget, dims]);
 
-  const zoomIn = useCallback(() => viewer?.viewport.zoomBy(1.5), [viewer]);
-  const zoomOut = useCallback(() => viewer?.viewport.zoomBy(0.667), [viewer]);
+  const zoomIn = useCallback(() => {
+    if (zoomLocked) return;
+    viewer?.viewport.zoomBy(1.5);
+  }, [viewer, zoomLocked]);
+  const zoomOut = useCallback(() => {
+    if (zoomLocked) return;
+    viewer?.viewport.zoomBy(0.667);
+  }, [viewer, zoomLocked]);
   const goHome = useCallback(() => viewer?.viewport.goHome(), [viewer]);
   const openSearch = useCallback(() => {
     setLeftSidebarCollapsed(true);
@@ -346,6 +356,7 @@ export default function Editor({
       if (!viewer) return;
       event.preventDefault();
       event.stopPropagation();
+      if (zoomLocked) return;
       const bounds = event.currentTarget.getBoundingClientRect();
       const pixel = new OpenSeadragon.Point(
         event.clientX - bounds.left,
@@ -356,7 +367,7 @@ export default function Editor({
       viewer.viewport.zoomBy(factor, refPoint);
       viewer.viewport.applyConstraints();
     },
-    [viewer]
+    [viewer, zoomLocked]
   );
 
   // Hotkeys
@@ -384,6 +395,7 @@ export default function Editor({
         if (event.key === 'Escape') {
           setShowMapPicker(false);
         }
+        if (!isFocusedPane) return;
         let handled = true;
         switch (event.key) {
           case 'm':
@@ -396,25 +408,32 @@ export default function Editor({
           case '\\':
             onToggleCompareOverlays?.();
             break;
+          case '9':
+            toggleZoomLock();
+            break;
+          case 'p':
+          case 'P':
+            togglePanLock();
+            break;
           case '+':
           case '=':
-            viewer.viewport.zoomBy(1.3);
+            if (!zoomLocked) viewer.viewport.zoomBy(1.3);
             break;
           case '-':
           case '_':
-            viewer.viewport.zoomBy(0.77);
+            if (!zoomLocked) viewer.viewport.zoomBy(0.77);
             break;
           case 'ArrowUp':
-            viewer.viewport.panBy(new OpenSeadragon.Point(0, -0.08));
+            if (!panLocked) viewer.viewport.panBy(new OpenSeadragon.Point(0, -0.08));
             break;
           case 'ArrowDown':
-            viewer.viewport.panBy(new OpenSeadragon.Point(0, 0.08));
+            if (!panLocked) viewer.viewport.panBy(new OpenSeadragon.Point(0, 0.08));
             break;
           case 'ArrowLeft':
-            viewer.viewport.panBy(new OpenSeadragon.Point(-0.08, 0));
+            if (!panLocked) viewer.viewport.panBy(new OpenSeadragon.Point(-0.08, 0));
             break;
           case 'ArrowRight':
-            viewer.viewport.panBy(new OpenSeadragon.Point(0.08, 0));
+            if (!panLocked) viewer.viewport.panBy(new OpenSeadragon.Point(0.08, 0));
             break;
           case '0':
           case 'Home':
@@ -427,7 +446,7 @@ export default function Editor({
         return;
       }
 
-      if (event.key === ' ' && !editing) {
+      if (event.key === ' ' && !editing && !panLocked) {
         event.preventDefault();
         spaceHeldRef.current = true;
         setSpacePanActive(true);
@@ -472,11 +491,11 @@ export default function Editor({
           break;
         case '+':
         case '=':
-          viewer.viewport.zoomBy(1.3);
+          if (!zoomLocked) viewer.viewport.zoomBy(1.3);
           break;
         case '-':
         case '_':
-          viewer.viewport.zoomBy(0.77);
+          if (!zoomLocked) viewer.viewport.zoomBy(0.77);
           break;
         case '1':
           toggleLeftSidebar();
@@ -505,20 +524,24 @@ export default function Editor({
         case '9':
           toggleZoomLock();
           break;
+        case 'p':
+        case 'P':
+          togglePanLock();
+          break;
         case '\\':
           toggleShowAllPrimitivesVisible();
           break;
         case 'ArrowUp':
-          viewer.viewport.panBy(new OpenSeadragon.Point(0, -panSpeed));
+          if (!panLocked) viewer.viewport.panBy(new OpenSeadragon.Point(0, -panSpeed));
           break;
         case 'ArrowDown':
-          viewer.viewport.panBy(new OpenSeadragon.Point(0, panSpeed));
+          if (!panLocked) viewer.viewport.panBy(new OpenSeadragon.Point(0, panSpeed));
           break;
         case 'ArrowLeft':
-          viewer.viewport.panBy(new OpenSeadragon.Point(-panSpeed, 0));
+          if (!panLocked) viewer.viewport.panBy(new OpenSeadragon.Point(-panSpeed, 0));
           break;
         case 'ArrowRight':
-          viewer.viewport.panBy(new OpenSeadragon.Point(panSpeed, 0));
+          if (!panLocked) viewer.viewport.panBy(new OpenSeadragon.Point(panSpeed, 0));
           break;
         case '0':
         case 'Home':
@@ -585,6 +608,7 @@ export default function Editor({
     toggleRightPane,
     cycleSelection,
     toggleZoomLock,
+    togglePanLock,
     setSpacePanActive,
     editorMode,
     clearDraftGroup,
@@ -599,6 +623,7 @@ export default function Editor({
     compareOnly,
     onToggleCompareOverlays,
     isFocusedPane,
+    panLocked,
   ]);
 
   return (
@@ -613,7 +638,9 @@ export default function Editor({
             : editorMode === 'none' ||
               editorMode === 'groupCollect' ||
               editorMode === 'overlayNeighborPick'
-            ? mapDragActive || spaceDragActive
+            ? panLocked
+              ? 'default'
+              : mapDragActive || spaceDragActive
               ? 'grabbing'
               : 'grab'
             : 'crosshair',
@@ -692,6 +719,32 @@ export default function Editor({
         >
           {zoomLocked ? <Lock size={15} /> : <Unlock size={15} />}
         </button>
+        {compareOnly && (
+          <button
+            onClick={togglePanLock}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+              panLocked
+                ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                : 'bg-white/90 text-gray-700 hover:bg-white'
+            }`}
+            title={panLocked ? 'Pinned viewport (P)' : 'Pin viewport (P)'}
+          >
+            <Pin size={15} />
+          </button>
+        )}
+        {!compareOnly && (
+          <button
+            onClick={togglePanLock}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+              panLocked
+                ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                : 'bg-white/90 text-gray-700 hover:bg-white'
+            }`}
+            title={panLocked ? 'Pin focus movement off (P)' : 'Pin viewport while focusing (P)'}
+          >
+            <Pin size={15} />
+          </button>
+        )}
         <button
           onClick={goHome}
           className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
@@ -903,8 +956,8 @@ export default function Editor({
       >
         <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
           {compareOnly
-            ? 'M maps · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
-            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · 0 home · T text · M maps · B split · \\ overlays · ? help'}
+            ? 'M maps · 9 lock · P pin · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
+            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · M maps · B split · \\ overlays · ? help'}
         </div>
         {compareOnly && onComparePageChange && pageCount > 1 ? (
           <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur">

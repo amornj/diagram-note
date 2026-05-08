@@ -46,6 +46,7 @@ export interface EditorState {
   rightPaneOpen: boolean;
   zoomTarget: ZoomTarget | null;
   zoomLocked: boolean;
+  panLocked: boolean;
   spacePanActive: boolean;
   pendingNameFocusId: string | null;
   overlayNeighborTargetId: string | null;
@@ -62,6 +63,7 @@ export interface EditorState {
   toggleRightPane: () => void;
   setZoomTarget: (target: ZoomTarget | null) => void;
   toggleZoomLock: () => void;
+  togglePanLock: () => void;
   setSpacePanActive: (active: boolean) => void;
   setEditorMode: (mode: EditorMode) => void;
   setDraftOverlayColor: (color: string) => void;
@@ -95,6 +97,7 @@ export interface EditorState {
 }
 
 const ZOOM_LOCK_STORAGE_KEY = 'diagram-note-zoom-lock';
+const PAN_LOCK_STORAGE_KEY = 'diagram-note-pan-lock';
 
 function loadZoomLock() {
   if (typeof window === 'undefined') return false;
@@ -104,6 +107,16 @@ function loadZoomLock() {
 function persistZoomLock(value: boolean) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(ZOOM_LOCK_STORAGE_KEY, String(value));
+}
+
+function loadPanLock() {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(PAN_LOCK_STORAGE_KEY) === 'true';
+}
+
+function persistPanLock(value: boolean) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(PAN_LOCK_STORAGE_KEY, String(value));
 }
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -121,6 +134,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   rightPaneOpen: true,
   zoomTarget: null,
   zoomLocked: loadZoomLock(),
+  panLocked: loadPanLock(),
   spacePanActive: false,
   pendingNameFocusId: null,
   overlayNeighborTargetId: null,
@@ -215,6 +229,12 @@ export const useEditorStore = create<EditorState>((set) => ({
       const next = !s.zoomLocked;
       persistZoomLock(next);
       return { zoomLocked: next };
+    }),
+  togglePanLock: () =>
+    set((s) => {
+      const next = !s.panLocked;
+      persistPanLock(next);
+      return { panLocked: next };
     }),
   setSpacePanActive: (active) => set({ spacePanActive: active }),
 

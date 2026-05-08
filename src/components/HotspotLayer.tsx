@@ -81,6 +81,7 @@ export default function HotspotLayer({
   const addPrimitive = useEditorStore((s) => s.addPrimitive);
   const setEditorMode = useEditorStore((s) => s.setEditorMode);
   const zoomLocked = useEditorStore((s) => s.zoomLocked);
+  const panLocked = useEditorStore((s) => s.panLocked);
   const zoomTarget = useEditorStore((s) => s.zoomTarget);
   const spacePanActive = useEditorStore((s) => s.spacePanActive);
   const addDraftGroupMember = useEditorStore((s) => s.addDraftGroupMember);
@@ -220,6 +221,7 @@ export default function HotspotLayer({
       if (target?.bbox) {
         fitBBox(viewer, target.bbox, dims, {
           locked: zoomLocked,
+          frozen: panLocked,
           padding: FOCUS_PADDING,
         });
         return;
@@ -229,11 +231,12 @@ export default function HotspotLayer({
     if (bounds) {
       fitBBox(viewer, bounds, dims, {
         locked: zoomLocked,
+        frozen: panLocked,
         padding: FOCUS_PADDING,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPrimitiveId, selectedOccurrenceIndex, selectionGeomKey, viewer, zoomLocked, zoomTarget, dims.width, dims.height, compareOnly]);
+  }, [selectedPrimitiveId, selectedOccurrenceIndex, selectionGeomKey, viewer, zoomLocked, panLocked, zoomTarget, dims.width, dims.height, compareOnly]);
 
   useEffect(() => {
     if (editorMode !== 'polygon') return;
@@ -420,7 +423,7 @@ export default function HotspotLayer({
 
   const beginInteractiveDrag = useCallback(
     (event: React.PointerEvent<SVGElement>, activate: () => void) => {
-      if (spacePanActive || (editorMode !== 'none' && !overlaySelectionMode)) return;
+      if (panLocked || spacePanActive || (editorMode !== 'none' && !overlaySelectionMode)) return;
       onMapDragActiveChange(true);
       dragRef.current = {
         pointerId: event.pointerId,
@@ -437,7 +440,7 @@ export default function HotspotLayer({
         // ignore
       }
     },
-    [editorMode, overlaySelectionMode, spacePanActive, onMapDragActiveChange]
+    [editorMode, overlaySelectionMode, panLocked, spacePanActive, onMapDragActiveChange]
   );
 
   const continueInteractiveDrag = useCallback(
@@ -456,12 +459,13 @@ export default function HotspotLayer({
         new OpenSeadragon.Point(-dx, -dy),
         true
       );
+      if (panLocked) return;
       viewer.viewport.panBy(delta, true);
       viewer.viewport.applyConstraints();
       drag.lastX = event.clientX;
       drag.lastY = event.clientY;
     },
-    [viewer]
+    [viewer, panLocked]
   );
 
   const endInteractiveDrag = useCallback(

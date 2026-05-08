@@ -73,8 +73,9 @@ export function fitBBox(
   viewer: OpenSeadragon.Viewer,
   bbox: BBox,
   dims: SourceDims,
-  options?: { padding?: number; immediate?: boolean; locked?: boolean }
+  options?: { padding?: number; immediate?: boolean; locked?: boolean; frozen?: boolean }
 ) {
+  if (options?.frozen) return;
   const r = bboxToImageRect(bbox, dims);
   const cx = r.x + r.width / 2;
   const cy = r.y + r.height / 2;
