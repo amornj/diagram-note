@@ -27,6 +27,12 @@ import { fitBBox, type SourceDims } from '../lib/coords';
 import * as idb from '../lib/idb';
 import type { BBox, MapWorkspace } from '../types';
 
+type DraggablePanelKey = 'search' | 'map' | 'studybox' | 'group' | 'polyline';
+
+type PanelOffset = { x: number; y: number };
+
+const DEFAULT_PANEL_OFFSET: PanelOffset = { x: 0, y: 0 };
+
 interface EditorProps {
   rasterUrl: string;
   dims: SourceDims;
@@ -84,7 +90,21 @@ export default function Editor({
   >(null);
   const [groupBuilderFocusSignal, setGroupBuilderFocusSignal] = useState(0);
   const [zoomPercent, setZoomPercent] = useState(100);
+  const [panelOffsets, setPanelOffsets] = useState<Record<DraggablePanelKey, PanelOffset>>({
+    search: DEFAULT_PANEL_OFFSET,
+    map: DEFAULT_PANEL_OFFSET,
+    studybox: DEFAULT_PANEL_OFFSET,
+    group: DEFAULT_PANEL_OFFSET,
+    polyline: DEFAULT_PANEL_OFFSET,
+  });
   const spaceHeldRef = useRef(false);
+  const panelDragRef = useRef<{
+    key: DraggablePanelKey;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startOffset: PanelOffset;
+  } | null>(null);
 
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
   const zoomTarget = useEditorStore((s) => s.zoomTarget);
@@ -241,6 +261,85 @@ export default function Editor({
     window.dispatchEvent(new Event('map-search-clear'));
     containerRef.current?.focus({ preventScroll: true });
   }, [setEditorMode, setLeftSidebarCollapsed, setSelectedPrimitiveId]);
+
+  const startPanelDrag = useCallback(
+    (key: DraggablePanelKey, event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const startOffset = panelOffsets[key];
+      panelDragRef.current = {
+        key,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startOffset,
+      };
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+    },
+    [panelOffsets]
+  );
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const drag = panelDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      setPanelOffsets((current) => ({
+        ...current,
+        [drag.key]: {
+          x: drag.startOffset.x + (event.clientX - drag.startX),
+          y: drag.startOffset.y + (event.clientY - drag.startY),
+        },
+      }));
+    };
+
+    const clearDrag = (event: PointerEvent) => {
+      const drag = panelDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      panelDragRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', clearDrag);
+    window.addEventListener('pointercancel', clearDrag);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', clearDrag);
+      window.removeEventListener('pointercancel', clearDrag);
+    };
+  }, []);
+
+  const renderDraggablePanel = useCallback(
+    (key: DraggablePanelKey, widthClass: string, children: React.ReactNode) => {
+      const offset = panelOffsets[key];
+      return (
+        <div
+          className={`absolute z-20 max-w-[calc(100vw-5rem)] -translate-x-1/2 ${widthClass}`}
+          style={{
+            left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2 + ${offset.x}px)`,
+            top: `${64 + offset.y}px`,
+          }}
+        >
+          <div
+            onPointerDown={(event) => startPanelDrag(key, event)}
+            className="mb-2 flex cursor-grab justify-center pt-1 active:cursor-grabbing"
+          >
+            <div className="h-1.5 w-14 rounded-full bg-white/35 shadow-sm backdrop-blur transition hover:bg-white/55" />
+          </div>
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-x-0 -top-3 flex justify-center">
+              <div className="h-1.5 w-14 rounded-full bg-white/15" />
+            </div>
+            {children}
+          </div>
+        </div>
+      );
+    },
+    [leftInset, panelOffsets, startPanelDrag]
+  );
 
   const handleWheelZoom = useCallback(
     (event: React.WheelEvent<HTMLDivElement>) => {
@@ -733,11 +832,10 @@ export default function Editor({
       </div>
 
       {showMapPicker && (
-        <div
-          className="absolute top-16 z-20 -translate-x-1/2 origin-top transition-all duration-300"
-          style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
-        >
-          <div className="w-80 rounded-2xl border border-gray-200 bg-white p-2 shadow-lg">
+        renderDraggablePanel(
+          'map',
+          'w-80',
+          <div className="rounded-2xl border border-gray-200 bg-white p-2 shadow-lg">
             <div className="max-h-80 overflow-y-auto">
               {(mapOptions ?? []).map((map) => (
                 <button
@@ -758,57 +856,45 @@ export default function Editor({
               ))}
             </div>
           </div>
-        </div>
+        )
       )}
 
       {!compareOnly && showQuickSearch && (
-        <div
-          className="absolute top-16 z-20 -translate-x-1/2 origin-top transition-all duration-300"
-          style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
-        >
+        renderDraggablePanel('search', 'w-80', 
           <SearchBox
             floating
             autoFocus
             onRequestClose={() => setShowQuickSearch(false)}
           />
-        </div>
+        )
       )}
 
       {!compareOnly && floatingTool === 'group' && (
-        <div
-          className="absolute top-16 z-20 w-80 max-w-[calc(100vw-5rem)] -translate-x-1/2"
-          style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
-        >
+        renderDraggablePanel('group', 'w-80',
           <DrawTools
             mode="group"
             groupBuilderFocusSignal={groupBuilderFocusSignal}
             onRequestClose={() => setFloatingTool(null)}
           />
-        </div>
+        )
       )}
 
       {!compareOnly && floatingTool === 'studybox' && (
-        <div
-          className="absolute top-16 z-20 w-fit max-w-[calc(100vw-5rem)] -translate-x-1/2"
-          style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
-        >
+        renderDraggablePanel('studybox', 'w-fit',
           <DrawTools
             mode="studybox"
             onRequestClose={() => setFloatingTool(null)}
           />
-        </div>
+        )
       )}
 
       {!compareOnly && floatingTool === 'polyline' && (
-        <div
-          className="absolute top-16 z-20 w-fit max-w-[calc(100vw-5rem)] -translate-x-1/2"
-          style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
-        >
+        renderDraggablePanel('polyline', 'w-fit',
           <DrawTools
             mode="polyline"
             onRequestClose={() => setFloatingTool(null)}
           />
-        </div>
+        )
       )}
 
       <div
