@@ -787,8 +787,7 @@ export default function Editor({
       )}
 
       <div
-        className="absolute top-4 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-white/10 bg-black/45 px-2 py-2 shadow-lg backdrop-blur transition-[left] duration-200"
-        style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
+        className="absolute top-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-white/10 bg-black/45 px-2 py-2 shadow-lg backdrop-blur"
       >
         {compareOnly && title && (
           <div className="mr-2 rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-white/90">
