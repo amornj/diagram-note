@@ -31,6 +31,15 @@ interface HotspotLayerProps {
 }
 
 const FOCUS_PADDING = 16;
+const PRIORITY_BUBBLE_MIN_WIDTH = 180;
+const PRIORITY_BUBBLE_MAX_WIDTH = 340;
+const PRIORITY_BUBBLE_HANDLE_WIDTH = 44;
+const PRIORITY_BUBBLE_HANDLE_HEIGHT = 6;
+const PRIORITY_BUBBLE_PADDING_X = 14;
+const PRIORITY_BUBBLE_PADDING_TOP = 22;
+const PRIORITY_BUBBLE_PADDING_BOTTOM = 14;
+const PRIORITY_BUBBLE_LINE_HEIGHT = 16;
+const PRIORITY_BUBBLE_CHAR_LIMIT = 42;
 
 function isStudyBoxPrimitive(primitive: Primitive) {
   return primitive.kind === 'rectangle';
@@ -38,6 +47,59 @@ function isStudyBoxPrimitive(primitive: Primitive) {
 
 function isMapSelectablePrimitive(primitive: Primitive) {
   return primitive.kind !== 'group';
+}
+
+function getPriorityNote(primitive: Primitive | null) {
+  return primitive?.notes?.find((note) => note.isPriority && note.content.trim()) ?? null;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function wrapPriorityText(content: string, limit = PRIORITY_BUBBLE_CHAR_LIMIT) {
+  const paragraphs = content
+    .trim()
+    .split(/\r?\n/)
+    .flatMap((paragraph) => {
+      const words = paragraph.trim().split(/\s+/).filter(Boolean);
+      if (words.length === 0) return [''];
+      const lines: string[] = [];
+      let current = '';
+      for (const word of words) {
+        if (current.length === 0) {
+          current = word;
+          continue;
+        }
+        if (`${current} ${word}`.length <= limit) {
+          current = `${current} ${word}`;
+          continue;
+        }
+        lines.push(current);
+        current = word;
+      }
+      if (current) lines.push(current);
+      return lines;
+    });
+  return paragraphs.length > 0 ? paragraphs : [''];
+}
+
+function layoutPriorityBubble(content: string) {
+  const rawLines = content.trim().split(/\r?\n/);
+  const longestRawLine = rawLines.reduce((max, line) => Math.max(max, line.trim().length), 0);
+  const targetChars = clamp(Math.max(18, Math.min(longestRawLine, PRIORITY_BUBBLE_CHAR_LIMIT)), 18, PRIORITY_BUBBLE_CHAR_LIMIT);
+  const lines = wrapPriorityText(content, targetChars);
+  const longestWrappedLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
+  const width = clamp(
+    longestWrappedLine * 6.8 + PRIORITY_BUBBLE_PADDING_X * 2,
+    PRIORITY_BUBBLE_MIN_WIDTH,
+    PRIORITY_BUBBLE_MAX_WIDTH
+  );
+  const height =
+    PRIORITY_BUBBLE_PADDING_TOP +
+    PRIORITY_BUBBLE_PADDING_BOTTOM +
+    lines.length * PRIORITY_BUBBLE_LINE_HEIGHT;
+  return { lines, width, height };
 }
 
 export default function HotspotLayer({
@@ -66,6 +128,14 @@ export default function HotspotLayer({
     moved: boolean;
     activate: () => void;
   } | null>(null);
+  const priorityBubbleDragRef = useRef<{
+    pointerId: number;
+    primitiveId: string;
+    anchor: Point;
+  } | null>(null);
+  const [priorityBubbleDraftAnchors, setPriorityBubbleDraftAnchors] = useState<
+    Record<string, Point>
+  >({});
 
   const selectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
   const hoveredPrimitiveId = useEditorStore((s) => s.hoveredPrimitiveId);
@@ -83,6 +153,7 @@ export default function HotspotLayer({
   const clearDraftPolygon = useEditorStore((s) => s.clearDraftPolygon);
   const setDraftRectangleStart = useEditorStore((s) => s.setDraftRectangleStart);
   const addPrimitive = useEditorStore((s) => s.addPrimitive);
+  const updatePrimitive = useEditorStore((s) => s.updatePrimitive);
   const setEditorMode = useEditorStore((s) => s.setEditorMode);
   const zoomLocked = useEditorStore((s) => s.zoomLocked);
   const panLocked = useEditorStore((s) => s.panLocked);
@@ -162,6 +233,59 @@ export default function HotspotLayer({
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
   }, [selectedPrimitive, primitivesById, workspace.primitives]);
 
+  const priorityBubbles = useMemo(() => {
+    if (compareOnly) return [];
+    return workspace.primitives
+      .map((primitive) => {
+        const priorityNote = getPriorityNote(primitive);
+        if (!priorityNote || primitive.showPriorityNote !== true) return null;
+        const isSelected = selectedPrimitiveId === primitive.id;
+        const shouldShow = isSelected || showAllPrimitivesVisible;
+        if (!shouldShow) return null;
+        const bounds = getPrimitiveBounds(primitive, primitivesById);
+        if (!bounds) return null;
+        const anchor =
+          priorityBubbleDraftAnchors[primitive.id] ??
+          primitive.priorityNoteAnchor ?? {
+            x: clamp(bounds.x + bounds.w / 2, 0.02, 0.98),
+            y: clamp(bounds.y - 0.025, 0.02, 0.98),
+          };
+        const anchorPoint = normalizedPointToViewerElementPoint(viewer, anchor, dims);
+        if (!anchorPoint) return null;
+        const layout = layoutPriorityBubble(priorityNote.content);
+        const x = clamp(
+          anchorPoint.x - layout.width / 2,
+          8,
+          Math.max(8, viewportSize.w - layout.width - 8)
+        );
+        const y = clamp(
+          anchorPoint.y - layout.height - 18,
+          8,
+          Math.max(8, viewportSize.h - layout.height - 8)
+        );
+        return {
+          primitiveId: primitive.id,
+          anchor,
+          anchorPoint,
+          x,
+          y,
+          ...layout,
+        };
+      })
+      .filter((bubble): bubble is NonNullable<typeof bubble> => bubble !== null);
+  }, [
+    compareOnly,
+    workspace.primitives,
+    selectedPrimitiveId,
+    showAllPrimitivesVisible,
+    priorityBubbleDraftAnchors,
+    primitivesById,
+    viewer,
+    dims,
+    viewportSize.w,
+    viewportSize.h,
+  ]);
+
   useEffect(() => {
     let frame: number | null = null;
 
@@ -202,6 +326,11 @@ export default function HotspotLayer({
       viewer.removeHandler('resize', schedule);
     };
   }, [viewer]);
+
+  useEffect(() => {
+    setPriorityBubbleDraftAnchors({});
+    priorityBubbleDragRef.current = null;
+  }, [selectedPrimitiveId]);
 
   const simplifyOverlay = viewportAnimating && editorMode === 'none';
 
@@ -539,6 +668,96 @@ export default function HotspotLayer({
       cancelInteractiveDrag(event);
     },
     [cancelInteractiveDrag]
+  );
+
+  const beginPriorityBubbleDrag = useCallback(
+    (event: React.PointerEvent<SVGRectElement>, primitiveId: string, anchor: Point) => {
+      if (compareOnly) return;
+      event.preventDefault();
+      event.stopPropagation();
+      priorityBubbleDragRef.current = {
+        pointerId: event.pointerId,
+        primitiveId,
+        anchor,
+      };
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+    },
+    [compareOnly]
+  );
+
+  const continuePriorityBubbleDrag = useCallback(
+    (event: React.PointerEvent<SVGRectElement>) => {
+      const drag = priorityBubbleDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const svg = svgRef.current;
+      if (!svg) return;
+      const bounds = svg.getBoundingClientRect();
+      const normalized = viewerElementPointToNormalizedPoint(
+        viewer,
+        event.clientX - bounds.left,
+        event.clientY - bounds.top + 10,
+        dims
+      );
+      if (!normalized) return;
+      setPriorityBubbleDraftAnchors((current) => ({
+        ...current,
+        [drag.primitiveId]: {
+          x: clamp(normalized.x, 0.02, 0.98),
+          y: clamp(normalized.y, 0.02, 0.98),
+        },
+      }));
+    },
+    [viewer, dims]
+  );
+
+  const endPriorityBubbleDrag = useCallback(
+    (event: React.PointerEvent<SVGRectElement>) => {
+      const drag = priorityBubbleDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+      const nextAnchor = priorityBubbleDraftAnchors[drag.primitiveId] ?? drag.anchor;
+      updatePrimitive(drag.primitiveId, { priorityNoteAnchor: nextAnchor });
+      setPriorityBubbleDraftAnchors((current) => {
+        const next = { ...current };
+        delete next[drag.primitiveId];
+        return next;
+      });
+      priorityBubbleDragRef.current = null;
+    },
+    [priorityBubbleDraftAnchors, updatePrimitive]
+  );
+
+  const cancelPriorityBubbleDrag = useCallback(
+    (event: React.PointerEvent<SVGRectElement>) => {
+      const drag = priorityBubbleDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+      setPriorityBubbleDraftAnchors((current) => {
+        const next = { ...current };
+        delete next[drag.primitiveId];
+        return next;
+      });
+      priorityBubbleDragRef.current = null;
+    },
+    []
   );
 
   // re-render markers when viewport changes
@@ -894,6 +1113,74 @@ export default function HotspotLayer({
           })}
         </g>
       )}
+
+      {!simplifyOverlay &&
+        priorityBubbles.map((priorityBubble) => (
+          <g key={`priority-bubble-${priorityBubble.primitiveId}`}>
+            <path
+              d={`M ${priorityBubble.anchorPoint.x} ${priorityBubble.anchorPoint.y} L ${
+                priorityBubble.x + priorityBubble.width / 2
+              } ${priorityBubble.y + priorityBubble.height}`}
+              stroke="#f59e0b"
+              strokeWidth={2}
+              strokeDasharray="6 5"
+              fill="none"
+              pointerEvents="none"
+              opacity={0.9}
+            />
+            <rect
+              x={priorityBubble.x}
+              y={priorityBubble.y}
+              width={priorityBubble.width}
+              height={priorityBubble.height}
+              rx={18}
+              fill="#fff8eb"
+              stroke="#f59e0b"
+              strokeWidth={2}
+              filter="url(#hotspot-glow)"
+              pointerEvents="none"
+            />
+            <rect
+              x={priorityBubble.x + (priorityBubble.width - PRIORITY_BUBBLE_HANDLE_WIDTH) / 2}
+              y={priorityBubble.y + 8}
+              width={PRIORITY_BUBBLE_HANDLE_WIDTH}
+              height={PRIORITY_BUBBLE_HANDLE_HEIGHT}
+              rx={PRIORITY_BUBBLE_HANDLE_HEIGHT / 2}
+              fill="#f59e0b"
+              opacity={0.45}
+              style={{ cursor: compareOnly ? 'default' : 'grab' }}
+              onPointerDown={(event) =>
+                beginPriorityBubbleDrag(
+                  event,
+                  priorityBubble.primitiveId,
+                  priorityBubble.anchor
+                )
+              }
+              onPointerMove={continuePriorityBubbleDrag}
+              onPointerUp={endPriorityBubbleDrag}
+              onPointerCancel={cancelPriorityBubbleDrag}
+            />
+            <text
+              x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
+              y={priorityBubble.y + PRIORITY_BUBBLE_PADDING_TOP}
+              fill="#7c2d12"
+              fontSize={12}
+              fontWeight={600}
+              style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+              pointerEvents="none"
+            >
+              {priorityBubble.lines.map((line, index) => (
+                <tspan
+                  key={`${priorityBubble.primitiveId}-priority-line-${index}`}
+                  x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
+                  dy={index === 0 ? 0 : PRIORITY_BUBBLE_LINE_HEIGHT}
+                >
+                  {line}
+                </tspan>
+              ))}
+            </text>
+          </g>
+        ))}
 
       {!compareOnly &&
         editorMode !== 'none' &&

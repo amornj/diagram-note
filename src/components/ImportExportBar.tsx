@@ -20,7 +20,7 @@ function buildNotesMarkdown(
 
   for (const { pageIndex, workspace } of workspaces) {
     const primitivesWithNotes = workspace.primitives.filter((primitive) =>
-      (primitive.notes ?? []).some((note) => note.name.trim() || note.content.trim())
+      (primitive.notes ?? []).some((note) => note.content.trim())
     );
     if (primitivesWithNotes.length === 0) continue;
 
@@ -29,11 +29,10 @@ function buildNotesMarkdown(
     for (const primitive of primitivesWithNotes) {
       sections.push(``, `### ${escapeMarkdown(primitive.name || 'Untitled primitive')}`);
 
-      for (const [noteIndex, note] of (primitive.notes ?? []).entries()) {
-        const noteName = note.name.trim() || `Note ${noteIndex + 1}`;
+      for (const note of primitive.notes ?? []) {
         const noteContent = note.content.trim();
-        sections.push(``, `#### ${escapeMarkdown(noteName)}`);
-        sections.push(noteContent || '_Empty note_');
+        if (!noteContent) continue;
+        sections.push(``, noteContent);
       }
     }
   }

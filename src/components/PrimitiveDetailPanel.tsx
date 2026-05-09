@@ -45,8 +45,8 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(primitive.name);
+  const [aliasDraft, setAliasDraft] = useState((primitive.aliases ?? []).join(', '));
   const [draggedGroupIndex, setDraggedGroupIndex] = useState<number | null>(null);
-  const aliasInput = useMemo(() => (primitive.aliases ?? []).join(', '), [primitive.aliases]);
   const primitivesById = useMemo(
     () => new Map(workspace.primitives.map((p) => [p.id, p])),
     [workspace.primitives]
@@ -94,9 +94,10 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
   // Reset state when switching primitives
   useEffect(() => {
     setNameDraft(primitive.name);
+    setAliasDraft((primitive.aliases ?? []).join(', '));
     setEditingName(false);
     setConfirmDelete(false);
-  }, [primitive.id, primitive.name]);
+  }, [primitive.id, primitive.name, primitive.aliases]);
 
   // Auto-focus name input on freshly-created primitives
   useEffect(() => {
@@ -114,6 +115,18 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
       setNameDraft(primitive.name);
     }
     setEditingName(false);
+  };
+
+  const saveAliases = () => {
+    const normalized = normalizeTagInput(aliasDraft);
+    const current = primitive.aliases ?? [];
+    const unchanged =
+      normalized.length === current.length &&
+      normalized.every((alias, index) => alias === current[index]);
+    if (!unchanged) {
+      updatePrimitive(primitive.id, { aliases: normalized });
+    }
+    setAliasDraft(normalized.join(', '));
   };
 
   return (
@@ -173,12 +186,19 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
             Aliases
           </label>
           <input
-            value={aliasInput}
-            onChange={(event) =>
-              updatePrimitive(primitive.id, {
-                aliases: normalizeTagInput(event.target.value),
-              })
-            }
+            value={aliasDraft}
+            onChange={(event) => setAliasDraft(event.target.value)}
+            onBlur={saveAliases}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                saveAliases();
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setAliasDraft((primitive.aliases ?? []).join(', '));
+              }
+            }}
             placeholder="Other names or abbreviations, separated by commas"
             className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none transition focus:border-sky-300"
           />
@@ -220,6 +240,19 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
               className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
             />
             Show on load
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              checked={primitive.showPriorityNote === true}
+              onChange={(event) =>
+                updatePrimitive(primitive.id, {
+                  showPriorityNote: event.target.checked,
+                })
+              }
+              className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+            />
+            Show priority note
           </label>
         </div>
 

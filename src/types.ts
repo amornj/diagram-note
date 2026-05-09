@@ -13,6 +13,7 @@ export interface Point {
 export interface NoteCard {
   name: string;
   content: string;
+  isPriority?: boolean;
 }
 
 export type PrimitiveKind = 'rectangle' | 'polygon' | 'customline' | 'group';
@@ -27,6 +28,8 @@ export interface Primitive {
   notes?: NoteCard[];
   showLabel?: boolean;
   showOnLoad?: boolean;
+  showPriorityNote?: boolean;
+  priorityNoteAnchor?: Point;
   /** rectangle */
   bbox?: BBox;
   /** polygon, customline */

@@ -116,7 +116,7 @@ export default function SearchBox({
         if (!matchesType) continue;
 
         const baseFields = [primitive.name, ...(primitive.aliases ?? [])];
-        const noteFields = primitive.notes?.map((n) => `${n.name} ${n.content}`) ?? [];
+        const noteFields = primitive.notes?.map((n) => n.content) ?? [];
         const tagFields = primitive.tags ?? [];
         const searchableFields =
           activeContentFilters.length === 0

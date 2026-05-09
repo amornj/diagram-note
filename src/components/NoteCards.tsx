@@ -13,7 +13,7 @@ const NOTE_HEIGHT_STORAGE_KEY = 'diagram-note-note-height';
 function loadSavedHeight() {
   if (typeof window === 'undefined') return 128;
   const raw = Number(window.localStorage.getItem(NOTE_HEIGHT_STORAGE_KEY));
-  return Number.isFinite(raw) ? Math.max(80, raw) : 128;
+  return Number.isFinite(raw) ? Math.max(96, raw) : 128;
 }
 
 export default function NoteCards({
@@ -23,19 +23,20 @@ export default function NoteCards({
 }: NoteCardsProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [currentIndex, setCurrentIndex] = useState(Math.max(0, notes.length - 1));
-  const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState('');
   const [noteHeight, setNoteHeight] = useState(loadSavedHeight);
+  const [emptyDraft, setEmptyDraft] = useState('');
 
   useEffect(() => {
     if (notes.length === 0) {
       setCurrentIndex(0);
+      setEmptyDraft('');
       return;
     }
     if (currentIndex >= notes.length) {
       setCurrentIndex(notes.length - 1);
     }
-  }, [notes.length, currentIndex]);
+    setEmptyDraft('');
+  }, [notes, notes.length, currentIndex]);
 
   const currentNote = notes[currentIndex];
 
@@ -46,7 +47,6 @@ export default function NoteCards({
     const nextNotes = [...notes, { name: '', content: '' }];
     onChange(nextNotes);
     setCurrentIndex(nextNotes.length - 1);
-    setEditingName(false);
   };
 
   const handleDelete = () => {
@@ -55,35 +55,35 @@ export default function NoteCards({
     onChange(nextNotes);
     const nextIndex = Math.max(0, Math.min(currentIndex, nextNotes.length - 1));
     setCurrentIndex(nextIndex);
-    setEditingName(false);
+  };
+
+  const handleTogglePriority = () => {
+    if (notes.length === 0) return;
+    const nextPriority = currentNote?.isPriority !== true;
+    const nextNotes = notes.map((note, index) => ({
+      ...note,
+      isPriority: index === currentIndex ? nextPriority : false,
+    }));
+    onChange(nextNotes);
   };
 
   const handleUpdateContent = (value: string) => {
+    if (notes.length === 0) {
+      setEmptyDraft(value);
+      onChange([{ name: '', content: value }]);
+      setCurrentIndex(0);
+      return;
+    }
     const nextNotes = notes.map((n, i) =>
       i === currentIndex ? { ...n, content: value } : n
     );
     onChange(nextNotes);
   };
 
-  const startEditName = () => {
-    if (!currentNote) return;
-    setNameDraft(currentNote.name);
-    setEditingName(true);
-  };
-
-  const saveName = () => {
-    const trimmed = nameDraft.trim();
-    const nextNotes = notes.map((n, i) =>
-      i === currentIndex ? { ...n, name: trimmed } : n
-    );
-    onChange(nextNotes);
-    setEditingName(false);
-  };
-
   const persistHeight = () => {
     const nextHeight = textareaRef.current?.offsetHeight;
     if (!nextHeight) return;
-    const clamped = Math.max(80, nextHeight);
+    const clamped = Math.max(96, nextHeight);
     setNoteHeight(clamped);
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(NOTE_HEIGHT_STORAGE_KEY, String(clamped));
@@ -93,9 +93,19 @@ export default function NoteCards({
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Note
-        </div>
+        <button
+          type="button"
+          onClick={handleTogglePriority}
+          disabled={notes.length === 0}
+          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+            currentNote?.isPriority === true
+              ? 'border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200'
+              : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100'
+          } disabled:cursor-default disabled:opacity-50`}
+          title="Mark this note as the priority note"
+        >
+          Priority
+        </button>
         <div className="flex items-center gap-1">
           {notes.length > 0 && (
             <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
@@ -140,36 +150,6 @@ export default function NoteCards({
 
       {notes.length > 0 ? (
         <div className="mt-2 space-y-2">
-          {editingName ? (
-            <input
-              value={nameDraft}
-              onChange={(event) => setNameDraft(event.target.value)}
-              onBlur={saveName}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  saveName();
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  setEditingName(false);
-                }
-              }}
-              autoFocus
-              placeholder="Note name"
-              className="w-full rounded-lg border border-gray-200 px-2.5 py-1 text-sm font-semibold text-gray-900 outline-none focus:border-sky-300"
-            />
-          ) : (
-            <button
-              onDoubleClick={startEditName}
-              className="block w-full truncate rounded-lg px-1 py-0.5 text-left text-sm font-semibold text-gray-900 transition hover:bg-gray-100"
-              title="Double-click to edit name"
-            >
-              {currentNote?.name || (
-                <span className="text-gray-400 font-normal">Untitled note</span>
-              )}
-            </button>
-          )}
           <textarea
             ref={textareaRef}
             value={currentNote?.content ?? ''}
@@ -179,13 +159,24 @@ export default function NoteCards({
             onBlur={persistHeight}
             placeholder={placeholder}
             style={{ height: `${noteHeight}px` }}
-            className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-sky-300"
+            rows={4}
+            className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-sky-300"
           />
         </div>
       ) : (
-        <div className="mt-2 rounded-xl border border-dashed border-slate-300 bg-white/60 px-3 py-4 text-center text-xs text-slate-400">
-          No notes yet. Click <span className="font-semibold text-slate-500">+ Add</span>{' '}
-          to create one.
+        <div className="mt-2">
+          <textarea
+            ref={textareaRef}
+            value={emptyDraft}
+            onChange={(event) => handleUpdateContent(event.target.value)}
+            onMouseUp={persistHeight}
+            onTouchEnd={persistHeight}
+            onBlur={persistHeight}
+            placeholder={placeholder}
+            style={{ height: `${noteHeight}px` }}
+            rows={4}
+            className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-sky-300"
+          />
         </div>
       )}
     </div>
