@@ -7,7 +7,11 @@ import PrimitiveDetailPanel from './components/PrimitiveDetailPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import HotkeyHelp from './components/HotkeyHelp';
 import DropOverlay from './components/DropOverlay';
-import { useEditorStore } from './lib/store';
+import {
+  DEFAULT_OVERLAY_FILTERS,
+  useEditorStore,
+  type OverlayFilterState,
+} from './lib/store';
 import { loadMapPageView, useMapStore } from './lib/mapStore';
 import { getPrimitiveBounds } from './lib/workspace';
 import { EMPTY_WORKSPACE } from './lib/workspace';
@@ -290,7 +294,9 @@ function ComparePane({
   onActivate,
   isFocusedPane,
   showAllOverlays,
+  visibleOverlayFilters,
   onToggleOverlays,
+  onToggleOverlayFilter,
   zoomLocked,
   onToggleZoomLock,
   panLocked,
@@ -311,7 +317,9 @@ function ComparePane({
   onActivate: () => void;
   isFocusedPane?: boolean;
   showAllOverlays: boolean;
+  visibleOverlayFilters: OverlayFilterState;
   onToggleOverlays: () => void;
+  onToggleOverlayFilter: (key: keyof OverlayFilterState) => void;
   zoomLocked: boolean;
   onToggleZoomLock: () => void;
   panLocked: boolean;
@@ -387,7 +395,9 @@ function ComparePane({
           workspaceOverride={state.workspace}
           onComparePageChange={onPageChange}
           compareShowAllOverlays={showAllOverlays}
+          compareVisibleOverlayFilters={visibleOverlayFilters}
           onToggleCompareOverlays={onToggleOverlays}
+          onToggleCompareOverlayFilter={onToggleOverlayFilter}
           compareZoomLocked={zoomLocked}
           onToggleCompareZoomLock={onToggleZoomLock}
           comparePanLocked={panLocked}
@@ -437,9 +447,12 @@ function MapPage() {
     1: { mapId: activeMap?.id ?? null, pageIndex: activeMap?.pageIndex ?? 0 },
     2: { mapId: activeMap?.id ?? null, pageIndex: activeMap?.pageIndex ?? 0 },
   });
-  const [compareOverlayVisible, setCompareOverlayVisible] = useState<{ 1: boolean; 2: boolean }>({
-    1: false,
-    2: false,
+  const [compareOverlayFilters, setCompareOverlayFilters] = useState<{
+    1: OverlayFilterState;
+    2: OverlayFilterState;
+  }>({
+    1: { ...DEFAULT_OVERLAY_FILTERS },
+    2: { ...DEFAULT_OVERLAY_FILTERS },
   });
   const [compareViewportLocks, setCompareViewportLocks] = useState<{
     1: { zoomLocked: boolean; panLocked: boolean };
@@ -603,7 +616,10 @@ function MapPage() {
         useEditorStore.getState().setSelectedPrimitiveId(null);
         setSplitRatio(0.5);
         setFocusedSplitPane(1);
-        setCompareOverlayVisible({ 1: false, 2: false });
+        setCompareOverlayFilters({
+          1: { ...DEFAULT_OVERLAY_FILTERS },
+          2: { ...DEFAULT_OVERLAY_FILTERS },
+        });
         setCompareViewportLocks({
           1: { zoomLocked: false, panLocked: false },
           2: { zoomLocked: false, panLocked: false },
@@ -665,12 +681,60 @@ function MapPage() {
   }, []);
 
   const handleToggleCompareOverlays1 = useCallback(() => {
-    setCompareOverlayVisible((current) => ({ ...current, 1: !current[1] }));
+    setCompareOverlayFilters((current) => {
+      const allVisible = Object.values(current[1]).every(Boolean);
+      return {
+        ...current,
+        1: {
+          studyBox: !allVisible,
+          group: !allVisible,
+          region: !allVisible,
+          priorityNote: !allVisible,
+        },
+      };
+    });
   }, []);
 
   const handleToggleCompareOverlays2 = useCallback(() => {
-    setCompareOverlayVisible((current) => ({ ...current, 2: !current[2] }));
+    setCompareOverlayFilters((current) => {
+      const allVisible = Object.values(current[2]).every(Boolean);
+      return {
+        ...current,
+        2: {
+          studyBox: !allVisible,
+          group: !allVisible,
+          region: !allVisible,
+          priorityNote: !allVisible,
+        },
+      };
+    });
   }, []);
+
+  const handleToggleCompareOverlayFilter1 = useCallback(
+    (key: keyof OverlayFilterState) => {
+      setCompareOverlayFilters((current) => ({
+        ...current,
+        1: {
+          ...current[1],
+          [key]: !current[1][key],
+        },
+      }));
+    },
+    []
+  );
+
+  const handleToggleCompareOverlayFilter2 = useCallback(
+    (key: keyof OverlayFilterState) => {
+      setCompareOverlayFilters((current) => ({
+        ...current,
+        2: {
+          ...current[2],
+          [key]: !current[2][key],
+        },
+      }));
+    },
+    []
+  );
 
   const handleToggleCompareZoomLock1 = useCallback(() => {
     setCompareViewportLocks((current) => ({
@@ -760,8 +824,10 @@ function MapPage() {
                 onLoaded={handleCompareLoaded1}
                 onActivate={handleActivatePane1}
                 isFocusedPane={focusedSplitPane === 1}
-                showAllOverlays={compareOverlayVisible[1]}
+                showAllOverlays={Object.values(compareOverlayFilters[1]).every(Boolean)}
+                visibleOverlayFilters={compareOverlayFilters[1]}
                 onToggleOverlays={handleToggleCompareOverlays1}
+                onToggleOverlayFilter={handleToggleCompareOverlayFilter1}
                 zoomLocked={compareViewportLocks[1].zoomLocked}
                 onToggleZoomLock={handleToggleCompareZoomLock1}
                 panLocked={compareViewportLocks[1].panLocked}
@@ -803,8 +869,10 @@ function MapPage() {
                 onLoaded={handleCompareLoaded2}
                 onActivate={handleActivatePane2}
                 isFocusedPane={focusedSplitPane === 2}
-                showAllOverlays={compareOverlayVisible[2]}
+                showAllOverlays={Object.values(compareOverlayFilters[2]).every(Boolean)}
+                visibleOverlayFilters={compareOverlayFilters[2]}
                 onToggleOverlays={handleToggleCompareOverlays2}
+                onToggleOverlayFilter={handleToggleCompareOverlayFilter2}
                 zoomLocked={compareViewportLocks[2].zoomLocked}
                 onToggleZoomLock={handleToggleCompareZoomLock2}
                 panLocked={compareViewportLocks[2].panLocked}

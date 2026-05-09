@@ -7,7 +7,11 @@ import {
   viewerElementPointToNormalizedPoint,
   type SourceDims,
 } from '../lib/coords';
-import { useEditorStore, type OverlayFilterState } from '../lib/store';
+import {
+  DEFAULT_OVERLAY_FILTERS,
+  useEditorStore,
+  type OverlayFilterState,
+} from '../lib/store';
 import {
   bboxFromPoints,
   getGroupMemberKeys,
@@ -26,6 +30,7 @@ interface HotspotLayerProps {
   compareOnly?: boolean;
   workspaceOverride?: MapWorkspace;
   compareShowAllOverlays?: boolean;
+  compareVisibleOverlayFilters?: OverlayFilterState;
   compareZoomLocked?: boolean;
   comparePanLocked?: boolean;
 }
@@ -118,6 +123,7 @@ export default function HotspotLayer({
   compareOnly = false,
   workspaceOverride,
   compareShowAllOverlays = false,
+  compareVisibleOverlayFilters = DEFAULT_OVERLAY_FILTERS,
   compareZoomLocked = false,
   comparePanLocked = false,
 }: HotspotLayerProps) {
@@ -280,7 +286,10 @@ export default function HotspotLayer({
         if (!priorityNote || primitive.showPriorityNote !== true) return null;
         const isSelected = selectedPrimitiveId === primitive.id;
         const shouldShow =
-          isSelected || (!compareOnly && visibleOverlayFilters.priorityNote);
+          isSelected ||
+          (compareOnly
+            ? compareVisibleOverlayFilters.priorityNote
+            : visibleOverlayFilters.priorityNote);
         if (!shouldShow) return null;
         const bounds = getPrimitiveBounds(primitive, primitivesById);
         if (!bounds) return null;
@@ -334,6 +343,7 @@ export default function HotspotLayer({
     workspace.primitives,
     selectedPrimitiveId,
     visibleOverlayFilters.priorityNote,
+    compareVisibleOverlayFilters.priorityNote,
     priorityBubbleDraftAnchors,
     primitivesById,
     viewer,
@@ -875,8 +885,10 @@ export default function HotspotLayer({
             selectedPrimitive.showMemberNumbers === true;
           const groupEntry = selectedGroupTargets.find((e) => e.id === primitive.id);
           const isVisible =
-            (compareOnly ? compareShowAllOverlays : false) ||
-            (!compareOnly && primitiveMatchesFilter(primitive, visibleOverlayFilters)) ||
+            (compareOnly
+              ? compareShowAllOverlays ||
+                primitiveMatchesFilter(primitive, compareVisibleOverlayFilters)
+              : primitiveMatchesFilter(primitive, visibleOverlayFilters)) ||
             primitive.showOnLoad === true ||
             isSelected ||
             isHovered ||

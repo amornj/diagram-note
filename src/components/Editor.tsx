@@ -22,7 +22,11 @@ import SearchBox from './SearchBox';
 import DrawTools from './DrawTools';
 import PagePicker from './PagePicker';
 import TextLayer from './TextLayer';
-import { useEditorStore } from '../lib/store';
+import {
+  DEFAULT_OVERLAY_FILTERS,
+  useEditorStore,
+  type OverlayFilterState,
+} from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import { fitBBox, type SourceDims } from '../lib/coords';
 import * as idb from '../lib/idb';
@@ -52,6 +56,8 @@ interface EditorProps {
   onSelectMap?: (mapId: string) => void;
   compareShowAllOverlays?: boolean;
   onToggleCompareOverlays?: () => void;
+  compareVisibleOverlayFilters?: OverlayFilterState;
+  onToggleCompareOverlayFilter?: (key: keyof OverlayFilterState) => void;
   compareZoomLocked?: boolean;
   onToggleCompareZoomLock?: () => void;
   comparePanLocked?: boolean;
@@ -78,6 +84,8 @@ export default function Editor({
   onSelectMap,
   compareShowAllOverlays = false,
   onToggleCompareOverlays,
+  compareVisibleOverlayFilters = DEFAULT_OVERLAY_FILTERS,
+  onToggleCompareOverlayFilter,
   compareZoomLocked = false,
   onToggleCompareZoomLock,
   comparePanLocked = false,
@@ -141,6 +149,7 @@ export default function Editor({
   const effectiveZoomLocked = compareOnly ? compareZoomLocked : zoomLocked;
   const effectivePanLocked = compareOnly ? comparePanLocked : panLocked;
   const allOverlayFiltersVisible = Object.values(visibleOverlayFilters).every(Boolean);
+  const allCompareOverlayFiltersVisible = Object.values(compareVisibleOverlayFilters).every(Boolean);
 
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
 
@@ -421,6 +430,22 @@ export default function Editor({
           case '\\':
             onToggleCompareOverlays?.();
             break;
+          case 's':
+          case 'S':
+            onToggleCompareOverlayFilter?.('studyBox');
+            break;
+          case 'g':
+          case 'G':
+            onToggleCompareOverlayFilter?.('group');
+            break;
+          case 'r':
+          case 'R':
+            onToggleCompareOverlayFilter?.('region');
+            break;
+          case 'n':
+          case 'N':
+            onToggleCompareOverlayFilter?.('priorityNote');
+            break;
           case '9':
             onToggleCompareZoomLock?.();
             break;
@@ -652,6 +677,7 @@ export default function Editor({
     toggleOverlayFilter,
     compareOnly,
     onToggleCompareOverlays,
+    onToggleCompareOverlayFilter,
     isFocusedPane,
     effectivePanLocked,
     effectiveZoomLocked,
@@ -703,6 +729,7 @@ export default function Editor({
           compareOnly={compareOnly}
           workspaceOverride={workspaceOverride}
           compareShowAllOverlays={compareShowAllOverlays}
+          compareVisibleOverlayFilters={compareVisibleOverlayFilters}
           compareZoomLocked={compareZoomLocked}
           comparePanLocked={comparePanLocked}
         />
@@ -907,11 +934,11 @@ export default function Editor({
             <button
               onClick={onToggleCompareOverlays}
               className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-                compareShowAllOverlays
+                allCompareOverlayFiltersVisible
                   ? 'bg-sky-500 text-white hover:bg-sky-600'
                   : 'bg-white/90 text-gray-700 hover:bg-white'
               }`}
-              title={compareShowAllOverlays ? 'Hide overlays (\\)' : 'Show overlays (\\)'}
+              title={allCompareOverlayFiltersVisible ? 'Hide overlays (\\)' : 'Show overlays (\\)'}
             >
               <Eye size={15} />
             </button>
@@ -991,7 +1018,7 @@ export default function Editor({
       >
         <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
           {compareOnly
-            ? 'M maps · 9 lock · P pin · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
+            ? 'M maps · 9 lock · P pin · S boxes · G groups · R regions · N notes · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
             : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · M maps · B split · S boxes · G groups · R regions · N notes · \\ overlays · ? help'}
         </div>
         {compareOnly && onComparePageChange && pageCount > 1 ? (
