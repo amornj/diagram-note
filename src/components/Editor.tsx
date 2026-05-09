@@ -1055,8 +1055,7 @@ export default function Editor({
       )}
 
       <div
-        className="absolute bottom-4 z-10 flex -translate-x-1/2 items-center gap-3"
-        style={{ left: `calc(${leftInset}px + (100% - ${leftInset}px) / 2)` }}
+        className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3"
       >
         <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
           {compareOnly
