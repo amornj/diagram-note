@@ -131,14 +131,16 @@ export default function Editor({
   const clearDraftGroup = useEditorStore((s) => s.clearDraftGroup);
   const clearDraftPolygon = useEditorStore((s) => s.clearDraftPolygon);
   const setEditorMode = useEditorStore((s) => s.setEditorMode);
-  const showAllPrimitivesVisible = useEditorStore((s) => s.showAllPrimitivesVisible);
-  const toggleShowAllPrimitivesVisible = useEditorStore(
-    (s) => s.toggleShowAllPrimitivesVisible
+  const visibleOverlayFilters = useEditorStore((s) => s.visibleOverlayFilters);
+  const toggleShowAllOverlayFilters = useEditorStore(
+    (s) => s.toggleShowAllOverlayFilters
   );
+  const toggleOverlayFilter = useEditorStore((s) => s.toggleOverlayFilter);
   const activeMapId = useMapStore((s) => s.activeMapId);
   const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
   const effectiveZoomLocked = compareOnly ? compareZoomLocked : zoomLocked;
   const effectivePanLocked = compareOnly ? comparePanLocked : panLocked;
+  const allOverlayFiltersVisible = Object.values(visibleOverlayFilters).every(Boolean);
 
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
 
@@ -539,8 +541,24 @@ export default function Editor({
         case 'P':
           togglePanLock();
           break;
+        case 's':
+        case 'S':
+          toggleOverlayFilter('studyBox');
+          break;
+        case 'g':
+        case 'G':
+          toggleOverlayFilter('group');
+          break;
+        case 'r':
+        case 'R':
+          toggleOverlayFilter('region');
+          break;
+        case 'n':
+        case 'N':
+          toggleOverlayFilter('priorityNote');
+          break;
         case '\\':
-          toggleShowAllPrimitivesVisible();
+          toggleShowAllOverlayFilters();
           break;
         case 'ArrowUp':
           if (!effectivePanLocked) viewer.viewport.panBy(new OpenSeadragon.Point(0, -panSpeed));
@@ -630,7 +648,8 @@ export default function Editor({
     openSearch,
     toggleMapPicker,
     setEditorMode,
-    toggleShowAllPrimitivesVisible,
+    toggleShowAllOverlayFilters,
+    toggleOverlayFilter,
     compareOnly,
     onToggleCompareOverlays,
     isFocusedPane,
@@ -861,13 +880,13 @@ export default function Editor({
         )}
         {!compareOnly && (
           <button
-            onClick={toggleShowAllPrimitivesVisible}
+            onClick={toggleShowAllOverlayFilters}
             className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-            showAllPrimitivesVisible
+            allOverlayFiltersVisible
               ? 'bg-sky-500 text-white hover:bg-sky-600'
               : 'bg-white/90 text-gray-700 hover:bg-white'
           }`}
-          title={showAllPrimitivesVisible ? 'Hide all overlays (\\)' : 'Show all overlays (\\)'}
+          title={allOverlayFiltersVisible ? 'Hide all overlays (\\)' : 'Show all overlays (\\)'}
         >
           <Eye size={15} />
           </button>
@@ -973,7 +992,7 @@ export default function Editor({
         <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
           {compareOnly
             ? 'M maps · 9 lock · P pin · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
-            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · M maps · B split · \\ overlays · ? help'}
+            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · M maps · B split · S boxes · G groups · R regions · N notes · \\ overlays · ? help'}
         </div>
         {compareOnly && onComparePageChange && pageCount > 1 ? (
           <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur">

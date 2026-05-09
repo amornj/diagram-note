@@ -7,7 +7,7 @@ import {
   viewerElementPointToNormalizedPoint,
   type SourceDims,
 } from '../lib/coords';
-import { useEditorStore } from '../lib/store';
+import { useEditorStore, type OverlayFilterState } from '../lib/store';
 import {
   bboxFromPoints,
   getGroupMemberKeys,
@@ -151,7 +151,7 @@ export default function HotspotLayer({
   const storeWorkspace = useEditorStore((s) => s.workspace);
   const workspace = workspaceOverride ?? storeWorkspace;
   const editorMode = useEditorStore((s) => s.editorMode);
-  const showAllPrimitivesVisible = useEditorStore((s) => s.showAllPrimitivesVisible);
+  const visibleOverlayFilters = useEditorStore((s) => s.visibleOverlayFilters);
   const draftOverlayColor = useEditorStore((s) => s.draftOverlayColor);
   const draftPolygonPoints = useEditorStore((s) => s.draftPolygonPoints);
   const draftRectangleStart = useEditorStore((s) => s.draftRectangleStart);
@@ -190,6 +190,16 @@ export default function HotspotLayer({
   const selectedPrimitive = selectedPrimitiveId
     ? primitivesById.get(selectedPrimitiveId) ?? null
     : null;
+
+  const primitiveMatchesFilter = useCallback(
+    (primitive: Primitive, filters: OverlayFilterState) => {
+      if (primitive.kind === 'rectangle') return filters.studyBox;
+      if (primitive.kind === 'polygon') return filters.region;
+      if (primitive.kind === 'group') return filters.group;
+      return false;
+    },
+    []
+  );
 
   const primitiveShapes = useMemo(() => {
     const entries = workspace.primitives
@@ -248,7 +258,8 @@ export default function HotspotLayer({
         const priorityNote = getPriorityNote(primitive);
         if (!priorityNote || primitive.showPriorityNote !== true) return null;
         const isSelected = selectedPrimitiveId === primitive.id;
-        const shouldShow = isSelected || showAllPrimitivesVisible;
+        const shouldShow =
+          isSelected || (!compareOnly && visibleOverlayFilters.priorityNote);
         if (!shouldShow) return null;
         const bounds = getPrimitiveBounds(primitive, primitivesById);
         if (!bounds) return null;
@@ -303,13 +314,15 @@ export default function HotspotLayer({
     compareOnly,
     workspace.primitives,
     selectedPrimitiveId,
-    showAllPrimitivesVisible,
+    visibleOverlayFilters.priorityNote,
     priorityBubbleDraftOffsets,
     primitivesById,
     viewer,
     dims,
     viewportSize.w,
     viewportSize.h,
+    viewTick,
+    compareOnly,
   ]);
 
   useEffect(() => {
@@ -829,7 +842,7 @@ export default function HotspotLayer({
           const groupEntry = selectedGroupTargets.find((e) => e.id === primitive.id);
           const isVisible =
             (compareOnly ? compareShowAllOverlays : false) ||
-            showAllPrimitivesVisible ||
+            (!compareOnly && primitiveMatchesFilter(primitive, visibleOverlayFilters)) ||
             primitive.showOnLoad === true ||
             isSelected ||
             isHovered ||
@@ -1144,8 +1157,7 @@ export default function HotspotLayer({
         </g>
       )}
 
-      {!simplifyOverlay &&
-        priorityBubbles.map((priorityBubble) => (
+      {priorityBubbles.map((priorityBubble) => (
           <g key={`priority-bubble-${priorityBubble.primitiveId}`}>
             <path
               d={`M ${priorityBubble.basePoint.x} ${priorityBubble.basePoint.y} L ${

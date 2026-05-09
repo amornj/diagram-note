@@ -31,6 +31,17 @@ export type ZoomTarget = {
   padding?: number;
 };
 
+export type OverlayFilterKey = 'studyBox' | 'group' | 'region' | 'priorityNote';
+
+export type OverlayFilterState = Record<OverlayFilterKey, boolean>;
+
+export const DEFAULT_OVERLAY_FILTERS: OverlayFilterState = {
+  studyBox: false,
+  group: false,
+  region: false,
+  priorityNote: false,
+};
+
 export interface EditorState {
   selectedPrimitiveId: string | null;
   hoveredPrimitiveId: string | null;
@@ -41,7 +52,7 @@ export interface EditorState {
   draftOverlayColor: string;
   draftPolygonPoints: Point[];
   draftRectangleStart: Point | null;
-  showAllPrimitivesVisible: boolean;
+  visibleOverlayFilters: OverlayFilterState;
   leftSidebarCollapsed: boolean;
   rightPaneOpen: boolean;
   zoomTarget: ZoomTarget | null;
@@ -72,7 +83,8 @@ export interface EditorState {
   setDraftRectangleStart: (point: Point | null) => void;
   addPrimitive: (primitive: Omit<Primitive, 'id'>) => string;
   updatePrimitive: (id: string, patch: Partial<Primitive>) => void;
-  toggleShowAllPrimitivesVisible: () => void;
+  toggleShowAllOverlayFilters: () => void;
+  toggleOverlayFilter: (key: OverlayFilterKey) => void;
   deletePrimitive: (id: string) => void;
   addDraftGroupMember: (memberKey: string) => void;
   removeDraftGroupMember: (memberKey: string) => void;
@@ -129,7 +141,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   draftOverlayColor: '#fb7185',
   draftPolygonPoints: [],
   draftRectangleStart: null,
-  showAllPrimitivesVisible: false,
+  visibleOverlayFilters: DEFAULT_OVERLAY_FILTERS,
   leftSidebarCollapsed: true,
   rightPaneOpen: true,
   zoomTarget: null,
@@ -151,7 +163,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       editorMode: s.editorMode === 'overlayNeighborPick' ? s.editorMode : 'none',
       draftPolygonPoints: [],
       draftRectangleStart: null,
-      showAllPrimitivesVisible: false,
+      visibleOverlayFilters: DEFAULT_OVERLAY_FILTERS,
       pendingNameFocusId: null,
       overlayNeighborTargetId:
         s.editorMode === 'overlayNeighborPick' ? s.overlayNeighborTargetId : null,
@@ -281,14 +293,36 @@ export const useEditorStore = create<EditorState>((set) => ({
       },
     })),
 
-  toggleShowAllPrimitivesVisible: () =>
+  toggleShowAllOverlayFilters: () =>
     set((s) => {
-      const nextVisible = !s.showAllPrimitivesVisible;
+      const allVisible = Object.values(s.visibleOverlayFilters).every(Boolean);
+      const nextFilters = {
+        studyBox: !allVisible,
+        group: !allVisible,
+        region: !allVisible,
+        priorityNote: !allVisible,
+      };
+      const anyVisible = Object.values(nextFilters).some(Boolean);
       return {
-        showAllPrimitivesVisible: nextVisible,
-        selectedPrimitiveId: nextVisible ? s.selectedPrimitiveId : null,
-        hoveredPrimitiveId: nextVisible ? s.hoveredPrimitiveId : null,
-        selectedOccurrenceIndex: nextVisible ? s.selectedOccurrenceIndex : 0,
+        visibleOverlayFilters: nextFilters,
+        selectedPrimitiveId: anyVisible ? s.selectedPrimitiveId : null,
+        hoveredPrimitiveId: anyVisible ? s.hoveredPrimitiveId : null,
+        selectedOccurrenceIndex: anyVisible ? s.selectedOccurrenceIndex : 0,
+      };
+    }),
+
+  toggleOverlayFilter: (key) =>
+    set((s) => {
+      const nextFilters = {
+        ...s.visibleOverlayFilters,
+        [key]: !s.visibleOverlayFilters[key],
+      };
+      const anyVisible = Object.values(nextFilters).some(Boolean);
+      return {
+        visibleOverlayFilters: nextFilters,
+        selectedPrimitiveId: anyVisible ? s.selectedPrimitiveId : null,
+        hoveredPrimitiveId: anyVisible ? s.hoveredPrimitiveId : null,
+        selectedOccurrenceIndex: anyVisible ? s.selectedOccurrenceIndex : 0,
       };
     }),
 
