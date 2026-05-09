@@ -122,6 +122,7 @@ export default function Editor({
     startY: number;
     startOffset: PanelOffset;
   } | null>(null);
+  const compareFiltersRef = useRef(compareVisibleOverlayFilters);
 
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
   const zoomTarget = useEditorStore((s) => s.zoomTarget);
@@ -150,6 +151,10 @@ export default function Editor({
   const effectivePanLocked = compareOnly ? comparePanLocked : panLocked;
   const allOverlayFiltersVisible = Object.values(visibleOverlayFilters).every(Boolean);
   const allCompareOverlayFiltersVisible = Object.values(compareVisibleOverlayFilters).every(Boolean);
+
+  useEffect(() => {
+    compareFiltersRef.current = compareVisibleOverlayFilters;
+  }, [compareVisibleOverlayFilters]);
 
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
 
@@ -418,6 +423,7 @@ export default function Editor({
           setShowMapPicker(false);
         }
         if (!isFocusedPane) return;
+        const compareAllVisible = Object.values(compareFiltersRef.current).every(Boolean);
         let handled = true;
         switch (event.key) {
           case 'm':
@@ -432,25 +438,25 @@ export default function Editor({
             break;
           case 's':
           case 'S':
-            if (!allCompareOverlayFiltersVisible) {
+            if (!compareAllVisible) {
               onToggleCompareOverlayFilter?.('studyBox');
             }
             break;
           case 'g':
           case 'G':
-            if (!allCompareOverlayFiltersVisible) {
+            if (!compareAllVisible) {
               onToggleCompareOverlayFilter?.('group');
             }
             break;
           case 'r':
           case 'R':
-            if (!allCompareOverlayFiltersVisible) {
+            if (!compareAllVisible) {
               onToggleCompareOverlayFilter?.('region');
             }
             break;
           case 'n':
           case 'N':
-            if (!allCompareOverlayFiltersVisible) {
+            if (!compareAllVisible) {
               onToggleCompareOverlayFilter?.('priorityNote');
             }
             break;
@@ -525,6 +531,9 @@ export default function Editor({
       if (editing) return;
 
       const panSpeed = 0.08;
+      const singleAllVisible = Object.values(
+        useEditorStore.getState().visibleOverlayFilters
+      ).every(Boolean);
       let handled = true;
       switch (event.key) {
         case 'm':
@@ -576,25 +585,25 @@ export default function Editor({
           break;
         case 's':
         case 'S':
-          if (!allOverlayFiltersVisible) {
+          if (!singleAllVisible) {
             toggleOverlayFilter('studyBox');
           }
           break;
         case 'g':
         case 'G':
-          if (!allOverlayFiltersVisible) {
+          if (!singleAllVisible) {
             toggleOverlayFilter('group');
           }
           break;
         case 'r':
         case 'R':
-          if (!allOverlayFiltersVisible) {
+          if (!singleAllVisible) {
             toggleOverlayFilter('region');
           }
           break;
         case 'n':
         case 'N':
-          if (!allOverlayFiltersVisible) {
+          if (!singleAllVisible) {
             toggleOverlayFilter('priorityNote');
           }
           break;
