@@ -191,14 +191,34 @@ export default function HotspotLayer({
     ? primitivesById.get(selectedPrimitiveId) ?? null
     : null;
 
+  const groupedStudyBoxIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const primitive of workspace.primitives) {
+      if (primitive.kind !== 'group') continue;
+      for (const memberKey of getGroupMemberKeys(primitive)) {
+        const member = parseMemberKey(memberKey);
+        if (!member) continue;
+        const memberPrimitive = primitivesById.get(member.id);
+        if (memberPrimitive?.kind === 'rectangle') {
+          ids.add(member.id);
+        }
+      }
+    }
+    return ids;
+  }, [workspace.primitives, primitivesById]);
+
   const primitiveMatchesFilter = useCallback(
     (primitive: Primitive, filters: OverlayFilterState) => {
-      if (primitive.kind === 'rectangle') return filters.studyBox;
+      if (primitive.kind === 'rectangle') {
+        const isGroupedMember = groupedStudyBoxIds.has(primitive.id);
+        if (isGroupedMember) return filters.group;
+        return filters.studyBox;
+      }
       if (primitive.kind === 'polygon') return filters.region;
-      if (primitive.kind === 'group') return filters.group;
+      if (primitive.kind === 'group') return false;
       return false;
     },
-    []
+    [groupedStudyBoxIds]
   );
 
   const primitiveShapes = useMemo(() => {
