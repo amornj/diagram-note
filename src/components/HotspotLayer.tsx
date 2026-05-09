@@ -326,16 +326,8 @@ export default function HotspotLayer({
           };
         const anchorPoint = normalizedPointToViewerElementPoint(viewer, anchor, dims);
         if (!anchorPoint) return null;
-        const x = clamp(
-          anchorPoint.x - layout.width / 2,
-          8,
-          Math.max(8, viewportSize.w - layout.width - 8)
-        );
-        const y = clamp(
-          anchorPoint.y,
-          8,
-          Math.max(8, viewportSize.h - layout.height - 8)
-        );
+        const x = anchorPoint.x - layout.width / 2;
+        const y = anchorPoint.y;
         return {
           primitiveId: primitive.id,
           anchor,
@@ -774,6 +766,23 @@ export default function HotspotLayer({
       }
     },
     [compareOnly, priorityBubbles]
+  );
+
+  const closePriorityBubble = useCallback(
+    (event: React.PointerEvent<SVGCircleElement | SVGTextElement>, primitiveId: string) => {
+      if (compareOnly) return;
+      event.preventDefault();
+      event.stopPropagation();
+      updatePrimitive(primitiveId, {
+        showPriorityNote: false,
+      });
+      setPriorityBubbleDraftAnchors((current) => {
+        const next = { ...current };
+        delete next[primitiveId];
+        return next;
+      });
+    },
+    [compareOnly, updatePrimitive]
   );
 
   const continuePriorityBubbleDrag = useCallback(
@@ -1226,6 +1235,36 @@ export default function HotspotLayer({
               filter="url(#hotspot-glow)"
               pointerEvents="none"
             />
+            {!compareOnly && (
+              <>
+                <circle
+                  cx={priorityBubble.x + priorityBubble.width - 14}
+                  cy={priorityBubble.y + 14}
+                  r={8}
+                  fill="#fff8eb"
+                  stroke="#f59e0b"
+                  strokeWidth={1.5}
+                  style={{ cursor: 'pointer' }}
+                  onPointerDown={(event) =>
+                    closePriorityBubble(event, priorityBubble.primitiveId)
+                  }
+                />
+                <text
+                  x={priorityBubble.x + priorityBubble.width - 14}
+                  y={priorityBubble.y + 18}
+                  fill="#b45309"
+                  fontSize={11}
+                  fontWeight={700}
+                  textAnchor="middle"
+                  style={{ cursor: 'pointer', fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                  onPointerDown={(event) =>
+                    closePriorityBubble(event, priorityBubble.primitiveId)
+                  }
+                >
+                  x
+                </text>
+              </>
+            )}
             <rect
               x={priorityBubble.x + (priorityBubble.width - PRIORITY_BUBBLE_HANDLE_WIDTH) / 2}
               y={priorityBubble.y + 8}
