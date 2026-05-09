@@ -29,6 +29,7 @@ export interface Primitive {
   showLabel?: boolean;
   showOnLoad?: boolean;
   showPriorityNote?: boolean;
+  priorityNoteCollapsed?: boolean;
   priorityNoteAnchor?: Point;
   priorityNoteOffset?: Point;
   /** rectangle */

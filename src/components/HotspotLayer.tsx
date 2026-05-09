@@ -45,6 +45,8 @@ const PRIORITY_BUBBLE_PADDING_TOP = 22;
 const PRIORITY_BUBBLE_PADDING_BOTTOM = 14;
 const PRIORITY_BUBBLE_LINE_HEIGHT = 16;
 const PRIORITY_BUBBLE_CHAR_LIMIT = 42;
+const PRIORITY_BUBBLE_COLLAPSED_WIDTH = 42;
+const PRIORITY_BUBBLE_COLLAPSED_HEIGHT = 28;
 
 function isStudyBoxPrimitive(primitive: Primitive) {
   return primitive.kind === 'rectangle';
@@ -326,14 +328,20 @@ export default function HotspotLayer({
           };
         const anchorPoint = normalizedPointToViewerElementPoint(viewer, anchor, dims);
         if (!anchorPoint) return null;
-        const x = anchorPoint.x - layout.width / 2;
+        const collapsed = primitive.priorityNoteCollapsed === true;
+        const width = collapsed ? PRIORITY_BUBBLE_COLLAPSED_WIDTH : layout.width;
+        const height = collapsed ? PRIORITY_BUBBLE_COLLAPSED_HEIGHT : layout.height;
+        const x = anchorPoint.x - width / 2;
         const y = anchorPoint.y;
         return {
           primitiveId: primitive.id,
           anchor,
+          collapsed,
           x,
           y,
-          ...layout,
+          width,
+          height,
+          lines: layout.lines,
         };
       })
       .filter((bubble): bubble is NonNullable<typeof bubble> => bubble !== null);
@@ -768,18 +776,19 @@ export default function HotspotLayer({
     [compareOnly, priorityBubbles]
   );
 
-  const closePriorityBubble = useCallback(
-    (event: React.PointerEvent<SVGCircleElement | SVGTextElement>, primitiveId: string) => {
+  const togglePriorityBubbleCollapsed = useCallback(
+    (
+      event: React.PointerEvent<
+        SVGCircleElement | SVGTextElement | SVGRectElement | SVGGElement
+      >,
+      primitiveId: string,
+      collapsed: boolean
+    ) => {
       if (compareOnly) return;
       event.preventDefault();
       event.stopPropagation();
       updatePrimitive(primitiveId, {
-        showPriorityNote: false,
-      });
-      setPriorityBubbleDraftAnchors((current) => {
-        const next = { ...current };
-        delete next[primitiveId];
-        return next;
+        priorityNoteCollapsed: !collapsed,
       });
     },
     [compareOnly, updatePrimitive]
@@ -1223,86 +1232,161 @@ export default function HotspotLayer({
 
       {priorityBubbles.map((priorityBubble) => (
           <g key={`priority-bubble-${priorityBubble.primitiveId}`}>
-            <rect
-              x={priorityBubble.x}
-              y={priorityBubble.y}
-              width={priorityBubble.width}
-              height={priorityBubble.height}
-              rx={18}
-              fill="#fff8eb"
-              stroke="#f59e0b"
-              strokeWidth={2}
-              filter="url(#hotspot-glow)"
-              pointerEvents="none"
-            />
-            {!compareOnly && (
-              <>
-                <circle
-                  cx={priorityBubble.x + priorityBubble.width - 14}
-                  cy={priorityBubble.y + 14}
-                  r={8}
+            {priorityBubble.collapsed ? (
+              <g
+                style={{ cursor: compareOnly ? 'default' : 'pointer' }}
+                onPointerDown={(event) =>
+                  !compareOnly
+                    ? togglePriorityBubbleCollapsed(
+                        event,
+                        priorityBubble.primitiveId,
+                        priorityBubble.collapsed
+                      )
+                    : undefined
+                }
+              >
+                <path
+                  d={[
+                    `M ${priorityBubble.x + 10} ${priorityBubble.y}`,
+                    `H ${priorityBubble.x + priorityBubble.width - 10}`,
+                    `Q ${priorityBubble.x + priorityBubble.width} ${priorityBubble.y} ${
+                      priorityBubble.x + priorityBubble.width
+                    } ${priorityBubble.y + 10}`,
+                    `V ${priorityBubble.y + priorityBubble.height - 12}`,
+                    `Q ${priorityBubble.x + priorityBubble.width} ${
+                      priorityBubble.y + priorityBubble.height - 2
+                    } ${priorityBubble.x + priorityBubble.width - 10} ${
+                      priorityBubble.y + priorityBubble.height - 2
+                    }`,
+                    `H ${priorityBubble.x + 24}`,
+                    `L ${priorityBubble.x + 14} ${priorityBubble.y + priorityBubble.height + 8}`,
+                    `L ${priorityBubble.x + 16} ${priorityBubble.y + priorityBubble.height - 2}`,
+                    `H ${priorityBubble.x + 10}`,
+                    `Q ${priorityBubble.x} ${priorityBubble.y + priorityBubble.height - 2} ${
+                      priorityBubble.x
+                    } ${priorityBubble.y + priorityBubble.height - 12}`,
+                    `V ${priorityBubble.y + 10}`,
+                    `Q ${priorityBubble.x} ${priorityBubble.y} ${priorityBubble.x + 10} ${
+                      priorityBubble.y
+                    }`,
+                    'Z',
+                  ].join(' ')}
                   fill="#fff8eb"
                   stroke="#f59e0b"
-                  strokeWidth={1.5}
-                  style={{ cursor: 'pointer' }}
-                  onPointerDown={(event) =>
-                    closePriorityBubble(event, priorityBubble.primitiveId)
-                  }
+                  strokeWidth={2}
+                  filter="url(#hotspot-glow)"
                 />
                 <text
-                  x={priorityBubble.x + priorityBubble.width - 14}
-                  y={priorityBubble.y + 18}
+                  x={priorityBubble.x + 12}
+                  y={priorityBubble.y + 19}
                   fill="#b45309"
-                  fontSize={11}
+                  fontSize={14}
                   fontWeight={700}
-                  textAnchor="middle"
-                  style={{ cursor: 'pointer', fontFamily: 'system-ui, -apple-system, sans-serif' }}
-                  onPointerDown={(event) =>
-                    closePriorityBubble(event, priorityBubble.primitiveId)
-                  }
+                  letterSpacing="1.5"
+                  style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                  pointerEvents="none"
                 >
-                  x
+                  ...
+                </text>
+              </g>
+            ) : (
+              <rect
+                x={priorityBubble.x}
+                y={priorityBubble.y}
+                width={priorityBubble.width}
+                height={priorityBubble.height}
+                rx={18}
+                fill="#fff8eb"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                filter="url(#hotspot-glow)"
+                pointerEvents="none"
+              />
+            )}
+            {!compareOnly && (
+              <>
+                {!priorityBubble.collapsed && (
+                  <>
+                    <circle
+                      cx={priorityBubble.x + priorityBubble.width - 14}
+                      cy={priorityBubble.y + 14}
+                      r={8}
+                      fill="#fff8eb"
+                      stroke="#f59e0b"
+                      strokeWidth={1.5}
+                      style={{ cursor: 'pointer' }}
+                      onPointerDown={(event) =>
+                        togglePriorityBubbleCollapsed(
+                          event,
+                          priorityBubble.primitiveId,
+                          priorityBubble.collapsed
+                        )
+                      }
+                    />
+                    <text
+                      x={priorityBubble.x + priorityBubble.width - 14}
+                      y={priorityBubble.y + 18}
+                      fill="#b45309"
+                      fontSize={11}
+                      fontWeight={700}
+                      textAnchor="middle"
+                      style={{ cursor: 'pointer', fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                      onPointerDown={(event) =>
+                        togglePriorityBubbleCollapsed(
+                          event,
+                          priorityBubble.primitiveId,
+                          priorityBubble.collapsed
+                        )
+                      }
+                    >
+                      ◉
+                    </text>
+                  </>
+                )}
+              </>
+            )}
+            {!priorityBubble.collapsed && (
+              <>
+                <rect
+                  x={priorityBubble.x + (priorityBubble.width - PRIORITY_BUBBLE_HANDLE_WIDTH) / 2}
+                  y={priorityBubble.y + 8}
+                  width={PRIORITY_BUBBLE_HANDLE_WIDTH}
+                  height={PRIORITY_BUBBLE_HANDLE_HEIGHT}
+                  rx={PRIORITY_BUBBLE_HANDLE_HEIGHT / 2}
+                  fill="#f59e0b"
+                  opacity={0.45}
+                  style={{ cursor: compareOnly ? 'default' : 'grab' }}
+                  onPointerDown={(event) =>
+                    beginPriorityBubbleDrag(
+                      event,
+                      priorityBubble.primitiveId
+                    )
+                  }
+                  onPointerMove={continuePriorityBubbleDrag}
+                  onPointerUp={endPriorityBubbleDrag}
+                  onPointerCancel={cancelPriorityBubbleDrag}
+                />
+                <text
+                  x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
+                  y={priorityBubble.y + PRIORITY_BUBBLE_PADDING_TOP}
+                  fill="#7c2d12"
+                  fontSize={12}
+                  fontWeight={600}
+                  style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                  pointerEvents="none"
+                >
+                  {priorityBubble.lines.map((line, index) => (
+                    <tspan
+                      key={`${priorityBubble.primitiveId}-priority-line-${index}`}
+                      x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
+                      dy={index === 0 ? 0 : PRIORITY_BUBBLE_LINE_HEIGHT}
+                    >
+                      {line}
+                    </tspan>
+                  ))}
                 </text>
               </>
             )}
-            <rect
-              x={priorityBubble.x + (priorityBubble.width - PRIORITY_BUBBLE_HANDLE_WIDTH) / 2}
-              y={priorityBubble.y + 8}
-              width={PRIORITY_BUBBLE_HANDLE_WIDTH}
-              height={PRIORITY_BUBBLE_HANDLE_HEIGHT}
-              rx={PRIORITY_BUBBLE_HANDLE_HEIGHT / 2}
-              fill="#f59e0b"
-              opacity={0.45}
-              style={{ cursor: compareOnly ? 'default' : 'grab' }}
-              onPointerDown={(event) =>
-                beginPriorityBubbleDrag(
-                  event,
-                  priorityBubble.primitiveId
-                )
-              }
-              onPointerMove={continuePriorityBubbleDrag}
-              onPointerUp={endPriorityBubbleDrag}
-              onPointerCancel={cancelPriorityBubbleDrag}
-            />
-            <text
-              x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
-              y={priorityBubble.y + PRIORITY_BUBBLE_PADDING_TOP}
-              fill="#7c2d12"
-              fontSize={12}
-              fontWeight={600}
-              style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
-              pointerEvents="none"
-            >
-              {priorityBubble.lines.map((line, index) => (
-                <tspan
-                  key={`${priorityBubble.primitiveId}-priority-line-${index}`}
-                  x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
-                  dy={index === 0 ? 0 : PRIORITY_BUBBLE_LINE_HEIGHT}
-                >
-                  {line}
-                </tspan>
-              ))}
-            </text>
           </g>
         ))}
 

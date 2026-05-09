@@ -490,7 +490,7 @@ function MapPage() {
         setShowHelp(false);
         return;
       }
-      if ((event.key === 'b' || event.key === 'B') && !editing) {
+      if (event.key === '|' && !editing) {
         event.preventDefault();
         toggleSplitModeRef.current();
         return;
