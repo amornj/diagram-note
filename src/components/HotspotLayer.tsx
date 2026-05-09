@@ -287,7 +287,6 @@ export default function HotspotLayer({
   }, [selectedPrimitive, primitivesById, workspace.primitives]);
 
   const priorityBubbles = useMemo(() => {
-    if (compareOnly) return [];
     return workspace.primitives
       .map((primitive) => {
         const priorityNote = getPriorityNote(primitive);
