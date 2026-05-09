@@ -432,19 +432,27 @@ export default function Editor({
             break;
           case 's':
           case 'S':
-            onToggleCompareOverlayFilter?.('studyBox');
+            if (!allCompareOverlayFiltersVisible) {
+              onToggleCompareOverlayFilter?.('studyBox');
+            }
             break;
           case 'g':
           case 'G':
-            onToggleCompareOverlayFilter?.('group');
+            if (!allCompareOverlayFiltersVisible) {
+              onToggleCompareOverlayFilter?.('group');
+            }
             break;
           case 'r':
           case 'R':
-            onToggleCompareOverlayFilter?.('region');
+            if (!allCompareOverlayFiltersVisible) {
+              onToggleCompareOverlayFilter?.('region');
+            }
             break;
           case 'n':
           case 'N':
-            onToggleCompareOverlayFilter?.('priorityNote');
+            if (!allCompareOverlayFiltersVisible) {
+              onToggleCompareOverlayFilter?.('priorityNote');
+            }
             break;
           case '9':
             onToggleCompareZoomLock?.();
@@ -568,19 +576,27 @@ export default function Editor({
           break;
         case 's':
         case 'S':
-          toggleOverlayFilter('studyBox');
+          if (!allOverlayFiltersVisible) {
+            toggleOverlayFilter('studyBox');
+          }
           break;
         case 'g':
         case 'G':
-          toggleOverlayFilter('group');
+          if (!allOverlayFiltersVisible) {
+            toggleOverlayFilter('group');
+          }
           break;
         case 'r':
         case 'R':
-          toggleOverlayFilter('region');
+          if (!allOverlayFiltersVisible) {
+            toggleOverlayFilter('region');
+          }
           break;
         case 'n':
         case 'N':
-          toggleOverlayFilter('priorityNote');
+          if (!allOverlayFiltersVisible) {
+            toggleOverlayFilter('priorityNote');
+          }
           break;
         case '\\':
           toggleShowAllOverlayFilters();
