@@ -47,9 +47,22 @@ function snapshotMaps(maps: DiagramMap[]) {
   return new Map(maps.map((map) => [map.id, JSON.stringify(mapForCloud(map))]));
 }
 
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripUndefinedDeep(entry)) as T;
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => [key, stripUndefinedDeep(entry)]);
+    return Object.fromEntries(entries) as T;
+  }
+  return value;
+}
+
 function mapForCloud(map: DiagramMap): DiagramMap {
   const { lastOpenedAt: _lastOpenedAt, ...rest } = map;
-  return rest;
+  return stripUndefinedDeep(rest);
 }
 
 function getWorkspaceForMapPage(map: DiagramMap, pageIndex: number): MapWorkspace {

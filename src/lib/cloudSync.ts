@@ -10,6 +10,19 @@ import {
 import { db } from './firebase';
 import type { DiagramMap } from '../types';
 
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripUndefinedDeep(entry)) as T;
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => [key, stripUndefinedDeep(entry)]);
+    return Object.fromEntries(entries) as T;
+  }
+  return value;
+}
+
 function mapsCollection(uid: string) {
   return collection(db!, 'users', uid, 'maps');
 }
@@ -45,7 +58,7 @@ export async function saveCloudMaps(
       if (!nextIds.has(entry.id)) batch.delete(entry.ref);
     }
     for (const map of maps) {
-      batch.set(mapDoc(uid, map.id), map);
+      batch.set(mapDoc(uid, map.id), stripUndefinedDeep(map));
     }
     await batch.commit();
     return true;
@@ -61,7 +74,7 @@ export async function saveCloudMap(
 ): Promise<boolean> {
   if (!db) return false;
   try {
-    await setDoc(mapDoc(uid, map.id), map);
+    await setDoc(mapDoc(uid, map.id), stripUndefinedDeep(map));
     return true;
   } catch (err) {
     console.error('[cloud] save map failed:', err);

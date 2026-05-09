@@ -845,10 +845,14 @@ export default function HotspotLayer({
       }
       const nextAnchor = priorityBubbleDraftAnchors[drag.primitiveId];
       if (nextAnchor) {
-        updatePrimitive(drag.primitiveId, {
-          priorityNoteAnchor: nextAnchor,
-          priorityNoteOffset: undefined,
-        });
+        const primitive = primitivesById.get(drag.primitiveId);
+        if (primitive) {
+          const { priorityNoteOffset: _priorityNoteOffset, ...rest } = primitive;
+          updatePrimitive(drag.primitiveId, {
+            ...rest,
+            priorityNoteAnchor: nextAnchor,
+          });
+        }
       }
       setPriorityBubbleDraftAnchors((current) => {
         const next = { ...current };
