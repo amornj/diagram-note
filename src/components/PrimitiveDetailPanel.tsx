@@ -232,6 +232,21 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
               Show label
             </label>
           )}
+          {primitive.kind === 'group' && (
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={primitive.showMemberNumbers === true}
+                onChange={(event) =>
+                  updatePrimitive(primitive.id, {
+                    showMemberNumbers: event.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+              />
+              Show member numbers on map
+            </label>
+          )}
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
             <input
               type="checkbox"
@@ -243,25 +258,9 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
               }
               className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
             />
-            Show priority note
-          </label>
+              Show priority note
+            </label>
         </div>
-
-        {primitive.kind === 'group' && (
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-            <input
-              type="checkbox"
-              checked={primitive.showMemberNumbers === true}
-              onChange={(event) =>
-                updatePrimitive(primitive.id, {
-                  showMemberNumbers: event.target.checked,
-                })
-              }
-              className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
-            />
-            Show member numbers on map
-          </label>
-        )}
 
         <NoteCards
           notes={primitive.notes ?? []}
