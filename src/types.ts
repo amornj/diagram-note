@@ -30,6 +30,7 @@ export interface Primitive {
   showOnLoad?: boolean;
   showPriorityNote?: boolean;
   priorityNoteAnchor?: Point;
+  priorityNoteOffset?: Point;
   /** rectangle */
   bbox?: BBox;
   /** polygon, customline */

@@ -102,6 +102,14 @@ function layoutPriorityBubble(content: string) {
   return { lines, width, height };
 }
 
+function getPriorityBubbleBasePoint(bounds: Primitive['bbox']) {
+  if (!bounds) return null;
+  return {
+    x: clamp(bounds.x + bounds.w / 2, 0.02, 0.98),
+    y: clamp(bounds.y, 0.02, 0.98),
+  };
+}
+
 export default function HotspotLayer({
   viewer,
   dims,
@@ -131,9 +139,9 @@ export default function HotspotLayer({
   const priorityBubbleDragRef = useRef<{
     pointerId: number;
     primitiveId: string;
-    anchor: Point;
+    offset: Point;
   } | null>(null);
-  const [priorityBubbleDraftAnchors, setPriorityBubbleDraftAnchors] = useState<
+  const [priorityBubbleDraftOffsets, setPriorityBubbleDraftOffsets] = useState<
     Record<string, Point>
   >({});
 
@@ -244,29 +252,47 @@ export default function HotspotLayer({
         if (!shouldShow) return null;
         const bounds = getPrimitiveBounds(primitive, primitivesById);
         if (!bounds) return null;
-        const anchor =
-          priorityBubbleDraftAnchors[primitive.id] ??
-          primitive.priorityNoteAnchor ?? {
-            x: clamp(bounds.x + bounds.w / 2, 0.02, 0.98),
-            y: clamp(bounds.y - 0.025, 0.02, 0.98),
-          };
-        const anchorPoint = normalizedPointToViewerElementPoint(viewer, anchor, dims);
-        if (!anchorPoint) return null;
+        const basePointNormalized = getPriorityBubbleBasePoint(bounds);
+        if (!basePointNormalized) return null;
+        const basePoint = normalizedPointToViewerElementPoint(
+          viewer,
+          basePointNormalized,
+          dims
+        );
+        if (!basePoint) return null;
         const layout = layoutPriorityBubble(priorityNote.content);
+        const fallbackOffset = primitive.priorityNoteAnchor
+          ? (() => {
+              const legacyAnchorPoint = normalizedPointToViewerElementPoint(
+                viewer,
+                primitive.priorityNoteAnchor,
+                dims
+              );
+              if (!legacyAnchorPoint) return { x: 0, y: -18 };
+              return {
+                x: legacyAnchorPoint.x - basePoint.x,
+                y: legacyAnchorPoint.y - basePoint.y,
+              };
+            })()
+          : { x: 0, y: -18 };
+        const offset =
+          priorityBubbleDraftOffsets[primitive.id] ??
+          primitive.priorityNoteOffset ??
+          fallbackOffset;
         const x = clamp(
-          anchorPoint.x - layout.width / 2,
+          basePoint.x + offset.x - layout.width / 2,
           8,
           Math.max(8, viewportSize.w - layout.width - 8)
         );
         const y = clamp(
-          anchorPoint.y - layout.height - 18,
+          basePoint.y + offset.y - layout.height,
           8,
           Math.max(8, viewportSize.h - layout.height - 8)
         );
         return {
           primitiveId: primitive.id,
-          anchor,
-          anchorPoint,
+          basePoint,
+          offset,
           x,
           y,
           ...layout,
@@ -278,7 +304,7 @@ export default function HotspotLayer({
     workspace.primitives,
     selectedPrimitiveId,
     showAllPrimitivesVisible,
-    priorityBubbleDraftAnchors,
+    priorityBubbleDraftOffsets,
     primitivesById,
     viewer,
     dims,
@@ -328,7 +354,7 @@ export default function HotspotLayer({
   }, [viewer]);
 
   useEffect(() => {
-    setPriorityBubbleDraftAnchors({});
+    setPriorityBubbleDraftOffsets({});
     priorityBubbleDragRef.current = null;
   }, [selectedPrimitiveId]);
 
@@ -671,14 +697,14 @@ export default function HotspotLayer({
   );
 
   const beginPriorityBubbleDrag = useCallback(
-    (event: React.PointerEvent<SVGRectElement>, primitiveId: string, anchor: Point) => {
+    (event: React.PointerEvent<SVGRectElement>, primitiveId: string, offset: Point) => {
       if (compareOnly) return;
       event.preventDefault();
       event.stopPropagation();
       priorityBubbleDragRef.current = {
         pointerId: event.pointerId,
         primitiveId,
-        anchor,
+        offset,
       };
       try {
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -695,25 +721,26 @@ export default function HotspotLayer({
       if (!drag || drag.pointerId !== event.pointerId) return;
       event.preventDefault();
       event.stopPropagation();
+      const bubble = priorityBubbles.find((entry) => entry.primitiveId === drag.primitiveId);
+      if (!bubble) return;
       const svg = svgRef.current;
       if (!svg) return;
       const bounds = svg.getBoundingClientRect();
-      const normalized = viewerElementPointToNormalizedPoint(
-        viewer,
-        event.clientX - bounds.left,
-        event.clientY - bounds.top + 10,
-        dims
-      );
-      if (!normalized) return;
-      setPriorityBubbleDraftAnchors((current) => ({
+      const pointerX = event.clientX - bounds.left;
+      const pointerY = event.clientY - bounds.top;
+      const handleCenterX = bubble.x + bubble.width / 2;
+      const handleCenterY = bubble.y + 8 + PRIORITY_BUBBLE_HANDLE_HEIGHT / 2;
+      const deltaX = pointerX - handleCenterX;
+      const deltaY = pointerY - handleCenterY;
+      setPriorityBubbleDraftOffsets((current) => ({
         ...current,
         [drag.primitiveId]: {
-          x: clamp(normalized.x, 0.02, 0.98),
-          y: clamp(normalized.y, 0.02, 0.98),
+          x: drag.offset.x + deltaX,
+          y: drag.offset.y + deltaY,
         },
       }));
     },
-    [viewer, dims]
+    [priorityBubbles]
   );
 
   const endPriorityBubbleDrag = useCallback(
@@ -727,16 +754,19 @@ export default function HotspotLayer({
       } catch {
         // ignore
       }
-      const nextAnchor = priorityBubbleDraftAnchors[drag.primitiveId] ?? drag.anchor;
-      updatePrimitive(drag.primitiveId, { priorityNoteAnchor: nextAnchor });
-      setPriorityBubbleDraftAnchors((current) => {
+      const nextOffset = priorityBubbleDraftOffsets[drag.primitiveId] ?? drag.offset;
+      updatePrimitive(drag.primitiveId, {
+        priorityNoteOffset: nextOffset,
+        priorityNoteAnchor: undefined,
+      });
+      setPriorityBubbleDraftOffsets((current) => {
         const next = { ...current };
         delete next[drag.primitiveId];
         return next;
       });
       priorityBubbleDragRef.current = null;
     },
-    [priorityBubbleDraftAnchors, updatePrimitive]
+    [priorityBubbleDraftOffsets, updatePrimitive]
   );
 
   const cancelPriorityBubbleDrag = useCallback(
@@ -750,7 +780,7 @@ export default function HotspotLayer({
       } catch {
         // ignore
       }
-      setPriorityBubbleDraftAnchors((current) => {
+      setPriorityBubbleDraftOffsets((current) => {
         const next = { ...current };
         delete next[drag.primitiveId];
         return next;
@@ -1118,7 +1148,7 @@ export default function HotspotLayer({
         priorityBubbles.map((priorityBubble) => (
           <g key={`priority-bubble-${priorityBubble.primitiveId}`}>
             <path
-              d={`M ${priorityBubble.anchorPoint.x} ${priorityBubble.anchorPoint.y} L ${
+              d={`M ${priorityBubble.basePoint.x} ${priorityBubble.basePoint.y} L ${
                 priorityBubble.x + priorityBubble.width / 2
               } ${priorityBubble.y + priorityBubble.height}`}
               stroke="#f59e0b"
@@ -1153,7 +1183,7 @@ export default function HotspotLayer({
                 beginPriorityBubbleDrag(
                   event,
                   priorityBubble.primitiveId,
-                  priorityBubble.anchor
+                  priorityBubble.offset
                 )
               }
               onPointerMove={continuePriorityBubbleDrag}
