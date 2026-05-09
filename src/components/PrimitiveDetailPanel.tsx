@@ -217,30 +217,6 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
         </div>
 
         <div className="space-y-2">
-          {primitive.kind !== 'group' && (
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <input
-                type="checkbox"
-                checked={primitive.showLabel === true}
-                onChange={(event) =>
-                  updatePrimitive(primitive.id, { showLabel: event.target.checked })
-                }
-                className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
-              />
-              Show label
-            </label>
-          )}
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-            <input
-              type="checkbox"
-              checked={primitive.showOnLoad === true}
-              onChange={(event) =>
-                updatePrimitive(primitive.id, { showOnLoad: event.target.checked })
-              }
-              className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
-            />
-            Show on load
-          </label>
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
             <input
               type="checkbox"
