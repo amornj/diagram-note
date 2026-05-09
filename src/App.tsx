@@ -346,6 +346,47 @@ function ComparePane({
     mapName: title,
   });
 
+  const patchWorkspacePrimitive = useCallback(
+    (id: string, patch: Partial<import('./types').Primitive>) => {
+      setState((current) => {
+        const workspace = {
+          ...current.workspace,
+          primitives: current.workspace.primitives.map((primitive) =>
+            primitive.id === id ? { ...primitive, ...patch } : primitive
+          ),
+        };
+        onLoadedRef.current({ mapId, mapName: current.mapName, workspace });
+        return { ...current, workspace };
+      });
+    },
+    [mapId]
+  );
+
+  const toggleAllPriorityNotesCollapsed = useCallback(() => {
+    setState((current) => {
+      const priorityPrimitives = current.workspace.primitives.filter(
+        (primitive) =>
+          primitive.showPriorityNote === true &&
+          (primitive.notes ?? []).some((note) => note.isPriority && note.content.trim())
+      );
+      if (priorityPrimitives.length === 0) return current;
+      const shouldCollapse = priorityPrimitives.some(
+        (primitive) => primitive.priorityNoteCollapsed !== true
+      );
+      const priorityIds = new Set(priorityPrimitives.map((primitive) => primitive.id));
+      const workspace = {
+        ...current.workspace,
+        primitives: current.workspace.primitives.map((primitive) =>
+          priorityIds.has(primitive.id)
+            ? { ...primitive, priorityNoteCollapsed: shouldCollapse }
+            : primitive
+        ),
+      };
+      onLoadedRef.current({ mapId, mapName: current.mapName, workspace });
+      return { ...current, workspace };
+    });
+  }, [mapId]);
+
   useEffect(() => {
     let cancelled = false;
     let objectUrl: string | null = null;
@@ -398,6 +439,8 @@ function ComparePane({
           compareVisibleOverlayFilters={visibleOverlayFilters}
           onToggleCompareOverlays={onToggleOverlays}
           onToggleCompareOverlayFilter={onToggleOverlayFilter}
+          onToggleCompareAllPriorityNotesCollapsed={toggleAllPriorityNotesCollapsed}
+          onComparePrimitivePatch={patchWorkspacePrimitive}
           compareZoomLocked={zoomLocked}
           onToggleCompareZoomLock={onToggleZoomLock}
           comparePanLocked={panLocked}

@@ -58,6 +58,8 @@ interface EditorProps {
   onToggleCompareOverlays?: () => void;
   compareVisibleOverlayFilters?: OverlayFilterState;
   onToggleCompareOverlayFilter?: (key: keyof OverlayFilterState) => void;
+  onToggleCompareAllPriorityNotesCollapsed?: () => void;
+  onComparePrimitivePatch?: (id: string, patch: { priorityNoteCollapsed?: boolean }) => void;
   compareZoomLocked?: boolean;
   onToggleCompareZoomLock?: () => void;
   comparePanLocked?: boolean;
@@ -86,6 +88,8 @@ export default function Editor({
   onToggleCompareOverlays,
   compareVisibleOverlayFilters = DEFAULT_OVERLAY_FILTERS,
   onToggleCompareOverlayFilter,
+  onToggleCompareAllPriorityNotesCollapsed,
+  onComparePrimitivePatch,
   compareZoomLocked = false,
   onToggleCompareZoomLock,
   comparePanLocked = false,
@@ -145,6 +149,9 @@ export default function Editor({
     (s) => s.toggleShowAllOverlayFilters
   );
   const toggleOverlayFilter = useEditorStore((s) => s.toggleOverlayFilter);
+  const toggleAllPriorityNoteCollapsed = useEditorStore(
+    (s) => s.toggleAllPriorityNoteCollapsed
+  );
   const activeMapId = useMapStore((s) => s.activeMapId);
   const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
   const effectiveZoomLocked = compareOnly ? compareZoomLocked : zoomLocked;
@@ -460,6 +467,10 @@ export default function Editor({
               onToggleCompareOverlayFilter?.('priorityNote');
             }
             break;
+          case 'h':
+          case 'H':
+            onToggleCompareAllPriorityNotesCollapsed?.();
+            break;
           case '9':
             onToggleCompareZoomLock?.();
             break;
@@ -607,6 +618,10 @@ export default function Editor({
             toggleOverlayFilter('priorityNote');
           }
           break;
+        case 'h':
+        case 'H':
+          toggleAllPriorityNoteCollapsed();
+          break;
         case '\\':
           toggleShowAllOverlayFilters();
           break;
@@ -700,9 +715,11 @@ export default function Editor({
     setEditorMode,
     toggleShowAllOverlayFilters,
     toggleOverlayFilter,
+    toggleAllPriorityNoteCollapsed,
     compareOnly,
     onToggleCompareOverlays,
     onToggleCompareOverlayFilter,
+    onToggleCompareAllPriorityNotesCollapsed,
     isFocusedPane,
     effectivePanLocked,
     effectiveZoomLocked,
@@ -755,6 +772,7 @@ export default function Editor({
           workspaceOverride={workspaceOverride}
           compareShowAllOverlays={compareShowAllOverlays}
           compareVisibleOverlayFilters={compareVisibleOverlayFilters}
+          onComparePrimitivePatch={onComparePrimitivePatch}
           compareZoomLocked={compareZoomLocked}
           comparePanLocked={comparePanLocked}
         />
@@ -1043,8 +1061,8 @@ export default function Editor({
       >
         <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
           {compareOnly
-            ? 'M maps · 9 lock · P pin · S boxes · G groups · R regions · N notes · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
-            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · M maps · | split · S boxes · G groups · R regions · N notes · \\ overlays · ? help'}
+            ? 'M maps · 9 lock · P pin · H collapse notes · S boxes · G groups · R regions · N notes · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
+            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · H collapse notes · M maps · | split · S boxes · G groups · R regions · N notes · \\ overlays · ? help'}
         </div>
         {compareOnly && onComparePageChange && pageCount > 1 ? (
           <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur">

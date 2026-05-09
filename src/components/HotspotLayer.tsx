@@ -31,6 +31,7 @@ interface HotspotLayerProps {
   workspaceOverride?: MapWorkspace;
   compareShowAllOverlays?: boolean;
   compareVisibleOverlayFilters?: OverlayFilterState;
+  onComparePrimitivePatch?: (id: string, patch: Partial<Primitive>) => void;
   compareZoomLocked?: boolean;
   comparePanLocked?: boolean;
 }
@@ -126,6 +127,7 @@ export default function HotspotLayer({
   workspaceOverride,
   compareShowAllOverlays = false,
   compareVisibleOverlayFilters = DEFAULT_OVERLAY_FILTERS,
+  onComparePrimitivePatch,
   compareZoomLocked = false,
   comparePanLocked = false,
 }: HotspotLayerProps) {
@@ -784,14 +786,19 @@ export default function HotspotLayer({
       primitiveId: string,
       collapsed: boolean
     ) => {
-      if (compareOnly) return;
       event.preventDefault();
       event.stopPropagation();
+      if (compareOnly) {
+        onComparePrimitivePatch?.(primitiveId, {
+          priorityNoteCollapsed: !collapsed,
+        });
+        return;
+      }
       updatePrimitive(primitiveId, {
         priorityNoteCollapsed: !collapsed,
       });
     },
-    [compareOnly, updatePrimitive]
+    [compareOnly, onComparePrimitivePatch, updatePrimitive]
   );
 
   const continuePriorityBubbleDrag = useCallback(
