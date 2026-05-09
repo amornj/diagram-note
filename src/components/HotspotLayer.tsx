@@ -197,6 +197,10 @@ export default function HotspotLayer({
   const selectedPrimitive = selectedPrimitiveId
     ? primitivesById.get(selectedPrimitiveId) ?? null
     : null;
+  const allSingleOverlayFiltersVisible = Object.values(visibleOverlayFilters).every(Boolean);
+  const allCompareOverlayFiltersVisible = Object.values(
+    compareVisibleOverlayFilters
+  ).every(Boolean);
 
   const groupedStudyBoxIds = useMemo(() => {
     const ids = new Set<string>();
@@ -218,8 +222,10 @@ export default function HotspotLayer({
     (primitive: Primitive, filters: OverlayFilterState) => {
       if (primitive.kind === 'rectangle') {
         const isGroupedMember = groupedStudyBoxIds.has(primitive.id);
+        const allVisible = Object.values(filters).every(Boolean);
+        if (allVisible) return true;
         if (filters.studyBox) {
-          return filters.group ? !isGroupedMember : true;
+          return isGroupedMember ? filters.studyBox !== filters.group : true;
         }
         return filters.group ? isGroupedMember : false;
       }
@@ -290,8 +296,8 @@ export default function HotspotLayer({
         const shouldShow =
           isSelected ||
           (compareOnly
-            ? compareVisibleOverlayFilters.priorityNote
-            : visibleOverlayFilters.priorityNote);
+            ? allCompareOverlayFiltersVisible || compareVisibleOverlayFilters.priorityNote
+            : allSingleOverlayFiltersVisible || visibleOverlayFilters.priorityNote);
         if (!shouldShow) return null;
         const bounds = getPrimitiveBounds(primitive, primitivesById);
         if (!bounds) return null;
@@ -346,6 +352,8 @@ export default function HotspotLayer({
     selectedPrimitiveId,
     visibleOverlayFilters.priorityNote,
     compareVisibleOverlayFilters.priorityNote,
+    allSingleOverlayFiltersVisible,
+    allCompareOverlayFiltersVisible,
     priorityBubbleDraftAnchors,
     primitivesById,
     viewer,
