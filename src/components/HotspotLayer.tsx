@@ -218,8 +218,10 @@ export default function HotspotLayer({
     (primitive: Primitive, filters: OverlayFilterState) => {
       if (primitive.kind === 'rectangle') {
         const isGroupedMember = groupedStudyBoxIds.has(primitive.id);
-        if (isGroupedMember) return filters.group;
-        return filters.studyBox;
+        if (filters.studyBox) {
+          return filters.group ? !isGroupedMember : true;
+        }
+        return filters.group ? isGroupedMember : false;
       }
       if (primitive.kind === 'polygon') return filters.region;
       if (primitive.kind === 'group') return false;
