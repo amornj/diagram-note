@@ -194,7 +194,7 @@ async function mergeCloudMaps(
 
     useEditorStore
       .getState()
-      .setWorkspace(getWorkspaceForMapPage(activeMap, activeMap.pageIndex));
+      .setWorkspace(getWorkspaceForMapPage(activeMap, activeMap.pageIndex), false);
 
     if (!sameRenderedView) {
       await useMapStore.getState().setActiveMap(activeId);

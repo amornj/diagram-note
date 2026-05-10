@@ -64,7 +64,7 @@ export interface EditorState {
   overlayNeighborTargetPageIndex: number | null;
   groupCollectTargetId: string | null;
 
-  setWorkspace: (workspace: MapWorkspace) => void;
+  setWorkspace: (workspace: MapWorkspace, resetUi?: boolean) => void;
   setSelectedPrimitiveId: (id: string | null) => void;
   setHoveredPrimitiveId: (id: string | null) => void;
   setSelectedOccurrenceIndex: (index: number) => void;
@@ -155,7 +155,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   overlayNeighborTargetPageIndex: null,
   groupCollectTargetId: null,
 
-  setWorkspace: (workspace) =>
+  setWorkspace: (workspace, resetUi = true) =>
     set((s) => ({
       workspace,
       selectedPrimitiveId: null,
@@ -165,7 +165,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       editorMode: s.editorMode === 'overlayNeighborPick' ? s.editorMode : 'none',
       draftPolygonPoints: [],
       draftRectangleStart: null,
-      visibleOverlayFilters: DEFAULT_OVERLAY_FILTERS,
+      ...(resetUi ? { visibleOverlayFilters: DEFAULT_OVERLAY_FILTERS } : {}),
       pendingNameFocusId: null,
       overlayNeighborTargetId:
         s.editorMode === 'overlayNeighborPick' ? s.overlayNeighborTargetId : null,

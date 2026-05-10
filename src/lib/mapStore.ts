@@ -801,7 +801,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     set({
       maps: get().maps.map((entry) => (entry.id === updated.id ? updated : entry)),
     });
-    useEditorStore.getState().setWorkspace(getPageMeta(updated, updated.pageIndex).workspace);
+    useEditorStore.getState().setWorkspace(getPageMeta(updated, updated.pageIndex).workspace, false);
   },
 
   removePrimitiveBacklink: async (sourcePageIndex, sourceId, targetPageIndex, targetId) => {
@@ -827,7 +827,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     set({
       maps: get().maps.map((entry) => (entry.id === updated.id ? updated : entry)),
     });
-    useEditorStore.getState().setWorkspace(getPageMeta(updated, updated.pageIndex).workspace);
+    useEditorStore.getState().setWorkspace(getPageMeta(updated, updated.pageIndex).workspace, false);
   },
 
   deleteMap: async (id) => {
@@ -900,7 +900,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       maps: get().maps.map((m) => (m.id === mapId ? updated : m)),
     });
     if (get().activeMapId === mapId && updated.pageIndex === pageIndex) {
-      useEditorStore.getState().setWorkspace(getPageMeta(updated, pageIndex).workspace);
+      useEditorStore.getState().setWorkspace(getPageMeta(updated, pageIndex).workspace, false);
     }
   },
 }));

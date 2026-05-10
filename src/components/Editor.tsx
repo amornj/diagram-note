@@ -127,6 +127,7 @@ export default function Editor({
     startOffset: PanelOffset;
   } | null>(null);
   const compareFiltersRef = useRef(compareVisibleOverlayFilters);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
   const zoomTarget = useEditorStore((s) => s.zoomTarget);
@@ -157,6 +158,8 @@ export default function Editor({
   const storeWorkspace = useEditorStore((s) => s.workspace);
   const effectiveZoomLocked = compareOnly ? compareZoomLocked : zoomLocked;
   const effectivePanLocked = compareOnly ? comparePanLocked : panLocked;
+  const effectiveZoomLockedRef = useRef(effectiveZoomLocked);
+  effectiveZoomLockedRef.current = effectiveZoomLocked;
   const allOverlayFiltersVisible = Object.values(visibleOverlayFilters).every(Boolean);
   const allCompareOverlayFiltersVisible = Object.values(compareVisibleOverlayFilters).every(Boolean);
   const effectiveWorkspace = compareOnly ? (workspaceOverride ?? storeWorkspace) : storeWorkspace;
@@ -436,13 +439,15 @@ export default function Editor({
     [leftInset, panelOffsets, startPanelDrag]
   );
 
-  const handleWheelZoom = useCallback(
-    (event: React.WheelEvent<HTMLDivElement>) => {
-      if (!viewer) return;
+  // Attach wheel zoom as a non-passive listener so preventDefault works.
+  // React's onWheel is passive in React 17+, which prevents preventDefault.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el || !viewer) return;
+    const handler = (event: WheelEvent) => {
       event.preventDefault();
-      event.stopPropagation();
-      if (effectiveZoomLocked) return;
-      const bounds = event.currentTarget.getBoundingClientRect();
+      if (effectiveZoomLockedRef.current) return;
+      const bounds = el.getBoundingClientRect();
       const pixel = new OpenSeadragon.Point(
         event.clientX - bounds.left,
         event.clientY - bounds.top
@@ -451,9 +456,10 @@ export default function Editor({
       const factor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
       viewer.viewport.zoomBy(factor, refPoint);
       viewer.viewport.applyConstraints();
-    },
-    [viewer, effectiveZoomLocked]
-  );
+    };
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  }, [viewer]);
 
   // Hotkeys
   useEffect(() => {
@@ -774,8 +780,8 @@ export default function Editor({
 
   return (
     <div
+      ref={wrapperRef}
       className="relative h-full w-full overflow-hidden bg-gray-900"
-      onWheel={handleWheelZoom}
       onPointerDown={() => onActivatePane?.()}
       style={{
         cursor:
