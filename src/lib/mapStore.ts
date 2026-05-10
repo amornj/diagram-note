@@ -14,8 +14,6 @@ import {
 } from './cloudStorage';
 
 const ACTIVE_MAP_STORAGE_KEY = 'diagram-note-active-map';
-const DEFAULT_MAP_ASSET = '/metabolic-map.pdf';
-const DEFAULT_MAP_NAME = 'metabolic-map';
 export const FIXED_RENDER_SCALE = 1.5;
 
 function debugMap(message: string, details?: Record<string, unknown>) {
@@ -229,28 +227,6 @@ async function resolveSourceBlob(map: DiagramMap): Promise<Blob | null> {
     return sourceBlob;
   }
 
-  if (map.isDefault) {
-    try {
-      debugMap('fetching bundled default source', {
-        mapId: map.id,
-        asset: DEFAULT_MAP_ASSET,
-      });
-      const response = await fetch(DEFAULT_MAP_ASSET);
-      if (!response.ok) return null;
-      sourceBlob = await response.blob();
-      await idb.putPdfBlob(map.id, sourceBlob);
-      debugMap('resolved source from bundled default', {
-        mapId: map.id,
-        size: sourceBlob.size,
-        type: sourceBlob.type,
-      });
-      return sourceBlob;
-    } catch (error) {
-      console.error('[map] default source fetch failed:', error);
-      return null;
-    }
-  }
-
   const storagePaths = new Set<string>();
   if (map.sourceStoragePath) storagePaths.add(map.sourceStoragePath);
   const uid = auth?.currentUser?.uid;
@@ -386,33 +362,6 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     set({ loading: true });
     try {
       let maps = await idb.listMaps();
-
-      // Ensure the built-in default map always exists.
-      // This runs on first launch and also migrates existing users who had
-      // the subway map loaded without the isDefault flag.
-      if (!maps.some((m) => m.isDefault)) {
-        // Pre-populate in-memory maps so createMapFromPdf's hash dedup check
-        // can find maps that are already in IDB but not yet in state.
-        set({ maps });
-        const response = await fetch(DEFAULT_MAP_ASSET);
-        if (!response.ok) {
-          throw new Error(`Failed to load bundled default map: ${response.status}`);
-        }
-        const blob = await response.blob();
-        const file = new File([blob], DEFAULT_MAP_ASSET.split('/').pop()!, {
-          type: 'application/pdf',
-        });
-        const defaultId = await get().createMapFromPdf(file, {
-          scale: FIXED_RENDER_SCALE,
-          name: DEFAULT_MAP_NAME,
-        });
-        // Mark whichever map was created or found (by pdfHash) as the default.
-        const target = await idb.getMap(defaultId);
-        if (target) {
-          await idb.putMap({ ...target, isDefault: true, sortOrder: -1 });
-        }
-        maps = await idb.listMaps();
-      }
 
       // Deduplicate: if multiple maps share the same pdfHash, keep the one
       // with isDefault:true, or else the most-recently updated one, and
