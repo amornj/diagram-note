@@ -903,6 +903,11 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     const map = await idb.getMap(id);
     if (!map) return;
     const meta = getPageMeta(map, map.pageIndex);
+    // Skip if content is unchanged — avoids a phantom updatedAt bump when
+    // setActiveMap calls setWorkspace, which would make the local snapshot
+    // diverge from persistedRef and cause mergeCloudMaps to silently skip
+    // incoming cross-device updates during the ~3 s debounce window.
+    if (JSON.stringify(meta.workspace) === JSON.stringify(workspace)) return;
     const updated = withPageMeta(map, map.pageIndex, {
       ...meta,
       workspace,
