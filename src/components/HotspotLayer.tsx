@@ -1305,6 +1305,10 @@ export default function HotspotLayer({
 
       {priorityBubbles.map((priorityBubble) => (
           <g key={`priority-bubble-${priorityBubble.primitiveId}`}>
+            {(() => {
+              const isEditing = editingPriorityPrimitiveId === priorityBubble.primitiveId;
+              return (
+                <>
             {priorityBubble.collapsed ? (
               <g
                 style={{ cursor: compareOnly ? 'default' : 'pointer' }}
@@ -1442,33 +1446,35 @@ export default function HotspotLayer({
                   onPointerUp={endPriorityBubbleDrag}
                   onPointerCancel={cancelPriorityBubbleDrag}
                 />
-                <text
-                  x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
-                  y={priorityBubble.y + PRIORITY_BUBBLE_PADDING_TOP}
-                  fill="#7c2d12"
-                  fontSize={12}
-                  fontWeight={600}
-                  style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
-                  onDoubleClick={(event) =>
-                    beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
-                  }
-                >
-                  {priorityBubble.lines.map((line, index) => (
-                    <tspan
-                      key={`${priorityBubble.primitiveId}-priority-line-${index}`}
-                      x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
-                      dy={index === 0 ? 0 : PRIORITY_BUBBLE_LINE_HEIGHT}
-                    >
-                      {line}
-                    </tspan>
-                  ))}
-                </text>
-                {editingPriorityPrimitiveId === priorityBubble.primitiveId && (
+                {!isEditing && (
+                  <text
+                    x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
+                    y={priorityBubble.y + PRIORITY_BUBBLE_PADDING_TOP}
+                    fill="#7c2d12"
+                    fontSize={12}
+                    fontWeight={600}
+                    style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                    onDoubleClick={(event) =>
+                      beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
+                    }
+                  >
+                    {priorityBubble.lines.map((line, index) => (
+                      <tspan
+                        key={`${priorityBubble.primitiveId}-priority-line-${index}`}
+                        x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
+                        dy={index === 0 ? 0 : PRIORITY_BUBBLE_LINE_HEIGHT}
+                      >
+                        {line}
+                      </tspan>
+                    ))}
+                  </text>
+                )}
+                {isEditing && (
                   <foreignObject
-                    x={priorityBubble.x + 10}
-                    y={priorityBubble.y + 18}
-                    width={priorityBubble.width - 20}
-                    height={priorityBubble.height - 28}
+                    x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
+                    y={priorityBubble.y + 12}
+                    width={priorityBubble.width - PRIORITY_BUBBLE_PADDING_X * 2}
+                    height={priorityBubble.height - 18}
                   >
                     <textarea
                       autoFocus
@@ -1496,6 +1502,9 @@ export default function HotspotLayer({
                       style={{
                         width: '100%',
                         height: '100%',
+                        margin: '0',
+                        padding: '10px 0 14px 0',
+                        boxSizing: 'border-box',
                         resize: 'none',
                         border: 'none',
                         outline: 'none',
@@ -1511,6 +1520,9 @@ export default function HotspotLayer({
                 )}
               </>
             )}
+                </>
+              );
+            })()}
           </g>
         ))}
 
