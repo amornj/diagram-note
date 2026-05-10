@@ -901,6 +901,19 @@ export default function Editor({
         >
           <Home size={16} />
         </button>
+        {!compareOnly && (
+          <button
+            onClick={onToggleSplitMode}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+              splitMode
+                ? 'bg-sky-500 text-white hover:bg-sky-600'
+                : 'bg-white/90 text-gray-700 hover:bg-white'
+            }`}
+            title={splitMode ? 'Exit split compare' : 'Split compare'}
+          >
+            <Columns2 size={15} />
+          </button>
+        )}
         {!compareOnly && activeMap?.sourceType === 'pdf' && (
           <button
             onClick={() => setEditorMode(editorMode === 'textSelect' ? 'none' : 'textSelect')}
@@ -977,19 +990,6 @@ export default function Editor({
             title="Maps (M)"
           >
             <Map size={15} />
-          </button>
-        )}
-        {!compareOnly && (
-          <button
-            onClick={onToggleSplitMode}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-              splitMode
-                ? 'bg-sky-500 text-white hover:bg-sky-600'
-                : 'bg-white/90 text-gray-700 hover:bg-white'
-            }`}
-            title={splitMode ? 'Exit split compare' : 'Split compare'}
-          >
-            <Columns2 size={15} />
           </button>
         )}
         {!compareOnly && (
