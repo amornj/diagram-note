@@ -46,8 +46,8 @@ const PRIORITY_BUBBLE_PADDING_TOP = 22;
 const PRIORITY_BUBBLE_PADDING_BOTTOM = 14;
 const PRIORITY_BUBBLE_LINE_HEIGHT = 16;
 const PRIORITY_BUBBLE_CHAR_LIMIT = 42;
-const PRIORITY_BUBBLE_COLLAPSED_WIDTH = 30;
-const PRIORITY_BUBBLE_COLLAPSED_HEIGHT = 20;
+const PRIORITY_BUBBLE_COLLAPSED_WIDTH = 42;
+const PRIORITY_BUBBLE_COLLAPSED_HEIGHT = 28;
 
 function isStudyBoxPrimitive(primitive: Primitive) {
   return primitive.kind === 'rectangle';
@@ -119,14 +119,6 @@ function getPriorityBubbleBasePoint(bounds: Primitive['bbox']) {
   return {
     x: clamp(bounds.x + bounds.w / 2, 0.02, 0.98),
     y: clamp(bounds.y, 0.02, 0.98),
-  };
-}
-
-function getCollapsedPriorityBubbleAnchor(bounds: Primitive['bbox']) {
-  if (!bounds) return null;
-  return {
-    x: clamp(bounds.x + bounds.w + 0.014, 0.02, 0.98),
-    y: clamp(bounds.y - 0.022, 0.02, 0.98),
   };
 }
 
@@ -334,8 +326,7 @@ export default function HotspotLayer({
               return viewerElementPointToNormalizedPoint(viewer, topCenterX, topY, dims);
             })()
           : null;
-        const collapsed = primitive.priorityNoteCollapsed === true;
-        const expandedAnchor =
+        const anchor =
           priorityBubbleDraftAnchors[primitive.id] ??
           primitive.priorityNoteAnchor ??
           fallbackAnchor ??
@@ -343,10 +334,9 @@ export default function HotspotLayer({
             x: clamp(bounds.x + bounds.w / 2, 0.02, 0.98),
             y: clamp(bounds.y - 0.06, 0.02, 0.98),
           };
-        const collapsedAnchor = getCollapsedPriorityBubbleAnchor(bounds);
-        const anchor = collapsed ? (collapsedAnchor ?? expandedAnchor) : expandedAnchor;
         const anchorPoint = normalizedPointToViewerElementPoint(viewer, anchor, dims);
         if (!anchorPoint) return null;
+        const collapsed = primitive.priorityNoteCollapsed === true;
         const width = collapsed ? PRIORITY_BUBBLE_COLLAPSED_WIDTH : layout.width;
         const height = collapsed ? PRIORITY_BUBBLE_COLLAPSED_HEIGHT : layout.height;
         const x = anchorPoint.x - width / 2;
@@ -1333,26 +1323,26 @@ export default function HotspotLayer({
               >
                 <path
                   d={[
-                    `M ${priorityBubble.x + 7} ${priorityBubble.y}`,
-                    `H ${priorityBubble.x + priorityBubble.width - 7}`,
+                    `M ${priorityBubble.x + 10} ${priorityBubble.y}`,
+                    `H ${priorityBubble.x + priorityBubble.width - 10}`,
                     `Q ${priorityBubble.x + priorityBubble.width} ${priorityBubble.y} ${
                       priorityBubble.x + priorityBubble.width
-                    } ${priorityBubble.y + 7}`,
-                    `V ${priorityBubble.y + priorityBubble.height - 8}`,
+                    } ${priorityBubble.y + 10}`,
+                    `V ${priorityBubble.y + priorityBubble.height - 12}`,
                     `Q ${priorityBubble.x + priorityBubble.width} ${
-                      priorityBubble.y + priorityBubble.height
-                    } ${priorityBubble.x + priorityBubble.width - 7} ${
-                      priorityBubble.y + priorityBubble.height
+                      priorityBubble.y + priorityBubble.height - 2
+                    } ${priorityBubble.x + priorityBubble.width - 10} ${
+                      priorityBubble.y + priorityBubble.height - 2
                     }`,
-                    `H ${priorityBubble.x + 16}`,
-                    `L ${priorityBubble.x + 10} ${priorityBubble.y + priorityBubble.height + 6}`,
-                    `L ${priorityBubble.x + 11} ${priorityBubble.y + priorityBubble.height}`,
-                    `H ${priorityBubble.x + 7}`,
-                    `Q ${priorityBubble.x} ${priorityBubble.y + priorityBubble.height} ${
+                    `H ${priorityBubble.x + 24}`,
+                    `L ${priorityBubble.x + 14} ${priorityBubble.y + priorityBubble.height + 8}`,
+                    `L ${priorityBubble.x + 16} ${priorityBubble.y + priorityBubble.height - 2}`,
+                    `H ${priorityBubble.x + 10}`,
+                    `Q ${priorityBubble.x} ${priorityBubble.y + priorityBubble.height - 2} ${
                       priorityBubble.x
-                    } ${priorityBubble.y + priorityBubble.height - 8}`,
-                    `V ${priorityBubble.y + 7}`,
-                    `Q ${priorityBubble.x} ${priorityBubble.y} ${priorityBubble.x + 7} ${
+                    } ${priorityBubble.y + priorityBubble.height - 12}`,
+                    `V ${priorityBubble.y + 10}`,
+                    `Q ${priorityBubble.x} ${priorityBubble.y} ${priorityBubble.x + 10} ${
                       priorityBubble.y
                     }`,
                     'Z',
@@ -1363,12 +1353,12 @@ export default function HotspotLayer({
                   filter="url(#hotspot-glow)"
                 />
                 <text
-                  x={priorityBubble.x + 8}
-                  y={priorityBubble.y + 14}
+                  x={priorityBubble.x + 12}
+                  y={priorityBubble.y + 19}
                   fill="#b45309"
-                  fontSize={11}
+                  fontSize={14}
                   fontWeight={700}
-                  letterSpacing="1"
+                  letterSpacing="1.5"
                   style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
                   pointerEvents="none"
                 >
