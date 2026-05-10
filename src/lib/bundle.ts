@@ -54,7 +54,9 @@ export async function exportDnote(
   const pages: Record<string, MapWorkspace> = {};
   pages[String(map.pageIndex)] = map.workspace;
   for (const [key, meta] of Object.entries(map.pages ?? {})) {
-    pages[key] = meta.workspace;
+    if (key !== String(map.pageIndex)) {
+      pages[key] = meta.workspace;
+    }
   }
   const workspaceFile: WorkspaceFile = { pages };
 

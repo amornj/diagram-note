@@ -378,7 +378,6 @@ export default function HotspotLayer({
     viewportSize.w,
     viewportSize.h,
     viewTick,
-    compareOnly,
   ]);
 
   useEffect(() => {
@@ -933,7 +932,7 @@ export default function HotspotLayer({
       });
       priorityBubbleDragRef.current = null;
     },
-    [priorityBubbleDraftAnchors, updatePrimitive]
+    [priorityBubbleDraftAnchors, primitivesById, updatePrimitive]
   );
 
   const cancelPriorityBubbleDrag = useCallback(
