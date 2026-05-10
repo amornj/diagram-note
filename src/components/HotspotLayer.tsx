@@ -1430,6 +1430,20 @@ export default function HotspotLayer({
                     >
                       ◉
                     </text>
+                    <g
+                      transform={`translate(${priorityBubble.x + priorityBubble.width - 14} ${priorityBubble.y + 36})`}
+                      style={{ cursor: 'pointer' }}
+                      onPointerDown={(event) =>
+                        beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
+                      }
+                    >
+                      <circle cx={0} cy={0} r={8} fill="#fff8eb" stroke="#f59e0b" strokeWidth={1.5} />
+                      <path
+                        d="M 2,-4 L 3.5,-2.5 L -2.5,3 L -4,1.5 Z M 2,-4 L 3.5,-2.5 L 4.5,-3.5 Z M -2.5,3 L -4,1.5 L -5,2.5 L -3.5,4 Z"
+                        fill="#b45309"
+                        pointerEvents="none"
+                      />
+                    </g>
                   </>
                 )}
               </>
