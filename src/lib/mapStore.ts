@@ -363,6 +363,13 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     try {
       let maps = await idb.listMaps();
 
+      // Migrate: purge legacy bundled default maps (no longer shipped).
+      const legacyDefaults = maps.filter((m) => m.isDefault);
+      if (legacyDefaults.length > 0) {
+        await Promise.all(legacyDefaults.map((m) => idb.deleteMap(m.id)));
+        maps = maps.filter((m) => !m.isDefault);
+      }
+
       // Deduplicate: if multiple maps share the same pdfHash, keep the one
       // with isDefault:true, or else the most-recently updated one, and
       // delete the rest. This cleans up state left by the prior bug.
@@ -781,7 +788,6 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
 
   deleteMap: async (id) => {
     const map = get().maps.find((m) => m.id === id);
-    if (map?.isDefault) return;
     if (map?.sourceStoragePath) {
       await deleteMapSource(map.sourceStoragePath);
     }
