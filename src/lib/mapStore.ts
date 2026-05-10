@@ -16,7 +16,9 @@ import {
 const ACTIVE_MAP_STORAGE_KEY = 'diagram-note-active-map';
 const DEFAULT_MAP_ASSET = '/metabolic-map.pdf';
 const DEFAULT_MAP_NAME = 'metabolic-map';
+export const DEFAULT_MAP_ID = 'map-metabolic-default';
 export const FIXED_RENDER_SCALE = 1.5;
+const DEFAULT_MAP_SEEDED_KEY = 'diagram-note-default-map-seeded';
 
 function debugMap(message: string, details?: Record<string, unknown>) {
   if (details) console.info(`[map] ${message}`, details);
@@ -34,7 +36,7 @@ export interface MapStoreState {
   setActivePage: (pageIndex: number) => Promise<void>;
   createMapFromPdf: (
     file: File | Blob,
-    options?: { scale?: number; name?: string }
+    options?: { scale?: number; name?: string; id?: string }
   ) => Promise<string>;
   importDnoteMap: (args: {
     map: DiagramMap;
@@ -95,6 +97,16 @@ function saveActiveId(id: string | null) {
   if (typeof window === 'undefined') return;
   if (id) window.localStorage.setItem(ACTIVE_MAP_STORAGE_KEY, id);
   else window.localStorage.removeItem(ACTIVE_MAP_STORAGE_KEY);
+}
+
+function loadDefaultMapSeeded() {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(DEFAULT_MAP_SEEDED_KEY) === 'true';
+}
+
+function persistDefaultMapSeeded(value: boolean) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(DEFAULT_MAP_SEEDED_KEY, value ? 'true' : 'false');
 }
 
 async function loadMapPage(
@@ -177,6 +189,26 @@ async function loadMapPage(
       height: raster.height,
     },
   };
+}
+
+async function ensureCanonicalDefaultMapId(
+  maps: DiagramMap[]
+): Promise<DiagramMap[]> {
+  const defaultMaps = maps.filter((map) => map.isDefault);
+  if (defaultMaps.length === 0) return maps;
+  if (defaultMaps.some((map) => map.id === DEFAULT_MAP_ID)) return maps;
+
+  const defaultMap = defaultMaps.reduce((best, map) =>
+    map.updatedAt > best.updatedAt ? map : best
+  );
+  const renamed: DiagramMap = {
+    ...defaultMap,
+    id: DEFAULT_MAP_ID,
+    sortOrder: -1,
+  };
+  await idb.putMap(renamed);
+  await idb.deleteMap(defaultMap.id);
+  return idb.listMaps();
 }
 
 async function ensureRemoteSource(
@@ -386,11 +418,13 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     set({ loading: true });
     try {
       let maps = await idb.listMaps();
+      maps = await ensureCanonicalDefaultMapId(maps);
 
-      // Ensure the built-in default map always exists.
-      // This runs on first launch and also migrates existing users who had
-      // the subway map loaded without the isDefault flag.
-      if (!maps.some((m) => m.isDefault)) {
+      const hasDefaultMap = maps.some((m) => m.id === DEFAULT_MAP_ID || m.isDefault);
+      if (hasDefaultMap) persistDefaultMapSeeded(true);
+
+      // Seed the bundled metabolic map only once per device.
+      if (!hasDefaultMap && maps.length === 0 && !loadDefaultMapSeeded()) {
         // Pre-populate in-memory maps so createMapFromPdf's hash dedup check
         // can find maps that are already in IDB but not yet in state.
         set({ maps });
@@ -405,18 +439,16 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         const defaultId = await get().createMapFromPdf(file, {
           scale: FIXED_RENDER_SCALE,
           name: DEFAULT_MAP_NAME,
+          id: DEFAULT_MAP_ID,
         });
-        // Mark whichever map was created or found (by pdfHash) as the default.
         const target = await idb.getMap(defaultId);
-        if (target) {
-          await idb.putMap({ ...target, isDefault: true, sortOrder: -1 });
-        }
+        if (target) await idb.putMap({ ...target, isDefault: true, sortOrder: -1 });
+        persistDefaultMapSeeded(true);
         maps = await idb.listMaps();
       }
 
-      // Deduplicate: if multiple maps share the same pdfHash, keep the one
-      // with isDefault:true, or else the most-recently updated one, and
-      // delete the rest. This cleans up state left by the prior bug.
+      // Deduplicate: if multiple maps share the same pdfHash, keep the
+      // canonical bundled metabolic map id, or else the most-recently updated one.
       const byHash = new Map<string, DiagramMap[]>();
       for (const m of maps) {
         if (!m.pdfHash) continue;
@@ -428,7 +460,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       for (const group of byHash.values()) {
         if (group.length <= 1) continue;
         const keep =
-          group.find((m) => m.isDefault) ??
+          group.find((m) => m.id === DEFAULT_MAP_ID) ??
           group.reduce((best, m) => (m.updatedAt > best.updatedAt ? m : best));
         for (const m of group) {
           if (m.id !== keep.id) dupeIdsToDelete.push(m.id);
@@ -439,26 +471,20 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         maps = maps.filter((m) => !dupeIdsToDelete.includes(m.id));
       }
 
-      // Default map always sorts first; others by sortOrder then updatedAt.
       maps.sort((a, b) => {
-        if (a.isDefault && !b.isDefault) return -1;
-        if (!a.isDefault && b.isDefault) return 1;
         const oa = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
         const ob = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
         return oa !== ob ? oa - ob : b.updatedAt - a.updatedAt;
       });
 
-      const mostRecentNonDefault = [...maps]
-        .filter((m) => !m.isDefault)
+      const mostRecent = [...maps]
         .sort((a, b) => {
           const aRecent = a.lastOpenedAt ?? a.updatedAt ?? a.createdAt;
           const bRecent = b.lastOpenedAt ?? b.updatedAt ?? b.createdAt;
           return bRecent - aRecent;
         })[0];
-      const defaultMap = maps.find((m) => m.isDefault) ?? null;
       const preferredIds = [
-        mostRecentNonDefault?.id ?? null,
-        defaultMap?.id ?? null,
+        mostRecent?.id ?? null,
         ...maps.map((m) => m.id),
       ].filter((id, index, items): id is string => Boolean(id) && items.indexOf(id) === index);
       set({ maps, activeMapId: preferredIds[0] ?? null, loading: false, initialized: true });
@@ -632,7 +658,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       return existing.id;
     }
 
-    const id = `map-${Math.random().toString(36).slice(2, 12)}`;
+    const id = options?.id ?? `map-${Math.random().toString(36).slice(2, 12)}`;
     const blob = file instanceof Blob ? file : new Blob([file]);
     const now = Date.now();
     const initialMeta: PageMeta = {
@@ -832,7 +858,6 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
 
   deleteMap: async (id) => {
     const map = get().maps.find((m) => m.id === id);
-    if (map?.isDefault) return;
     if (map?.sourceStoragePath) {
       await deleteMapSource(map.sourceStoragePath);
     }

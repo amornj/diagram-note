@@ -12,7 +12,7 @@ import {
   useEditorStore,
   type OverlayFilterState,
 } from './lib/store';
-import { loadMapPageView, useMapStore } from './lib/mapStore';
+import { DEFAULT_MAP_ID, loadMapPageView, useMapStore } from './lib/mapStore';
 import { getPrimitiveBounds } from './lib/workspace';
 import { EMPTY_WORKSPACE } from './lib/workspace';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -36,7 +36,14 @@ function dedupByHash(maps: DiagramMap[]): DiagramMap[] {
     if (!m.pdfHash) continue;
     const prev = seen.get(m.pdfHash);
     if (!prev) { seen.set(m.pdfHash, m); continue; }
-    const keep = prev.isDefault ? prev : m.isDefault ? m : (m.updatedAt >= prev.updatedAt ? m : prev);
+    const keep =
+      prev.id === DEFAULT_MAP_ID
+        ? prev
+        : m.id === DEFAULT_MAP_ID
+          ? m
+          : m.updatedAt >= prev.updatedAt
+            ? m
+            : prev;
     dupeIds.add(keep === prev ? m.id : prev.id);
     seen.set(m.pdfHash, keep);
   }
@@ -73,6 +80,33 @@ function getWorkspaceForMapPage(map: DiagramMap, pageIndex: number): MapWorkspac
   return map.pages?.[pageIndex]?.workspace ?? map.workspace ?? EMPTY_WORKSPACE;
 }
 
+function normalizeDefaultMapIds(maps: DiagramMap[]): DiagramMap[] {
+  return maps.map((map) =>
+    map.isDefault && map.id !== DEFAULT_MAP_ID
+      ? { ...map, id: DEFAULT_MAP_ID, sortOrder: -1 }
+      : map
+  );
+}
+
+function workspaceContentScore(workspace: MapWorkspace): number {
+  return workspace.primitives.reduce((score, primitive) => {
+    const noteCount = (primitive.notes ?? []).filter((note) => note.content.trim()).length;
+    const aliasCount = primitive.aliases?.length ?? 0;
+    const tagCount = primitive.tags?.length ?? 0;
+    return score + 10 + noteCount * 3 + aliasCount + tagCount;
+  }, 0);
+}
+
+function mapContentScore(map: DiagramMap): number {
+  if (map.pages) {
+    return Object.values(map.pages).reduce(
+      (score, page) => score + workspaceContentScore(page.workspace),
+      0
+    );
+  }
+  return workspaceContentScore(map.workspace ?? EMPTY_WORKSPACE);
+}
+
 async function backfillCloudSourcePaths(
   uid: string,
   maps: DiagramMap[]
@@ -81,7 +115,7 @@ async function backfillCloudSourcePaths(
   const nextMaps = [...maps];
   for (let index = 0; index < nextMaps.length; index += 1) {
     const map = nextMaps[index];
-    if (map.isDefault || map.sourceStoragePath) continue;
+    if (map.sourceStoragePath) continue;
     const sourceBlob = await idb.getPdfBlob(map.id);
     if (!sourceBlob) continue;
     let sourceStoragePath: string | null = null;
@@ -118,8 +152,16 @@ async function mergeCloudMaps(
   const localMaps = useMapStore.getState().maps;
   const cloudIds = new Set(cloud.map((map) => map.id));
   const toDelete = localMaps.filter((map) => {
-    if (map.isDefault || cloudIds.has(map.id)) return false;
+    if (cloudIds.has(map.id)) return false;
     const previous = previousCloudSnapshot.get(map.id);
+    if (
+      map.id === DEFAULT_MAP_ID &&
+      previous === undefined &&
+      cloud.length > 0 &&
+      mapContentScore(map) === 0
+    ) {
+      return true;
+    }
     return previous !== undefined && previous === snapshotMap(map);
   });
   if (toDelete.length > 0) {
@@ -137,6 +179,14 @@ async function mergeCloudMaps(
     if (previous === undefined) {
       // No prior cloud snapshot (e.g. first sync after login): accept cloud data
       // if it's newer, so cross-device changes are pulled in on login.
+      if (
+        cm.id === DEFAULT_MAP_ID &&
+        local.id === DEFAULT_MAP_ID &&
+        cm.pdfHash === local.pdfHash &&
+        mapContentScore(cm) > mapContentScore(local)
+      ) {
+        return true;
+      }
       return cm.updatedAt > local.updatedAt;
     }
     const localMatchesLastCloud = previous === snapshotMap(local);
@@ -234,9 +284,10 @@ function useCloudSync(): SyncStatus {
         return;
       }
       if (cloud && cloud.length > 0) {
+        const normalizedCloud = dedupByHash(normalizeDefaultMapIds(cloud));
         const previous = persistedRef.current;
-        await mergeCloudMaps(cloud, previous);
-        persistedRef.current = snapshotMaps(cloud);
+        await mergeCloudMaps(normalizedCloud, previous);
+        persistedRef.current = snapshotMaps(normalizedCloud);
       } else if (!cloud) {
         // First login — push local maps to cloud
         const localMaps = await backfillCloudSourcePaths(
@@ -263,7 +314,7 @@ function useCloudSync(): SyncStatus {
     const unsubscribe = subscribeCloudMaps(user.uid, {
       onData: (cloud) => {
         setStatus('loading');
-        const nextCloud = cloud ?? [];
+        const nextCloud = cloud ? dedupByHash(normalizeDefaultMapIds(cloud)) : [];
         const previous = persistedRef.current;
         void mergeCloudMaps(nextCloud, previous).then(() => {
           persistedRef.current = snapshotMaps(nextCloud);

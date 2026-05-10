@@ -343,35 +343,33 @@ export default function LeftPane({
                     )}
                   </div>
                 )}
-                {!map.isDefault && (
-                  confirmDeleteId === map.id ? (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => {
-                          deleteMap(map.id);
-                          setConfirmDeleteId(null);
-                        }}
-                        className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
+                {confirmDeleteId === map.id ? (
+                  <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setConfirmDeleteId(map.id)}
-                      className="rounded-full p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
-                      aria-label={`Delete ${map.name}`}
-                      title="Delete map"
+                      onClick={() => {
+                        deleteMap(map.id);
+                        setConfirmDeleteId(null);
+                      }}
+                      className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white"
                     >
-                      <Trash2 size={12} />
+                      Delete
                     </button>
-                  )
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteId(map.id)}
+                    className="rounded-full p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                    aria-label={`Delete ${map.name}`}
+                    title="Delete map"
+                  >
+                    <Trash2 size={12} />
+                  </button>
                 )}
               </div>
             );
