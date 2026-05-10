@@ -703,7 +703,14 @@ function MapPage() {
   }, [comparePaneData, compareSelectedPrimitiveId, compareFocusNonce]);
 
   const mapOptions = useMemo(
-    () => maps.map((map) => ({ id: map.id, name: map.name })),
+    () =>
+      [...maps]
+        .sort((a, b) => {
+          const aRecent = a.lastOpenedAt ?? a.updatedAt ?? a.createdAt;
+          const bRecent = b.lastOpenedAt ?? b.updatedAt ?? b.createdAt;
+          return bRecent - aRecent;
+        })
+        .map((map) => ({ id: map.id, name: map.name })),
     [maps]
   );
 
@@ -1038,7 +1045,13 @@ function MapPage() {
               leftInset={leftSidebarCollapsed ? 0 : leftPaneWidth}
               splitMode={splitMode}
               onToggleSplitMode={toggleSplitMode}
-              mapOptions={maps.map((map) => ({ id: map.id, name: map.name }))}
+              mapOptions={[...maps]
+                .sort((a, b) => {
+                  const aRecent = a.lastOpenedAt ?? a.updatedAt ?? a.createdAt;
+                  const bRecent = b.lastOpenedAt ?? b.updatedAt ?? b.createdAt;
+                  return bRecent - aRecent;
+                })
+                .map((map) => ({ id: map.id, name: map.name }))}
               selectedMapId={activeMap.id}
               onSelectMap={(mapId) => {
                 void useMapStore.getState().setActiveMap(mapId);
