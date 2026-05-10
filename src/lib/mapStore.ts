@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { DiagramMap, MapWorkspace, PageMeta } from '../types';
+import type { DiagramMap, MapWorkspace, PageMeta, Primitive } from '../types';
 import { EMPTY_WORKSPACE } from './workspace';
 import * as idb from './idb';
 import { detectSourceType, rasterizeSource } from './pdf';
@@ -57,6 +57,12 @@ export interface MapStoreState {
   renameMap: (id: string, name: string) => Promise<void>;
   reorderMaps: (fromIndex: number, toIndex: number) => Promise<void>;
   saveActiveWorkspace: (workspace: MapWorkspace) => Promise<void>;
+  patchMapPrimitive: (
+    mapId: string,
+    pageIndex: number,
+    primitiveId: string,
+    patch: Partial<Primitive>
+  ) => Promise<void>;
 }
 
 export interface MapPageView {
@@ -859,6 +865,22 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     set({
       maps: get().maps.map((m) => (m.id === id ? updated : m)),
     });
+  },
+
+  patchMapPrimitive: async (mapId, pageIndex, primitiveId, patch) => {
+    const map = await idb.getMap(mapId);
+    if (!map) return;
+    const updated = updatePrimitiveOnPage(map, pageIndex, primitiveId, (primitive) => ({
+      ...primitive,
+      ...patch,
+    }));
+    await idb.putMap(updated);
+    set({
+      maps: get().maps.map((m) => (m.id === mapId ? updated : m)),
+    });
+    if (get().activeMapId === mapId && updated.pageIndex === pageIndex) {
+      useEditorStore.getState().setWorkspace(getPageMeta(updated, pageIndex).workspace);
+    }
   },
 }));
 

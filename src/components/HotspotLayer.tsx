@@ -61,6 +61,10 @@ function getPriorityNote(primitive: Primitive | null) {
   return primitive?.notes?.find((note) => note.isPriority && note.content.trim()) ?? null;
 }
 
+function getPriorityNoteIndex(primitive: Primitive | null) {
+  return primitive?.notes?.findIndex((note) => note.isPriority && note.content.trim()) ?? -1;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -136,6 +140,8 @@ export default function HotspotLayer({
   const [viewTick, setViewTick] = useState(0);
   const [viewportAnimating, setViewportAnimating] = useState(false);
   const [draftPointer, setDraftPointer] = useState<Point | null>(null);
+  const [editingPriorityPrimitiveId, setEditingPriorityPrimitiveId] = useState<string | null>(null);
+  const [editingPriorityDraft, setEditingPriorityDraft] = useState('');
   const animationIdleTimerRef = useRef<number | null>(null);
   const dragRef = useRef<{
     pointerId: number;
@@ -410,6 +416,11 @@ export default function HotspotLayer({
     setPriorityBubbleDraftAnchors({});
     priorityBubbleDragRef.current = null;
   }, [selectedPrimitiveId]);
+
+  useEffect(() => {
+    setEditingPriorityPrimitiveId(null);
+    setEditingPriorityDraft('');
+  }, [workspace.primitives, compareOnly]);
 
   const simplifyOverlay = viewportAnimating && editorMode === 'none';
 
@@ -800,6 +811,57 @@ export default function HotspotLayer({
     },
     [compareOnly, onComparePrimitivePatch, updatePrimitive]
   );
+
+  const beginPriorityBubbleEdit = useCallback(
+    (
+      event:
+        | React.MouseEvent<SVGRectElement | SVGTextElement | SVGGElement>
+        | React.PointerEvent<SVGRectElement | SVGGElement>,
+      primitiveId: string
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const primitive = primitivesById.get(primitiveId);
+      const note = getPriorityNote(primitive ?? null);
+      if (!note) return;
+      setEditingPriorityPrimitiveId(primitiveId);
+      setEditingPriorityDraft(note.content);
+    },
+    [primitivesById]
+  );
+
+  const commitPriorityBubbleEdit = useCallback(() => {
+    if (!editingPriorityPrimitiveId) return;
+    const primitive = primitivesById.get(editingPriorityPrimitiveId);
+    const noteIndex = getPriorityNoteIndex(primitive ?? null);
+    if (!primitive || noteIndex < 0) {
+      setEditingPriorityPrimitiveId(null);
+      setEditingPriorityDraft('');
+      return;
+    }
+    const nextContent = editingPriorityDraft.trim();
+    const currentNotes = primitive.notes ?? [];
+    if (currentNotes[noteIndex]?.content !== nextContent) {
+      const nextNotes = currentNotes.map((note, index) =>
+        index === noteIndex ? { ...note, content: nextContent } : note
+      );
+      const patch = { notes: nextNotes };
+      if (compareOnly) {
+        onComparePrimitivePatch?.(editingPriorityPrimitiveId, patch);
+      } else {
+        updatePrimitive(editingPriorityPrimitiveId, patch);
+      }
+    }
+    setEditingPriorityPrimitiveId(null);
+    setEditingPriorityDraft('');
+  }, [
+    compareOnly,
+    editingPriorityDraft,
+    editingPriorityPrimitiveId,
+    onComparePrimitivePatch,
+    primitivesById,
+    updatePrimitive,
+  ]);
 
   const continuePriorityBubbleDrag = useCallback(
     (event: React.PointerEvent<SVGRectElement>) => {
@@ -1311,7 +1373,10 @@ export default function HotspotLayer({
                 stroke="#f59e0b"
                 strokeWidth={2}
                 filter="url(#hotspot-glow)"
-                pointerEvents="none"
+                style={{ cursor: 'text' }}
+                onDoubleClick={(event) =>
+                  beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
+                }
               />
             )}
             {!compareOnly && (
@@ -1384,7 +1449,9 @@ export default function HotspotLayer({
                   fontSize={12}
                   fontWeight={600}
                   style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
-                  pointerEvents="none"
+                  onDoubleClick={(event) =>
+                    beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
+                  }
                 >
                   {priorityBubble.lines.map((line, index) => (
                     <tspan
@@ -1396,6 +1463,52 @@ export default function HotspotLayer({
                     </tspan>
                   ))}
                 </text>
+                {editingPriorityPrimitiveId === priorityBubble.primitiveId && (
+                  <foreignObject
+                    x={priorityBubble.x + 10}
+                    y={priorityBubble.y + 18}
+                    width={priorityBubble.width - 20}
+                    height={priorityBubble.height - 28}
+                  >
+                    <textarea
+                      autoFocus
+                      value={editingPriorityDraft}
+                      onChange={(event) => setEditingPriorityDraft(event.target.value)}
+                      onBlur={commitPriorityBubbleEdit}
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                      }}
+                      onDoubleClick={(event) => {
+                        event.stopPropagation();
+                      }}
+                      onKeyDown={(event) => {
+                        event.stopPropagation();
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          setEditingPriorityPrimitiveId(null);
+                          setEditingPriorityDraft('');
+                        }
+                        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                          event.preventDefault();
+                          commitPriorityBubbleEdit();
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        resize: 'none',
+                        border: 'none',
+                        outline: 'none',
+                        background: '#fff8eb',
+                        color: '#7c2d12',
+                        fontFamily: 'system-ui, -apple-system, sans-serif',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        lineHeight: '16px',
+                      }}
+                    />
+                  </foreignObject>
+                )}
               </>
             )}
           </g>

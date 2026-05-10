@@ -390,8 +390,13 @@ function ComparePane({
         onLoadedRef.current({ mapId, mapName: current.mapName, workspace });
         return { ...current, workspace };
       });
+      if (mapId) {
+        void useMapStore
+          .getState()
+          .patchMapPrimitive(mapId, pageIndex, id, patch);
+      }
     },
-    [mapId]
+    [mapId, pageIndex]
   );
 
   const toggleAllPriorityNotesCollapsed = useCallback(() => {
