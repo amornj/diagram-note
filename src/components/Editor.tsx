@@ -111,6 +111,7 @@ export default function Editor({
   >(null);
   const [groupBuilderFocusSignal, setGroupBuilderFocusSignal] = useState(0);
   const [zoomPercent, setZoomPercent] = useState(100);
+  const [hintCollapsed, setHintCollapsed] = useState(false);
   const [panelOffsets, setPanelOffsets] = useState<Record<DraggablePanelKey, PanelOffset>>({
     search: DEFAULT_PANEL_OFFSET,
     map: DEFAULT_PANEL_OFFSET,
@@ -1108,11 +1109,30 @@ export default function Editor({
       <div
         className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3"
       >
-        <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
-          {compareOnly
-            ? 'M maps · 9 lock · P pin · S boxes · G groups · R regions · N notes cycle · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
-            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · M maps · | split · S boxes · G groups · R regions · N notes cycle · \\ overlays · ? help'}
-        </div>
+        {hintCollapsed ? (
+          <button
+            onClick={() => setHintCollapsed(false)}
+            className="flex h-5 w-5 items-center justify-center rounded border border-white/10 bg-black/50 text-white/50 backdrop-blur transition hover:text-white/90"
+            title="Show hint bar"
+          >
+            <span style={{ fontSize: 8, lineHeight: 1 }}>▼</span>
+          </button>
+        ) : (
+          <div className="flex items-center rounded-lg border border-white/10 bg-black/50 backdrop-blur">
+            <span className="pointer-events-none px-3 py-1.5 text-[11px] text-white/70">
+              {compareOnly
+                ? 'M maps · 9 lock · P pin · S boxes · G groups · R regions · N notes cycle · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
+                : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · M maps · | split · S boxes · G groups · R regions · N notes cycle · \\ overlays · ? help'}
+            </span>
+            <button
+              onClick={() => setHintCollapsed(true)}
+              className="px-2 py-1.5 text-white/40 transition hover:text-white/80"
+              title="Collapse hint bar"
+            >
+              <span style={{ fontSize: 8, lineHeight: 1 }}>▶</span>
+            </button>
+          </div>
+        )}
         {compareOnly && onComparePageChange && pageCount > 1 ? (
           <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur">
             <button
