@@ -1383,7 +1383,7 @@ export default function HotspotLayer({
                 }
               />
             )}
-            {!compareOnly && (
+            {!compareOnly && !isEditing && (
               <>
                 {!priorityBubble.collapsed && (
                   <>
@@ -1427,25 +1427,27 @@ export default function HotspotLayer({
             )}
             {!priorityBubble.collapsed && (
               <>
-                <rect
-                  x={priorityBubble.x + (priorityBubble.width - PRIORITY_BUBBLE_HANDLE_WIDTH) / 2}
-                  y={priorityBubble.y + 8}
-                  width={PRIORITY_BUBBLE_HANDLE_WIDTH}
-                  height={PRIORITY_BUBBLE_HANDLE_HEIGHT}
-                  rx={PRIORITY_BUBBLE_HANDLE_HEIGHT / 2}
-                  fill="#f59e0b"
-                  opacity={0.45}
-                  style={{ cursor: compareOnly ? 'default' : 'grab' }}
-                  onPointerDown={(event) =>
-                    beginPriorityBubbleDrag(
-                      event,
-                      priorityBubble.primitiveId
-                    )
-                  }
-                  onPointerMove={continuePriorityBubbleDrag}
-                  onPointerUp={endPriorityBubbleDrag}
-                  onPointerCancel={cancelPriorityBubbleDrag}
-                />
+                {!isEditing && (
+                  <rect
+                    x={priorityBubble.x + (priorityBubble.width - PRIORITY_BUBBLE_HANDLE_WIDTH) / 2}
+                    y={priorityBubble.y + 8}
+                    width={PRIORITY_BUBBLE_HANDLE_WIDTH}
+                    height={PRIORITY_BUBBLE_HANDLE_HEIGHT}
+                    rx={PRIORITY_BUBBLE_HANDLE_HEIGHT / 2}
+                    fill="#f59e0b"
+                    opacity={0.45}
+                    style={{ cursor: compareOnly ? 'default' : 'grab' }}
+                    onPointerDown={(event) =>
+                      beginPriorityBubbleDrag(
+                        event,
+                        priorityBubble.primitiveId
+                      )
+                    }
+                    onPointerMove={continuePriorityBubbleDrag}
+                    onPointerUp={endPriorityBubbleDrag}
+                    onPointerCancel={cancelPriorityBubbleDrag}
+                  />
+                )}
                 {!isEditing && (
                   <text
                     x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
@@ -1472,9 +1474,9 @@ export default function HotspotLayer({
                 {isEditing && (
                   <foreignObject
                     x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
-                    y={priorityBubble.y + 12}
+                    y={priorityBubble.y + 8}
                     width={priorityBubble.width - PRIORITY_BUBBLE_PADDING_X * 2}
-                    height={priorityBubble.height - 18}
+                    height={priorityBubble.height - 12}
                   >
                     <textarea
                       autoFocus
@@ -1503,7 +1505,7 @@ export default function HotspotLayer({
                         width: '100%',
                         height: '100%',
                         margin: '0',
-                        padding: '10px 0 14px 0',
+                        padding: '14px 0 14px 0',
                         boxSizing: 'border-box',
                         resize: 'none',
                         border: 'none',

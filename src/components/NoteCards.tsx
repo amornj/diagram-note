@@ -16,6 +16,15 @@ function loadSavedHeight() {
   return Number.isFinite(raw) ? Math.max(96, raw) : 128;
 }
 
+function ensurePriorityNote(notes: NoteCard[]) {
+  if (notes.length === 0) return notes;
+  if (notes.some((note) => note.isPriority === true)) return notes;
+  return notes.map((note, index) => ({
+    ...note,
+    isPriority: index === 0,
+  }));
+}
+
 export default function NoteCards({
   notes,
   onChange,
@@ -44,14 +53,14 @@ export default function NoteCards({
   const handleNext = () => setCurrentIndex((i) => Math.min(notes.length - 1, i + 1));
 
   const handleAdd = () => {
-    const nextNotes = [...notes, { name: '', content: '' }];
+    const nextNotes = ensurePriorityNote([...notes, { name: '', content: '' }]);
     onChange(nextNotes);
     setCurrentIndex(nextNotes.length - 1);
   };
 
   const handleDelete = () => {
     if (notes.length === 0) return;
-    const nextNotes = notes.filter((_, i) => i !== currentIndex);
+    const nextNotes = ensurePriorityNote(notes.filter((_, i) => i !== currentIndex));
     onChange(nextNotes);
     const nextIndex = Math.max(0, Math.min(currentIndex, nextNotes.length - 1));
     setCurrentIndex(nextIndex);
@@ -70,13 +79,13 @@ export default function NoteCards({
   const handleUpdateContent = (value: string) => {
     if (notes.length === 0) {
       setEmptyDraft(value);
-      onChange([{ name: '', content: value }]);
+      onChange([{ name: '', content: value, isPriority: true }]);
       setCurrentIndex(0);
       return;
     }
-    const nextNotes = notes.map((n, i) =>
+    const nextNotes = ensurePriorityNote(notes.map((n, i) =>
       i === currentIndex ? { ...n, content: value } : n
-    );
+    ));
     onChange(nextNotes);
   };
 
