@@ -47,6 +47,10 @@ function snapshotMaps(maps: DiagramMap[]) {
   return new Map(maps.map((map) => [map.id, JSON.stringify(mapForCloud(map))]));
 }
 
+function snapshotMap(map: DiagramMap) {
+  return JSON.stringify(mapForCloud(map));
+}
+
 function stripUndefinedDeep<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((entry) => stripUndefinedDeep(entry)) as T;
@@ -107,10 +111,17 @@ async function backfillCloudSourcePaths(
   return nextMaps;
 }
 
-async function mergeCloudMaps(cloud: DiagramMap[]) {
+async function mergeCloudMaps(
+  cloud: DiagramMap[],
+  previousCloudSnapshot: Map<string, string>
+) {
   const localMaps = useMapStore.getState().maps;
   const cloudIds = new Set(cloud.map((map) => map.id));
-  const toDelete = localMaps.filter((map) => !map.isDefault && !cloudIds.has(map.id));
+  const toDelete = localMaps.filter((map) => {
+    if (map.isDefault || cloudIds.has(map.id)) return false;
+    const previous = previousCloudSnapshot.get(map.id);
+    return previous !== undefined && previous === snapshotMap(map);
+  });
   if (toDelete.length > 0) {
     await Promise.all(toDelete.map((map) => idb.deleteMap(map.id)));
   }
@@ -121,7 +132,11 @@ async function mergeCloudMaps(cloud: DiagramMap[]) {
   const localById = new Map(survivingLocalMaps.map((m) => [m.id, m]));
   const toMerge = cloud.filter((cm) => {
     const local = localById.get(cm.id);
-    return !local || cm.updatedAt > local.updatedAt;
+    if (!local) return true;
+    const previous = previousCloudSnapshot.get(cm.id);
+    const localMatchesLastCloud =
+      previous !== undefined && previous === snapshotMap(local);
+    return localMatchesLastCloud && cm.updatedAt > local.updatedAt;
   });
   if (toMerge.length === 0 && toDelete.length === 0) return;
 
@@ -215,8 +230,9 @@ function useCloudSync(): SyncStatus {
         return;
       }
       if (cloud && cloud.length > 0) {
+        const previous = persistedRef.current;
+        await mergeCloudMaps(cloud, previous);
         persistedRef.current = snapshotMaps(cloud);
-        await mergeCloudMaps(cloud);
       } else if (!cloud) {
         // First login — push local maps to cloud
         const localMaps = await backfillCloudSourcePaths(
@@ -244,8 +260,11 @@ function useCloudSync(): SyncStatus {
       onData: (cloud) => {
         setStatus('loading');
         const nextCloud = cloud ?? [];
-        persistedRef.current = snapshotMaps(nextCloud);
-        void mergeCloudMaps(nextCloud).then(() => setStatus('synced'));
+        const previous = persistedRef.current;
+        void mergeCloudMaps(nextCloud, previous).then(() => {
+          persistedRef.current = snapshotMaps(nextCloud);
+          setStatus('synced');
+        });
       },
       onError: (error) => {
         console.error('[cloud] subscribe failed:', error);
