@@ -47,7 +47,7 @@ function persistPrimitiveSortMode(mode: PrimitiveSortMode) {
   window.localStorage.setItem(PRIMITIVE_SORT_STORAGE_KEY, mode);
 }
 
-function sortMaps(maps: DiagramMap[], mode: MapSortMode) {
+function sortMaps(maps: DiagramMap[], mode: MapSortMode, activeMapId: string | null) {
   const next = [...maps];
   next.sort((a, b) => {
     switch (mode) {
@@ -61,6 +61,8 @@ function sortMaps(maps: DiagramMap[], mode: MapSortMode) {
         return b.createdAt - a.createdAt;
       case 'recent':
       default: {
+        if (a.id === activeMapId && b.id !== activeMapId) return -1;
+        if (a.id !== activeMapId && b.id === activeMapId) return 1;
         const aRecent = a.lastOpenedAt ?? a.updatedAt ?? a.createdAt;
         const bRecent = b.lastOpenedAt ?? b.updatedAt ?? b.createdAt;
         return bRecent - aRecent;
@@ -154,7 +156,10 @@ export default function LeftPane({
     return next;
   }, [effectiveWorkspace.primitives, activeTagFilter, primitiveSortMode]);
 
-  const sortedMaps = useMemo(() => sortMaps(maps, mapSortMode), [maps, mapSortMode]);
+  const sortedMaps = useMemo(
+    () => sortMaps(maps, mapSortMode, activeMapId),
+    [maps, mapSortMode, activeMapId]
+  );
 
   const setAndPersistSortMode = (mode: MapSortMode) => {
     setMapSortMode(mode);
