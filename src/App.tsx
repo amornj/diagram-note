@@ -134,8 +134,12 @@ async function mergeCloudMaps(
     const local = localById.get(cm.id);
     if (!local) return true;
     const previous = previousCloudSnapshot.get(cm.id);
-    const localMatchesLastCloud =
-      previous !== undefined && previous === snapshotMap(local);
+    if (previous === undefined) {
+      // No prior cloud snapshot (e.g. first sync after login): accept cloud data
+      // if it's newer, so cross-device changes are pulled in on login.
+      return cm.updatedAt > local.updatedAt;
+    }
+    const localMatchesLastCloud = previous === snapshotMap(local);
     return localMatchesLastCloud && cm.updatedAt > local.updatedAt;
   });
   if (toMerge.length === 0 && toDelete.length === 0) return;

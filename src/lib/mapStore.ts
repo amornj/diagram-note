@@ -477,6 +477,27 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       requestedMapId: id,
       currentActiveMapId: get().activeMapId,
     });
+
+    // Flush any pending workspace edits for the current map before switching.
+    // The debounce subscription clears its timer when setWorkspace fires for the
+    // new map, so without this the current map's unsaved edits would be lost.
+    const currentId = get().activeMapId;
+    if (currentId && currentId !== id) {
+      const currentWorkspace = useEditorStore.getState().workspace;
+      const currentMapInDb = await idb.getMap(currentId);
+      if (currentMapInDb) {
+        const currentMeta = getPageMeta(currentMapInDb, currentMapInDb.pageIndex);
+        const flushed = withPageMeta(currentMapInDb, currentMapInDb.pageIndex, {
+          ...currentMeta,
+          workspace: currentWorkspace,
+        });
+        await idb.putMap(flushed);
+        set({
+          maps: get().maps.map((m) => (m.id === currentId ? flushed : m)),
+        });
+      }
+    }
+
     saveActiveId(id);
     if (!id) {
       setObjectUrl(null);
