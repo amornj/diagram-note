@@ -399,7 +399,7 @@ function ComparePane({
     [mapId, pageIndex]
   );
 
-  const toggleAllPriorityNotesCollapsed = useCallback(() => {
+  const setAllPriorityNotesCollapsed = useCallback((collapsed: boolean) => {
     setState((current) => {
       const priorityPrimitives = current.workspace.primitives.filter(
         (primitive) =>
@@ -407,15 +407,12 @@ function ComparePane({
           (primitive.notes ?? []).some((note) => note.isPriority && note.content.trim())
       );
       if (priorityPrimitives.length === 0) return current;
-      const shouldCollapse = priorityPrimitives.some(
-        (primitive) => primitive.priorityNoteCollapsed !== true
-      );
       const priorityIds = new Set(priorityPrimitives.map((primitive) => primitive.id));
       const workspace = {
         ...current.workspace,
         primitives: current.workspace.primitives.map((primitive) =>
           priorityIds.has(primitive.id)
-            ? { ...primitive, priorityNoteCollapsed: shouldCollapse }
+            ? { ...primitive, priorityNoteCollapsed: collapsed }
             : primitive
         ),
       };
@@ -476,7 +473,7 @@ function ComparePane({
           compareVisibleOverlayFilters={visibleOverlayFilters}
           onToggleCompareOverlays={onToggleOverlays}
           onToggleCompareOverlayFilter={onToggleOverlayFilter}
-          onToggleCompareAllPriorityNotesCollapsed={toggleAllPriorityNotesCollapsed}
+          onSetCompareAllPriorityNotesCollapsed={setAllPriorityNotesCollapsed}
           onComparePrimitivePatch={patchWorkspacePrimitive}
           compareZoomLocked={zoomLocked}
           onToggleCompareZoomLock={onToggleZoomLock}

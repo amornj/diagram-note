@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import OpenSeadragon from 'openseadragon';
 import {
   ChevronLeft,
@@ -58,7 +58,7 @@ interface EditorProps {
   onToggleCompareOverlays?: () => void;
   compareVisibleOverlayFilters?: OverlayFilterState;
   onToggleCompareOverlayFilter?: (key: keyof OverlayFilterState) => void;
-  onToggleCompareAllPriorityNotesCollapsed?: () => void;
+  onSetCompareAllPriorityNotesCollapsed?: (collapsed: boolean) => void;
   onComparePrimitivePatch?: (id: string, patch: { priorityNoteCollapsed?: boolean }) => void;
   compareZoomLocked?: boolean;
   onToggleCompareZoomLock?: () => void;
@@ -88,7 +88,7 @@ export default function Editor({
   onToggleCompareOverlays,
   compareVisibleOverlayFilters = DEFAULT_OVERLAY_FILTERS,
   onToggleCompareOverlayFilter,
-  onToggleCompareAllPriorityNotesCollapsed,
+  onSetCompareAllPriorityNotesCollapsed,
   onComparePrimitivePatch,
   compareZoomLocked = false,
   onToggleCompareZoomLock,
@@ -149,15 +149,17 @@ export default function Editor({
     (s) => s.toggleShowAllOverlayFilters
   );
   const toggleOverlayFilter = useEditorStore((s) => s.toggleOverlayFilter);
-  const toggleAllPriorityNoteCollapsed = useEditorStore(
-    (s) => s.toggleAllPriorityNoteCollapsed
+  const setAllPriorityNoteCollapsed = useEditorStore(
+    (s) => s.setAllPriorityNoteCollapsed
   );
   const activeMapId = useMapStore((s) => s.activeMapId);
   const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
+  const storeWorkspace = useEditorStore((s) => s.workspace);
   const effectiveZoomLocked = compareOnly ? compareZoomLocked : zoomLocked;
   const effectivePanLocked = compareOnly ? comparePanLocked : panLocked;
   const allOverlayFiltersVisible = Object.values(visibleOverlayFilters).every(Boolean);
   const allCompareOverlayFiltersVisible = Object.values(compareVisibleOverlayFilters).every(Boolean);
+  const effectiveWorkspace = compareOnly ? (workspaceOverride ?? storeWorkspace) : storeWorkspace;
 
   useEffect(() => {
     compareFiltersRef.current = compareVisibleOverlayFilters;
@@ -305,6 +307,55 @@ export default function Editor({
     window.dispatchEvent(new Event('map-search-clear'));
     containerRef.current?.focus({ preventScroll: true });
   }, [setEditorMode, setLeftSidebarCollapsed, setSelectedPrimitiveId]);
+
+  const priorityNotePrimitives = useMemo(
+    () =>
+      effectiveWorkspace.primitives.filter(
+        (primitive: MapWorkspace['primitives'][number]) =>
+          primitive.showPriorityNote === true &&
+          (primitive.notes ?? []).some((note) => note.isPriority && note.content.trim())
+      ),
+    [effectiveWorkspace]
+  );
+
+  const setPriorityNotesCollapsedState = useCallback(
+    (collapsed: boolean) => {
+      if (compareOnly) {
+        onSetCompareAllPriorityNotesCollapsed?.(collapsed);
+        return;
+      }
+      setAllPriorityNoteCollapsed(collapsed);
+    },
+    [compareOnly, onSetCompareAllPriorityNotesCollapsed, setAllPriorityNoteCollapsed]
+  );
+
+  const cyclePriorityNoteMode = useCallback(
+    (allVisible: boolean, noteFilterVisible: boolean) => {
+      if (allVisible) return;
+      if (!noteFilterVisible) {
+        if (compareOnly) onToggleCompareOverlayFilter?.('priorityNote');
+        else toggleOverlayFilter('priorityNote');
+        setPriorityNotesCollapsedState(false);
+        return;
+      }
+      const anyExpanded = priorityNotePrimitives.some(
+        (primitive) => primitive.priorityNoteCollapsed !== true
+      );
+      if (anyExpanded) {
+        setPriorityNotesCollapsedState(true);
+        return;
+      }
+      if (compareOnly) onToggleCompareOverlayFilter?.('priorityNote');
+      else toggleOverlayFilter('priorityNote');
+    },
+    [
+      compareOnly,
+      onToggleCompareOverlayFilter,
+      toggleOverlayFilter,
+      priorityNotePrimitives,
+      setPriorityNotesCollapsedState,
+    ]
+  );
 
   const startPanelDrag = useCallback(
     (key: DraggablePanelKey, event: React.PointerEvent<HTMLDivElement>) => {
@@ -463,13 +514,10 @@ export default function Editor({
             break;
           case 'n':
           case 'N':
-            if (!compareAllVisible) {
-              onToggleCompareOverlayFilter?.('priorityNote');
-            }
-            break;
-          case 'h':
-          case 'H':
-            onToggleCompareAllPriorityNotesCollapsed?.();
+            cyclePriorityNoteMode(
+              compareAllVisible,
+              compareFiltersRef.current.priorityNote
+            );
             break;
           case '9':
             onToggleCompareZoomLock?.();
@@ -614,13 +662,10 @@ export default function Editor({
           break;
         case 'n':
         case 'N':
-          if (!singleAllVisible) {
-            toggleOverlayFilter('priorityNote');
-          }
-          break;
-        case 'h':
-        case 'H':
-          toggleAllPriorityNoteCollapsed();
+          cyclePriorityNoteMode(
+            singleAllVisible,
+            useEditorStore.getState().visibleOverlayFilters.priorityNote
+          );
           break;
         case '\\':
           toggleShowAllOverlayFilters();
@@ -715,11 +760,11 @@ export default function Editor({
     setEditorMode,
     toggleShowAllOverlayFilters,
     toggleOverlayFilter,
-    toggleAllPriorityNoteCollapsed,
+    cyclePriorityNoteMode,
     compareOnly,
     onToggleCompareOverlays,
     onToggleCompareOverlayFilter,
-    onToggleCompareAllPriorityNotesCollapsed,
+    onSetCompareAllPriorityNotesCollapsed,
     isFocusedPane,
     effectivePanLocked,
     effectiveZoomLocked,
@@ -1059,8 +1104,8 @@ export default function Editor({
       >
         <div className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] text-white/70 backdrop-blur pointer-events-none">
           {compareOnly
-            ? 'M maps · 9 lock · P pin · H collapse notes · S boxes · G groups · R regions · N notes · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
-            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · H collapse notes · M maps · | split · S boxes · G groups · R regions · N notes · \\ overlays · ? help'}
+            ? 'M maps · 9 lock · P pin · S boxes · G groups · R regions · N notes cycle · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
+            : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · M maps · | split · S boxes · G groups · R regions · N notes cycle · \\ overlays · ? help'}
         </div>
         {compareOnly && onComparePageChange && pageCount > 1 ? (
           <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur">

@@ -16,6 +16,7 @@ const ROWS: { keys: string; label: string }[] = [
   { keys: '0  ·  Home', label: 'Reset view' },
   { keys: '+ / − / wheel', label: 'Zoom' },
   { keys: 'Space + drag', label: 'Pan' },
+  { keys: 'N', label: 'Priority notes: show, collapse, hide' },
   { keys: '/', label: 'Focus search' },
   { keys: '|', label: 'Split compare' },
   { keys: '?', label: 'This help' },

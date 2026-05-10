@@ -86,6 +86,7 @@ export interface EditorState {
   toggleShowAllOverlayFilters: () => void;
   toggleOverlayFilter: (key: OverlayFilterKey) => void;
   toggleAllPriorityNoteCollapsed: () => void;
+  setAllPriorityNoteCollapsed: (collapsed: boolean) => void;
   deletePrimitive: (id: string) => void;
   addDraftGroupMember: (memberKey: string) => void;
   removeDraftGroupMember: (memberKey: string) => void;
@@ -344,6 +345,30 @@ export const useEditorStore = create<EditorState>((set) => ({
           primitives: s.workspace.primitives.map((primitive) =>
             priorityPrimitives.some((entry) => entry.id === primitive.id)
               ? { ...primitive, priorityNoteCollapsed: shouldCollapse }
+              : primitive
+          ),
+        },
+      };
+    }),
+
+  setAllPriorityNoteCollapsed: (collapsed) =>
+    set((s) => {
+      const priorityIds = new Set(
+        s.workspace.primitives
+          .filter(
+            (primitive) =>
+              primitive.showPriorityNote === true &&
+              (primitive.notes ?? []).some((note) => note.isPriority && note.content.trim())
+          )
+          .map((primitive) => primitive.id)
+      );
+      if (priorityIds.size === 0) return {};
+      return {
+        workspace: {
+          ...s.workspace,
+          primitives: s.workspace.primitives.map((primitive) =>
+            priorityIds.has(primitive.id)
+              ? { ...primitive, priorityNoteCollapsed: collapsed }
               : primitive
           ),
         },
