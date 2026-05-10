@@ -338,7 +338,7 @@ export default function LeftPane({
                     )}
                   </div>
                 )}
-                {(
+                {!map.isDefault && (
                   confirmDeleteId === map.id ? (
                     <div className="flex items-center gap-1">
                       <button
