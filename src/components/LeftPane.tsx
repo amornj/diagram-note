@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
@@ -134,6 +134,17 @@ export default function LeftPane({
   const [primitiveSortMode, setPrimitiveSortMode] =
     useState<PrimitiveSortMode>(loadPrimitiveSortMode);
 
+  const [mapsHeight, setMapsHeight] = useState(() => {
+    if (typeof window === 'undefined') return 192;
+    const raw = window.localStorage.getItem('diagram-note-maps-height');
+    const parsed = raw ? Number(raw) : 192;
+    return Number.isFinite(parsed) ? Math.min(520, Math.max(80, parsed)) : 192;
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem('diagram-note-maps-height', String(mapsHeight));
+  }, [mapsHeight]);
+
   const allTags = useMemo(() => {
     const tags = new Set<string>();
     for (const p of effectiveWorkspace.primitives) {
@@ -181,6 +192,19 @@ export default function LeftPane({
     persistPrimitiveSortMode(nextMode);
   };
 
+  const startMapsResize = (startY: number, startHeight: number) => {
+    const handleMove = (event: MouseEvent) => {
+      const delta = event.clientY - startY;
+      setMapsHeight(Math.min(520, Math.max(80, startHeight + delta)));
+    };
+    const handleUp = () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+  };
+
   if (leftSidebarCollapsed) {
     return (
       <button
@@ -217,7 +241,7 @@ export default function LeftPane({
         </div>
       </div>
 
-      <div className="border-b border-gray-100 px-3 py-3">
+      <div className="px-3 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
             Maps
@@ -273,7 +297,7 @@ export default function LeftPane({
             </button>
           </div>
         </div>
-        <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+        <div className="mt-2 space-y-1 overflow-y-auto" style={{ height: mapsHeight }}>
           {maps.length === 0 && (
             <div className="text-xs text-gray-400">
               No maps yet. Load a PDF, PNG, JPEG, WEBP, or .dnote.
@@ -375,6 +399,16 @@ export default function LeftPane({
             );
           })}
         </div>
+      </div>
+      <div
+        className="relative z-10 h-2 cursor-row-resize"
+        onMouseDown={(event) => {
+          event.preventDefault();
+          startMapsResize(event.clientY, mapsHeight);
+        }}
+      >
+        <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200" />
+        <div className="absolute left-1/2 top-1/2 h-1 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-300" />
       </div>
 
       {allTags.length > 0 && (
