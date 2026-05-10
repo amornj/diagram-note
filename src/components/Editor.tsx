@@ -111,7 +111,7 @@ export default function Editor({
   >(null);
   const [groupBuilderFocusSignal, setGroupBuilderFocusSignal] = useState(0);
   const [zoomPercent, setZoomPercent] = useState(100);
-  const [hintCollapsed, setHintCollapsed] = useState(false);
+  const [hintCollapsed, setHintCollapsed] = useState(true);
   const [panelOffsets, setPanelOffsets] = useState<Record<DraggablePanelKey, PanelOffset>>({
     search: DEFAULT_PANEL_OFFSET,
     map: DEFAULT_PANEL_OFFSET,
