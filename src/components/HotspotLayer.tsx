@@ -672,7 +672,6 @@ export default function HotspotLayer({
               );
               if (added) {
                 setLinkFlash({ primitiveId: primitive.id, nonce: Date.now() });
-                setLinkConfirmIds([overlayNeighborTargetId, primitive.id]);
               }
               await setActivePage(overlayNeighborTargetPageIndex);
               setSelectedPrimitive(overlayNeighborTargetId);
@@ -1148,7 +1147,12 @@ export default function HotspotLayer({
               !isMapSelectablePrimitive(primitive)
                 ? ('none' as const)
                 : ('all' as const),
-            cursor: compareOnly && compareBacklinkPickActive ? 'crosshair' : mapDragActive ? 'grabbing' : 'pointer',
+            cursor:
+              compareOnly && compareBacklinkPickActive
+                ? 'pointer'
+                : mapDragActive
+                ? 'grabbing'
+                : 'pointer',
           };
 
           if (primitive.kind === 'customline' && primitive.points?.length) {
