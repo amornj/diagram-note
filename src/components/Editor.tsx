@@ -75,6 +75,14 @@ interface EditorProps {
   onPickCompareBacklinkTarget?: (primitiveId: string) => void;
   compareLinkFlash?: { primitiveId: string; nonce: number } | null;
   compareLinkConfirmIds?: string[];
+  onOpenBacklink?: (args: {
+    sourceMapId: string;
+    sourcePageIndex: number;
+    sourcePrimitiveId: string;
+    targetMapId: string;
+    targetPageIndex: number;
+    targetPrimitiveId: string;
+  }) => void;
 }
 
 export default function Editor({
@@ -113,6 +121,7 @@ export default function Editor({
   onPickCompareBacklinkTarget,
   compareLinkFlash,
   compareLinkConfirmIds = [],
+  onOpenBacklink,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
@@ -881,6 +890,7 @@ export default function Editor({
           onPickCompareBacklinkTarget={onPickCompareBacklinkTarget}
           compareLinkFlash={compareLinkFlash}
           compareLinkConfirmIds={compareLinkConfirmIds}
+          onOpenBacklink={onOpenBacklink}
         />
       )}
 

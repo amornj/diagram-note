@@ -1253,6 +1253,7 @@ function MapPage() {
               onSelectMap={(mapId) => {
                 void useMapStore.getState().setActiveMap(mapId);
               }}
+              onOpenBacklink={openCrossMapBacklink}
             />
           )}
         </div>
