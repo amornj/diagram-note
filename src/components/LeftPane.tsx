@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pin, Trash2 } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import type { DiagramMap, MapWorkspace, Primitive } from '../types';
@@ -12,6 +12,21 @@ type PrimitiveSortMode = 'default' | 'alphaAsc' | 'alphaDesc';
 
 const MAP_SORT_STORAGE_KEY = 'diagram-note-map-sort-mode';
 const PRIMITIVE_SORT_STORAGE_KEY = 'diagram-note-primitive-sort-mode';
+const PINNED_MAPS_STORAGE_KEY = 'diagram-note-pinned-maps';
+
+function loadPinnedMapIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(PINNED_MAPS_STORAGE_KEY);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+  } catch {}
+  return new Set();
+}
+
+function persistPinnedMapIds(ids: Set<string>) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(PINNED_MAPS_STORAGE_KEY, JSON.stringify([...ids]));
+}
 
 function loadMapSortMode(): MapSortMode {
   if (typeof window === 'undefined') return 'recent';
@@ -47,9 +62,12 @@ function persistPrimitiveSortMode(mode: PrimitiveSortMode) {
   window.localStorage.setItem(PRIMITIVE_SORT_STORAGE_KEY, mode);
 }
 
-function sortMaps(maps: DiagramMap[], mode: MapSortMode, activeMapId: string | null) {
+function sortMaps(maps: DiagramMap[], mode: MapSortMode, activeMapId: string | null, pinnedIds: Set<string>) {
   const next = [...maps];
   next.sort((a, b) => {
+    const aPinned = pinnedIds.has(a.id);
+    const bPinned = pinnedIds.has(b.id);
+    if (aPinned !== bPinned) return aPinned ? -1 : 1;
     switch (mode) {
       case 'alphaAsc':
         return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
@@ -133,6 +151,7 @@ export default function LeftPane({
   const [mapSortMode, setMapSortMode] = useState<MapSortMode>(loadMapSortMode);
   const [primitiveSortMode, setPrimitiveSortMode] =
     useState<PrimitiveSortMode>(loadPrimitiveSortMode);
+  const [pinnedMapIds, setPinnedMapIds] = useState<Set<string>>(loadPinnedMapIds);
 
   const [mapsHeight, setMapsHeight] = useState(() => {
     if (typeof window === 'undefined') return 192;
@@ -168,9 +187,19 @@ export default function LeftPane({
   }, [effectiveWorkspace.primitives, activeTagFilter, primitiveSortMode]);
 
   const sortedMaps = useMemo(
-    () => sortMaps(maps, mapSortMode, activeMapId),
-    [maps, mapSortMode, activeMapId]
+    () => sortMaps(maps, mapSortMode, activeMapId, pinnedMapIds),
+    [maps, mapSortMode, activeMapId, pinnedMapIds]
   );
+
+  const togglePinMap = (id: string) => {
+    setPinnedMapIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      persistPinnedMapIds(next);
+      return next;
+    });
+  };
 
   const setAndPersistSortMode = (mode: MapSortMode) => {
     setMapSortMode(mode);
@@ -367,6 +396,15 @@ export default function LeftPane({
                     )}
                   </div>
                 )}
+                <button
+                  onClick={() => togglePinMap(map.id)}
+                  className="rounded-full p-1 transition"
+                  aria-label={pinnedMapIds.has(map.id) ? `Unpin ${map.name}` : `Pin ${map.name}`}
+                  title={pinnedMapIds.has(map.id) ? 'Unpin map' : 'Pin to top'}
+                  style={{ color: pinnedMapIds.has(map.id) ? '#f59e0b' : '#d1d5db' }}
+                >
+                  <Pin size={12} />
+                </button>
                 {confirmDeleteId === map.id ? (
                   <div className="flex items-center gap-1">
                     <button
