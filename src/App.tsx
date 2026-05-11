@@ -589,6 +589,7 @@ function MapPage() {
   const [showHelp, setShowHelp] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
   const [splitMode, setSplitMode] = useState(false);
+  const [splitTarget, setSplitTarget] = useState<1 | 2 | null>(null);
   const [focusedSplitPane, setFocusedSplitPane] = useState<1 | 2>(1);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [splitMaps, setSplitMaps] = useState<{
@@ -802,6 +803,7 @@ function MapPage() {
         useEditorStore.getState().setSelectedPrimitiveId(null);
         setSplitRatio(0.5);
         setFocusedSplitPane(1);
+        setSplitTarget(null);
         setSplitBacklinkPick(null);
         setCompareOverlayFilters({
           1: { ...DEFAULT_OVERLAY_FILTERS },
@@ -821,6 +823,7 @@ function MapPage() {
           2: { mapId: activeMap.id, mapName: activeMap.name, workspace },
         });
       } else if (!next) {
+        setSplitTarget(null);
         setSplitBacklinkPick(null);
       }
       return next;
@@ -832,6 +835,7 @@ function MapPage() {
   const assignSplitMapToPane = (pane: 1 | 2, mapId: string) => {
     const map = useMapStore.getState().maps.find((entry) => entry.id === mapId);
     setFocusedSplitPane(pane);
+    setSplitTarget(null);
     setSplitBacklinkPick(null);
     setCompareSelectedPrimitiveId((current) => ({ ...current, [pane]: null }));
     setSplitMaps((current) => ({
@@ -939,6 +943,7 @@ function MapPage() {
       const targetMap = maps.find((map) => map.id === targetMapId);
       if (!sourceMap || !targetMap) return;
       setSplitMode(true);
+      setSplitTarget(null);
       setFocusedSplitPane(2);
       setSplitBacklinkPick(null);
       setSplitRatio(0.5);
@@ -1237,8 +1242,9 @@ function MapPage() {
                 1: splitMaps[1].mapId,
                 2: splitMaps[2].mapId,
               }}
+              splitTarget={splitTarget}
+              onSetSplitTarget={setSplitTarget}
               onAssignMapToSplitPane={assignSplitMapToPane}
-              focusedSplitPane={focusedSplitPane}
               workspaceOverride={splitMode ? comparePaneData[focusedSplitPane].workspace : undefined}
               selectedPrimitiveIdOverride={splitMode ? compareSelectedPrimitiveId[focusedSplitPane] : undefined}
               onSelectPrimitiveOverride={

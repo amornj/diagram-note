@@ -107,8 +107,9 @@ const KIND_DOT_COLORS: Record<Primitive['kind'], string> = {
 interface LeftPaneProps {
   splitMode?: boolean;
   splitAssignments?: { 1: string | null; 2: string | null };
+  splitTarget?: 1 | 2 | null;
+  onSetSplitTarget?: (pane: 1 | 2 | null) => void;
   onAssignMapToSplitPane?: (pane: 1 | 2, mapId: string) => void;
-  focusedSplitPane?: 1 | 2;
   workspaceOverride?: MapWorkspace | null;
   selectedPrimitiveIdOverride?: string | null;
   onSelectPrimitiveOverride?: (primitiveId: string) => void;
@@ -118,8 +119,9 @@ interface LeftPaneProps {
 export default function LeftPane({
   splitMode = false,
   splitAssignments = { 1: null, 2: null },
+  splitTarget = null,
+  onSetSplitTarget,
   onAssignMapToSplitPane,
-  focusedSplitPane = 1,
   workspaceOverride,
   selectedPrimitiveIdOverride = null,
   onSelectPrimitiveOverride,
@@ -339,7 +341,10 @@ export default function LeftPane({
                   <button
                     onClick={() => {
                       if (splitMode) {
-                        onAssignMapToSplitPane?.(focusedSplitPane, map.id);
+                        if (splitTarget !== null) {
+                          onAssignMapToSplitPane?.(splitTarget, map.id);
+                          onSetSplitTarget?.(null);
+                        }
                         return;
                       }
                       void setActiveMap(map.id);
@@ -356,28 +361,36 @@ export default function LeftPane({
                 )}
                 {splitMode && (
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => onAssignMapToSplitPane?.(1, map.id)}
-                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition ${
-                        splitAssignments[1] === map.id
-                          ? 'bg-sky-600 text-white'
-                          : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
-                      }`}
-                      title="Show this map in window 1"
-                    >
+                    {splitAssignments[1] === map.id && (
+                      <button
+                        onClick={() =>
+                          onSetSplitTarget?.(splitTarget === 1 ? null : 1)
+                        }
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition ${
+                          splitTarget === 1
+                            ? 'bg-sky-600 text-white'
+                            : 'bg-sky-100 text-sky-700 hover:bg-sky-200'
+                        }`}
+                        title="Select window 1, then click another map"
+                      >
                         W1
-                    </button>
-                    <button
-                      onClick={() => onAssignMapToSplitPane?.(2, map.id)}
-                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition ${
-                        splitAssignments[2] === map.id
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                      }`}
-                      title="Show this map in window 2"
-                    >
+                      </button>
+                    )}
+                    {splitAssignments[2] === map.id && (
+                      <button
+                        onClick={() =>
+                          onSetSplitTarget?.(splitTarget === 2 ? null : 2)
+                        }
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition ${
+                          splitTarget === 2
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                        }`}
+                        title="Select window 2, then click another map"
+                      >
                         W2
-                    </button>
+                      </button>
+                    )}
                   </div>
                 )}
                 <button
