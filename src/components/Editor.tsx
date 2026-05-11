@@ -67,6 +67,11 @@ interface EditorProps {
   compareFocusTarget?: { bbox: BBox; nonce: number } | null;
   onActivatePane?: () => void;
   isFocusedPane?: boolean;
+  selectedPrimitiveIdOverride?: string | null;
+  onSelectPrimitiveOverride?: (primitiveId: string) => void;
+  compareBacklinkPickActive?: boolean;
+  onPickCompareBacklinkTarget?: (primitiveId: string) => void;
+  compareLinkFlash?: { primitiveId: string; nonce: number } | null;
 }
 
 export default function Editor({
@@ -97,6 +102,11 @@ export default function Editor({
   compareFocusTarget,
   onActivatePane,
   isFocusedPane = false,
+  selectedPrimitiveIdOverride,
+  onSelectPrimitiveOverride,
+  compareBacklinkPickActive = false,
+  onPickCompareBacklinkTarget,
+  compareLinkFlash,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
@@ -526,6 +536,10 @@ export default function Editor({
               compareFiltersRef.current.priorityNote
             );
             break;
+          case 'l':
+          case 'L':
+            onPickCompareBacklinkTarget?.('__start__');
+            break;
           case '9':
             onToggleCompareZoomLock?.();
             break;
@@ -674,6 +688,20 @@ export default function Editor({
             useEditorStore.getState().visibleOverlayFilters.priorityNote
           );
           break;
+        case 'l':
+        case 'L': {
+          const selectedId = useEditorStore.getState().selectedPrimitiveId;
+          if (!selectedId) {
+            handled = false;
+            break;
+          }
+          if (editorMode === 'overlayNeighborPick') {
+            setEditorMode('none');
+          } else {
+            useEditorStore.getState().startNeighborPick(selectedId, activeMap?.pageIndex ?? 0);
+          }
+          break;
+        }
         case '\\':
           toggleShowAllOverlayFilters();
           break;
@@ -772,11 +800,13 @@ export default function Editor({
     onToggleCompareOverlays,
     onToggleCompareOverlayFilter,
     onSetCompareAllPriorityNotesCollapsed,
+    onPickCompareBacklinkTarget,
     isFocusedPane,
     effectivePanLocked,
     effectiveZoomLocked,
     onToggleComparePanLock,
     onToggleCompareZoomLock,
+    activeMap,
   ]);
 
   return (
@@ -788,9 +818,10 @@ export default function Editor({
         cursor:
           editorMode === 'textSelect'
             ? 'text'
+            : compareBacklinkPickActive
+            ? 'crosshair'
             : editorMode === 'none' ||
-              editorMode === 'groupCollect' ||
-              editorMode === 'overlayNeighborPick'
+              editorMode === 'groupCollect'
             ? effectivePanLocked
               ? 'default'
               : mapDragActive || spaceDragActive
@@ -827,6 +858,11 @@ export default function Editor({
           onComparePrimitivePatch={onComparePrimitivePatch}
           compareZoomLocked={compareZoomLocked}
           comparePanLocked={comparePanLocked}
+          selectedPrimitiveIdOverride={selectedPrimitiveIdOverride}
+          onSelectPrimitiveOverride={onSelectPrimitiveOverride}
+          compareBacklinkPickActive={compareBacklinkPickActive}
+          onPickCompareBacklinkTarget={onPickCompareBacklinkTarget}
+          compareLinkFlash={compareLinkFlash}
         />
       )}
 
@@ -1121,8 +1157,8 @@ export default function Editor({
           <div className="flex items-center rounded-lg border border-white/10 bg-black/50 backdrop-blur">
             <span className="pointer-events-none px-3 py-1.5 text-[11px] text-white/70">
               {compareOnly
-                ? 'M maps · 9 lock · P pin · S boxes · G groups · R regions · N notes cycle · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
-                : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · 0 home · T text · M maps · | split · S boxes · G groups · R regions · N notes cycle · \\ overlays · ? help'}
+                ? 'M maps · 9 lock · P pin · L backlink · S boxes · G groups · R regions · N notes cycle · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
+                : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · L backlink · 0 home · T text · M maps · | split · S boxes · G groups · R regions · N notes cycle · \\ overlays · ? help'}
             </span>
             <button
               onClick={() => setHintCollapsed(true)}

@@ -23,13 +23,31 @@ export function parseMemberKey(key: string): { id: string } | null {
   return { id: key.slice('primitive:'.length) };
 }
 
-export function makeRelatedPrimitiveKey(id: string, pageIndex: number) {
+export function makeRelatedPrimitiveKey(
+  id: string,
+  pageIndex: number,
+  mapId?: string | null
+) {
+  if (mapId) {
+    return `primitive-map-page:${mapId}:${pageIndex}:${id}`;
+  }
   return `primitive-page:${pageIndex}:${id}`;
 }
 
 export function parseRelatedPrimitiveKey(
   key: string
-): { id: string; pageIndex: number | null } | null {
+): { id: string; pageIndex: number | null; mapId: string | null } | null {
+  if (key.startsWith('primitive-map-page:')) {
+    const rest = key.slice('primitive-map-page:'.length);
+    const firstSep = rest.indexOf(':');
+    const secondSep = rest.indexOf(':', firstSep + 1);
+    if (firstSep <= 0 || secondSep <= firstSep + 1) return null;
+    const mapId = rest.slice(0, firstSep);
+    const pageIndex = Number.parseInt(rest.slice(firstSep + 1, secondSep), 10);
+    const id = rest.slice(secondSep + 1);
+    if (!mapId || !Number.isFinite(pageIndex) || !id) return null;
+    return { id, pageIndex, mapId };
+  }
   if (key.startsWith('primitive-page:')) {
     const rest = key.slice('primitive-page:'.length);
     const sep = rest.indexOf(':');
@@ -37,11 +55,11 @@ export function parseRelatedPrimitiveKey(
     const pageIndex = Number.parseInt(rest.slice(0, sep), 10);
     const id = rest.slice(sep + 1);
     if (!Number.isFinite(pageIndex) || !id) return null;
-    return { id, pageIndex };
+    return { id, pageIndex, mapId: null };
   }
   const legacy = parseMemberKey(key);
   if (!legacy) return null;
-  return { id: legacy.id, pageIndex: null };
+  return { id: legacy.id, pageIndex: null, mapId: null };
 }
 
 export function bboxFromPoints(a: Point, b: Point): BBox {

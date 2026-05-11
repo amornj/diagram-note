@@ -21,7 +21,20 @@ const KIND_LABELS: Record<Primitive['kind'], string> = {
   group: 'Group',
 };
 
-export default function PrimitiveDetailPanel({ primitive }: { primitive: Primitive }) {
+export default function PrimitiveDetailPanel({
+  primitive,
+  onOpenCrossMapBacklink,
+}: {
+  primitive: Primitive;
+  onOpenCrossMapBacklink?: (args: {
+    sourceMapId: string;
+    sourcePageIndex: number;
+    sourcePrimitiveId: string;
+    targetMapId: string;
+    targetPageIndex: number;
+    targetPrimitiveId: string;
+  }) => void;
+}) {
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
   const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
   const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
@@ -38,7 +51,9 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
   const removeGroupMember = useEditorStore((s) => s.removeGroupMember);
   const reorderGroupMember = useEditorStore((s) => s.reorderGroupMember);
   const groupCollectTargetId = useEditorStore((s) => s.groupCollectTargetId);
-  const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
+  const maps = useMapStore((s) => s.maps);
+  const activeMapId = useMapStore((s) => s.activeMapId);
+  const activeMap = maps.find((m) => m.id === activeMapId) ?? null;
   const setActivePage = useMapStore((s) => s.setActivePage);
   const removePrimitiveBacklink = useMapStore((s) => s.removePrimitiveBacklink);
 
@@ -58,31 +73,65 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
         .map((key) => {
           const member = parseRelatedPrimitiveKey(key);
           if (!member) return null;
-          const pageIndex = member.pageIndex ?? activeMap?.pageIndex ?? 0;
+          const targetMapId = member.mapId ?? activeMap?.id ?? null;
+          if (!targetMapId) return null;
+          const targetMap = maps.find((map) => map.id === targetMapId);
+          if (!targetMap) return null;
+          const pageIndex = member.pageIndex ?? targetMap.pageIndex ?? 0;
           const pageWorkspace =
-            pageIndex === activeMap?.pageIndex
+            targetMapId === activeMap?.id && pageIndex === activeMap?.pageIndex
               ? workspace
-              : activeMap?.pages?.[pageIndex]?.workspace;
+              : targetMap.pages?.[pageIndex]?.workspace ?? targetMap.workspace;
           const memberPrim = pageWorkspace?.primitives.find((p) => p.id === member.id);
           if (!memberPrim) return null;
+          const sameMap = targetMapId === activeMap?.id;
           return {
             key,
             id: member.id,
+            mapId: targetMapId,
+            mapName: targetMap.name,
+            sameMap,
             pageIndex,
             label:
-              pageIndex === activeMap?.pageIndex
+              sameMap && pageIndex === activeMap?.pageIndex
                 ? memberPrim.name
-                : `${memberPrim.name} · Page ${pageIndex + 1}`,
+                : sameMap
+                ? `${memberPrim.name} · Page ${pageIndex + 1}`
+                : `${memberPrim.name} · ${targetMap.name}${targetMap.pageCount > 1 ? ` · Page ${pageIndex + 1}` : ''}`,
             onClick: async () => {
-              if (pageIndex !== activeMap?.pageIndex) {
+              if (!activeMap) return;
+              if (!sameMap) {
+                onOpenCrossMapBacklink?.({
+                  sourceMapId: activeMap.id,
+                  sourcePageIndex: activeMap.pageIndex,
+                  sourcePrimitiveId: primitive.id,
+                  targetMapId,
+                  targetPageIndex: pageIndex,
+                  targetPrimitiveId: member.id,
+                });
+                return;
+              }
+              if (pageIndex !== activeMap.pageIndex) {
                 await setActivePage(pageIndex);
               }
               setSelectedPrimitiveId(member.id);
             },
           };
         })
-        .filter((m): m is NonNullable<typeof m> => m !== null),
-    [primitive, workspace, activeMap, setActivePage, setSelectedPrimitiveId]
+        .filter((m): m is NonNullable<typeof m> => m !== null)
+        .sort((a, b) => {
+          if (a.sameMap !== b.sameMap) return a.sameMap ? -1 : 1;
+          return a.label.localeCompare(b.label);
+        }),
+    [
+      primitive,
+      workspace,
+      maps,
+      activeMap,
+      setActivePage,
+      setSelectedPrimitiveId,
+      onOpenCrossMapBacklink,
+    ]
   );
 
   const isPickingRelated = editorMode === 'overlayNeighborPick';
@@ -310,8 +359,10 @@ export default function PrimitiveDetailPanel({ primitive }: { primitive: Primiti
                       event.stopPropagation();
                       if (activeMap) {
                         void removePrimitiveBacklink(
+                          activeMap.id,
                           activeMap.pageIndex,
                           primitive.id,
+                          member.mapId,
                           member.pageIndex,
                           member.id
                         );

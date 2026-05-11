@@ -44,14 +44,18 @@ export interface MapStoreState {
   }) => Promise<string>;
   clearMapOverlays: (id: string) => Promise<void>;
   addPrimitiveBacklink: (
+    sourceMapId: string,
     sourcePageIndex: number,
     sourceId: string,
+    targetMapId: string,
     targetPageIndex: number,
     targetId: string
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   removePrimitiveBacklink: (
+    sourceMapId: string,
     sourcePageIndex: number,
     sourceId: string,
+    targetMapId: string,
     targetPageIndex: number,
     targetId: string
   ) => Promise<void>;
@@ -804,56 +808,148 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     }
   },
 
-  addPrimitiveBacklink: async (sourcePageIndex, sourceId, targetPageIndex, targetId) => {
-    const activeId = get().activeMapId;
-    if (!activeId) return;
-    const map = await idb.getMap(activeId);
-    if (!map) return;
-    const sourceKey = makeRelatedPrimitiveKey(sourceId, sourcePageIndex);
-    const targetKey = makeRelatedPrimitiveKey(targetId, targetPageIndex);
-    let updated = updatePrimitiveOnPage(map, sourcePageIndex, sourceId, (primitive) => ({
-      ...primitive,
-      relatedMemberKeys: Array.from(
-        new Set([...(primitive.relatedMemberKeys ?? []), targetKey])
-      ).filter((key) => key !== sourceKey),
-    }));
-    updated = updatePrimitiveOnPage(updated, targetPageIndex, targetId, (primitive) => ({
-      ...primitive,
-      relatedMemberKeys: Array.from(
-        new Set([...(primitive.relatedMemberKeys ?? []), sourceKey])
-      ).filter((key) => key !== targetKey),
-    }));
-    await idb.putMap(updated);
+  addPrimitiveBacklink: async (
+    sourceMapId,
+    sourcePageIndex,
+    sourceId,
+    targetMapId,
+    targetPageIndex,
+    targetId
+  ) => {
+    if (sourceMapId === targetMapId && sourceId === targetId && sourcePageIndex === targetPageIndex) {
+      return false;
+    }
+    const sourceMap = await idb.getMap(sourceMapId);
+    const targetMap = sourceMapId === targetMapId ? sourceMap : await idb.getMap(targetMapId);
+    if (!sourceMap || !targetMap) return false;
+
+    const sourceKey = makeRelatedPrimitiveKey(sourceId, sourcePageIndex, sourceMapId);
+    const targetKey = makeRelatedPrimitiveKey(targetId, targetPageIndex, targetMapId);
+    const sourcePrimitive = getPageMeta(sourceMap, sourcePageIndex).workspace.primitives.find(
+      (primitive) => primitive.id === sourceId
+    );
+    const targetPrimitive = getPageMeta(targetMap, targetPageIndex).workspace.primitives.find(
+      (primitive) => primitive.id === targetId
+    );
+    if (!sourcePrimitive || !targetPrimitive) return false;
+    const sourceHasLink = (sourcePrimitive.relatedMemberKeys ?? []).includes(targetKey);
+    const targetHasLink = (targetPrimitive.relatedMemberKeys ?? []).includes(sourceKey);
+    if (sourceHasLink && targetHasLink) return false;
+
+    const nextSourceMap = updatePrimitiveOnPage(
+      sourceMap,
+      sourcePageIndex,
+      sourceId,
+      (primitive) => ({
+        ...primitive,
+        relatedMemberKeys: Array.from(
+          new Set([...(primitive.relatedMemberKeys ?? []), targetKey])
+        ).filter((key) => key !== sourceKey),
+      })
+    );
+    const nextTargetBase = sourceMapId === targetMapId ? nextSourceMap : targetMap;
+    const nextTargetMap = updatePrimitiveOnPage(
+      nextTargetBase,
+      targetPageIndex,
+      targetId,
+      (primitive) => ({
+        ...primitive,
+        relatedMemberKeys: Array.from(
+          new Set([...(primitive.relatedMemberKeys ?? []), sourceKey])
+        ).filter((key) => key !== targetKey),
+      })
+    );
+
+    if (sourceMapId === targetMapId) {
+      await idb.putMap(nextTargetMap);
+      set({
+        maps: get().maps.map((entry) => (entry.id === nextTargetMap.id ? nextTargetMap : entry)),
+      });
+      if (get().activeMapId === nextTargetMap.id) {
+        useEditorStore
+          .getState()
+          .setWorkspace(getPageMeta(nextTargetMap, nextTargetMap.pageIndex).workspace, false);
+      }
+      return true;
+    }
+
+    await idb.putMap(nextSourceMap);
+    await idb.putMap(nextTargetMap);
     set({
-      maps: get().maps.map((entry) => (entry.id === updated.id ? updated : entry)),
+      maps: get().maps.map((entry) => {
+        if (entry.id === nextSourceMap.id) return nextSourceMap;
+        if (entry.id === nextTargetMap.id) return nextTargetMap;
+        return entry;
+      }),
     });
-    useEditorStore.getState().setWorkspace(getPageMeta(updated, updated.pageIndex).workspace, false);
+    if (get().activeMapId === nextSourceMap.id) {
+      useEditorStore
+        .getState()
+        .setWorkspace(getPageMeta(nextSourceMap, nextSourceMap.pageIndex).workspace, false);
+    } else if (get().activeMapId === nextTargetMap.id) {
+      useEditorStore
+        .getState()
+        .setWorkspace(getPageMeta(nextTargetMap, nextTargetMap.pageIndex).workspace, false);
+    }
+    return true;
   },
 
-  removePrimitiveBacklink: async (sourcePageIndex, sourceId, targetPageIndex, targetId) => {
-    const activeId = get().activeMapId;
-    if (!activeId) return;
-    const map = await idb.getMap(activeId);
-    if (!map) return;
-    const sourceKey = makeRelatedPrimitiveKey(sourceId, sourcePageIndex);
-    const targetKey = makeRelatedPrimitiveKey(targetId, targetPageIndex);
-    let updated = updatePrimitiveOnPage(map, sourcePageIndex, sourceId, (primitive) => ({
+  removePrimitiveBacklink: async (
+    sourceMapId,
+    sourcePageIndex,
+    sourceId,
+    targetMapId,
+    targetPageIndex,
+    targetId
+  ) => {
+    const sourceMap = await idb.getMap(sourceMapId);
+    const targetMap = sourceMapId === targetMapId ? sourceMap : await idb.getMap(targetMapId);
+    if (!sourceMap || !targetMap) return;
+    const sourceKey = makeRelatedPrimitiveKey(sourceId, sourcePageIndex, sourceMapId);
+    const targetKey = makeRelatedPrimitiveKey(targetId, targetPageIndex, targetMapId);
+    const nextSourceMap = updatePrimitiveOnPage(sourceMap, sourcePageIndex, sourceId, (primitive) => ({
       ...primitive,
       relatedMemberKeys: (primitive.relatedMemberKeys ?? []).filter(
         (key) => key !== targetKey
       ),
     }));
-    updated = updatePrimitiveOnPage(updated, targetPageIndex, targetId, (primitive) => ({
+    const nextTargetBase = sourceMapId === targetMapId ? nextSourceMap : targetMap;
+    const nextTargetMap = updatePrimitiveOnPage(nextTargetBase, targetPageIndex, targetId, (primitive) => ({
       ...primitive,
       relatedMemberKeys: (primitive.relatedMemberKeys ?? []).filter(
         (key) => key !== sourceKey
       ),
     }));
-    await idb.putMap(updated);
+    if (sourceMapId === targetMapId) {
+      await idb.putMap(nextTargetMap);
+      set({
+        maps: get().maps.map((entry) => (entry.id === nextTargetMap.id ? nextTargetMap : entry)),
+      });
+      if (get().activeMapId === nextTargetMap.id) {
+        useEditorStore
+          .getState()
+          .setWorkspace(getPageMeta(nextTargetMap, nextTargetMap.pageIndex).workspace, false);
+      }
+      return;
+    }
+    await idb.putMap(nextSourceMap);
+    await idb.putMap(nextTargetMap);
     set({
-      maps: get().maps.map((entry) => (entry.id === updated.id ? updated : entry)),
+      maps: get().maps.map((entry) => {
+        if (entry.id === nextSourceMap.id) return nextSourceMap;
+        if (entry.id === nextTargetMap.id) return nextTargetMap;
+        return entry;
+      }),
     });
-    useEditorStore.getState().setWorkspace(getPageMeta(updated, updated.pageIndex).workspace, false);
+    if (get().activeMapId === nextSourceMap.id) {
+      useEditorStore
+        .getState()
+        .setWorkspace(getPageMeta(nextSourceMap, nextSourceMap.pageIndex).workspace, false);
+    } else if (get().activeMapId === nextTargetMap.id) {
+      useEditorStore
+        .getState()
+        .setWorkspace(getPageMeta(nextTargetMap, nextTargetMap.pageIndex).workspace, false);
+    }
   },
 
   deleteMap: async (id) => {

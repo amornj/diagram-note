@@ -213,13 +213,27 @@ export default function ImportExportBar() {
     setBusy(null);
   };
 
+  const openPicker = (input: HTMLInputElement | null) => {
+    if (!input) return;
+    setError(null);
+    try {
+      if (typeof input.showPicker === 'function') {
+        input.showPicker();
+        return;
+      }
+    } catch {
+      // Fall through to click() for browsers that expose showPicker but reject it here.
+    }
+    input.click();
+  };
+
   return (
     <div ref={rootRef} className="relative flex items-center gap-2">
       <input
         ref={pdfInputRef}
         type="file"
         accept="application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg,image/webp,.webp"
-        className="hidden"
+        className="sr-only"
         onChange={async (event) => {
           const file = event.target.files?.[0];
           if (!file) return;
@@ -231,7 +245,7 @@ export default function ImportExportBar() {
         ref={dnoteInputRef}
         type="file"
         accept=".dnote,.zip,application/zip"
-        className="hidden"
+        className="sr-only"
         onChange={async (event) => {
           const file = event.target.files?.[0];
           if (!file) return;
@@ -243,7 +257,7 @@ export default function ImportExportBar() {
         ref={jsonInputRef}
         type="file"
         accept="application/json,.json"
-        className="hidden"
+        className="sr-only"
         onChange={async (event) => {
           const file = event.target.files?.[0];
           if (!file) return;
@@ -266,7 +280,7 @@ export default function ImportExportBar() {
       {menuOpen && (
         <div className="absolute right-0 top-full z-40 mt-2 translate-x-12 w-56 rounded-2xl border border-gray-200 bg-white p-2 shadow-xl">
           <button
-            onClick={() => pdfInputRef.current?.click()}
+            onClick={() => openPicker(pdfInputRef.current)}
             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50"
             role="menuitem"
           >
@@ -274,7 +288,7 @@ export default function ImportExportBar() {
             Load map
           </button>
           <button
-            onClick={() => dnoteInputRef.current?.click()}
+            onClick={() => openPicker(dnoteInputRef.current)}
             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50"
             role="menuitem"
           >
@@ -282,7 +296,7 @@ export default function ImportExportBar() {
             Load .dnote
           </button>
           <button
-            onClick={() => jsonInputRef.current?.click()}
+            onClick={() => openPicker(jsonInputRef.current)}
             disabled={!activeMap}
             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             role="menuitem"

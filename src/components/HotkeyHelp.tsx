@@ -13,6 +13,7 @@ const ROWS: { keys: string; label: string }[] = [
   { keys: '7', label: 'Group builder' },
   { keys: '8', label: 'New polyline / region' },
   { keys: '9', label: 'Lock zoom' },
+  { keys: 'L', label: 'Backlink pick mode' },
   { keys: '0  ·  Home', label: 'Reset view' },
   { keys: '+ / − / wheel', label: 'Zoom' },
   { keys: 'Space + drag', label: 'Pan' },

@@ -391,6 +391,12 @@ function ComparePane({
   mapOptions,
   onSelectMap,
   focusTarget,
+  selectedPrimitiveId,
+  onSelectPrimitive,
+  compareBacklinkPickActive,
+  onStartBacklinkPick,
+  onPickBacklinkTarget,
+  linkFlash,
 }: {
   mapId: string | null;
   pageIndex: number;
@@ -414,6 +420,12 @@ function ComparePane({
   mapOptions: Array<{ id: string; name: string }>;
   onSelectMap: (mapId: string) => void;
   focusTarget: { bbox: import('./types').BBox; nonce: number } | null;
+  selectedPrimitiveId: string | null;
+  onSelectPrimitive: (primitiveId: string) => void;
+  compareBacklinkPickActive: boolean;
+  onStartBacklinkPick: () => void;
+  onPickBacklinkTarget: (primitiveId: string) => void;
+  linkFlash: { primitiveId: string; nonce: number } | null;
 }) {
   const onLoadedRef = useRef(onLoaded);
   onLoadedRef.current = onLoaded;
@@ -540,6 +552,14 @@ function ComparePane({
           compareFocusTarget={focusTarget}
           onActivatePane={onActivate}
           isFocusedPane={isFocusedPane}
+          selectedPrimitiveIdOverride={selectedPrimitiveId}
+          onSelectPrimitiveOverride={onSelectPrimitive}
+          compareBacklinkPickActive={compareBacklinkPickActive}
+          onPickCompareBacklinkTarget={(primitiveId) => {
+            if (primitiveId === '__start__') onStartBacklinkPick();
+            else onPickBacklinkTarget(primitiveId);
+          }}
+          compareLinkFlash={linkFlash}
         />
       ) : (
         <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,#1e293b,#020617)] text-white">
@@ -569,7 +589,6 @@ function MapPage() {
   const [showHelp, setShowHelp] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
   const [splitMode, setSplitMode] = useState(false);
-  const [splitTarget, setSplitTarget] = useState<1 | 2>(1);
   const [focusedSplitPane, setFocusedSplitPane] = useState<1 | 2>(1);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [splitMaps, setSplitMaps] = useState<{
@@ -603,6 +622,16 @@ function MapPage() {
   const [compareSelectedPrimitiveId, setCompareSelectedPrimitiveId] = useState<{
     1: string | null;
     2: string | null;
+  }>({ 1: null, 2: null });
+  const [splitBacklinkPick, setSplitBacklinkPick] = useState<{
+    sourcePane: 1 | 2;
+    mapId: string;
+    pageIndex: number;
+    primitiveId: string;
+  } | null>(null);
+  const [compareLinkFlash, setCompareLinkFlash] = useState<{
+    1: { primitiveId: string; nonce: number } | null;
+    2: { primitiveId: string; nonce: number } | null;
   }>({ 1: null, 2: null });
   const [compareFocusNonce, setCompareFocusNonce] = useState(0);
 
@@ -661,6 +690,24 @@ function MapPage() {
     const t = window.setTimeout(() => setDropError(null), 5000);
     return () => window.clearTimeout(t);
   }, [dropError]);
+
+  useEffect(() => {
+    const timers = ([
+      1,
+      2,
+    ] as const)
+      .map((pane) => {
+        const flash = compareLinkFlash[pane];
+        if (!flash) return null;
+        return window.setTimeout(() => {
+          setCompareLinkFlash((current) => ({ ...current, [pane]: null }));
+        }, 700);
+      })
+      .filter((timer): timer is number => timer !== null);
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [compareLinkFlash]);
 
   const [leftPaneWidth, setLeftPaneWidth] = useState(() => {
     if (typeof window === 'undefined') return 280;
@@ -755,6 +802,7 @@ function MapPage() {
         useEditorStore.getState().setSelectedPrimitiveId(null);
         setSplitRatio(0.5);
         setFocusedSplitPane(1);
+        setSplitBacklinkPick(null);
         setCompareOverlayFilters({
           1: { ...DEFAULT_OVERLAY_FILTERS },
           2: { ...DEFAULT_OVERLAY_FILTERS },
@@ -772,6 +820,8 @@ function MapPage() {
           1: { mapId: activeMap.id, mapName: activeMap.name, workspace },
           2: { mapId: activeMap.id, mapName: activeMap.name, workspace },
         });
+      } else if (!next) {
+        setSplitBacklinkPick(null);
       }
       return next;
     });
@@ -782,6 +832,7 @@ function MapPage() {
   const assignSplitMapToPane = (pane: 1 | 2, mapId: string) => {
     const map = useMapStore.getState().maps.find((entry) => entry.id === mapId);
     setFocusedSplitPane(pane);
+    setSplitBacklinkPick(null);
     setCompareSelectedPrimitiveId((current) => ({ ...current, [pane]: null }));
     setSplitMaps((current) => ({
       ...current,
@@ -790,9 +841,6 @@ function MapPage() {
         pageIndex: map?.pageIndex ?? 0,
       },
     }));
-  };
-  const assignSplitMap = (mapId: string) => {
-    assignSplitMapToPane(splitTarget, mapId);
   };
 
   const handleCompareLoaded1 = useCallback((state: {
@@ -818,6 +866,109 @@ function MapPage() {
   const handleActivatePane2 = useCallback(() => {
     setFocusedSplitPane(2);
   }, []);
+
+  const selectSplitPrimitive = useCallback((pane: 1 | 2, primitiveId: string) => {
+    setFocusedSplitPane(pane);
+    setCompareSelectedPrimitiveId((current) => ({
+      ...current,
+      [pane]: primitiveId,
+    }));
+    setCompareFocusNonce((value) => value + 1);
+  }, []);
+
+  const startSplitBacklinkPick = useCallback((pane: 1 | 2) => {
+    const primitiveId = compareSelectedPrimitiveId[pane];
+    const mapId = splitMaps[pane].mapId;
+    if (!primitiveId || !mapId) return;
+    const pageIndex = splitMaps[pane].pageIndex;
+    setFocusedSplitPane(pane);
+    setSplitBacklinkPick((current) => {
+      if (
+        current?.sourcePane === pane &&
+        current.mapId === mapId &&
+        current.pageIndex === pageIndex &&
+        current.primitiveId === primitiveId
+      ) {
+        return null;
+      }
+      return { sourcePane: pane, mapId, pageIndex, primitiveId };
+    });
+  }, [compareSelectedPrimitiveId, splitMaps]);
+
+  const handleSplitBacklinkTarget = useCallback(
+    async (pane: 1 | 2, primitiveId: string) => {
+      if (!splitBacklinkPick) return;
+      const targetMapId = splitMaps[pane].mapId;
+      if (!targetMapId) return;
+      const added = await useMapStore.getState().addPrimitiveBacklink(
+        splitBacklinkPick.mapId,
+        splitBacklinkPick.pageIndex,
+        splitBacklinkPick.primitiveId,
+        targetMapId,
+        splitMaps[pane].pageIndex,
+        primitiveId
+      );
+      if (!added) return;
+      setCompareLinkFlash((current) => ({
+        ...current,
+        [pane]: { primitiveId, nonce: Date.now() },
+      }));
+      setSplitBacklinkPick(null);
+      setFocusedSplitPane(splitBacklinkPick.sourcePane);
+    },
+    [splitBacklinkPick, splitMaps]
+  );
+
+  const openCrossMapBacklink = useCallback(
+    ({
+      sourceMapId,
+      sourcePageIndex,
+      sourcePrimitiveId,
+      targetMapId,
+      targetPageIndex,
+      targetPrimitiveId,
+    }: {
+      sourceMapId: string;
+      sourcePageIndex: number;
+      sourcePrimitiveId: string;
+      targetMapId: string;
+      targetPageIndex: number;
+      targetPrimitiveId: string;
+    }) => {
+      const sourceMap = maps.find((map) => map.id === sourceMapId);
+      const targetMap = maps.find((map) => map.id === targetMapId);
+      if (!sourceMap || !targetMap) return;
+      setSplitMode(true);
+      setFocusedSplitPane(2);
+      setSplitBacklinkPick(null);
+      setSplitRatio(0.5);
+      setSplitMaps({
+        1: { mapId: sourceMapId, pageIndex: sourcePageIndex },
+        2: { mapId: targetMapId, pageIndex: targetPageIndex },
+      });
+      setComparePaneData({
+        1: {
+          mapId: sourceMapId,
+          mapName: sourceMap.name,
+          workspace:
+            activeMap?.id === sourceMapId && activeMap.pageIndex === sourcePageIndex
+              ? workspace
+              : workspaceForPage(sourceMap, sourcePageIndex),
+        },
+        2: {
+          mapId: targetMapId,
+          mapName: targetMap.name,
+          workspace: workspaceForPage(targetMap, targetPageIndex),
+        },
+      });
+      setCompareSelectedPrimitiveId({
+        1: sourcePrimitiveId,
+        2: targetPrimitiveId,
+      });
+      setCompareFocusNonce((value) => value + 1);
+    },
+    [maps, activeMap, workspace]
+  );
 
   const handleToggleCompareOverlays1 = useCallback(() => {
     setCompareOverlayFilters((current) => {
@@ -975,6 +1126,14 @@ function MapPage() {
                 onSelectMap={handleSelectCompareMap1}
                 focusTarget={compareFocusTargets[1]}
                 onPageChange={handleComparePageChange1}
+                selectedPrimitiveId={compareSelectedPrimitiveId[1]}
+                onSelectPrimitive={(primitiveId) => selectSplitPrimitive(1, primitiveId)}
+                compareBacklinkPickActive={splitBacklinkPick !== null}
+                onStartBacklinkPick={() => startSplitBacklinkPick(1)}
+                onPickBacklinkTarget={(primitiveId) => {
+                  void handleSplitBacklinkTarget(1, primitiveId);
+                }}
+                linkFlash={compareLinkFlash[1]}
               />
                 <button
                   onClick={() => {
@@ -1020,6 +1179,14 @@ function MapPage() {
                 onSelectMap={handleSelectCompareMap2}
                 focusTarget={compareFocusTargets[2]}
                 onPageChange={handleComparePageChange2}
+                selectedPrimitiveId={compareSelectedPrimitiveId[2]}
+                onSelectPrimitive={(primitiveId) => selectSplitPrimitive(2, primitiveId)}
+                compareBacklinkPickActive={splitBacklinkPick !== null}
+                onStartBacklinkPick={() => startSplitBacklinkPick(2)}
+                onPickBacklinkTarget={(primitiveId) => {
+                  void handleSplitBacklinkTarget(2, primitiveId);
+                }}
+                linkFlash={compareLinkFlash[2]}
               />
                 <button
                   onClick={() => {
@@ -1066,29 +1233,22 @@ function MapPage() {
           >
             <LeftPane
               splitMode={splitMode}
-              splitTarget={splitTarget}
               splitAssignments={{
                 1: splitMaps[1].mapId,
                 2: splitMaps[2].mapId,
               }}
-              onSetSplitTarget={setSplitTarget}
-              onAssignMapToSplit={assignSplitMap}
+              onAssignMapToSplitPane={assignSplitMapToPane}
+              focusedSplitPane={focusedSplitPane}
               workspaceOverride={splitMode ? comparePaneData[focusedSplitPane].workspace : undefined}
               selectedPrimitiveIdOverride={splitMode ? compareSelectedPrimitiveId[focusedSplitPane] : undefined}
               onSelectPrimitiveOverride={
                 splitMode
-                  ? (primitiveId) => {
-                      setCompareSelectedPrimitiveId((current) => ({
-                        ...current,
-                        [focusedSplitPane]: primitiveId,
-                      }));
-                      setCompareFocusNonce((value) => value + 1);
-                    }
+                  ? (primitiveId) => selectSplitPrimitive(focusedSplitPane, primitiveId)
                   : undefined
               }
               paneLabel={
                 splitMode
-                  ? `W${focusedSplitPane} · ${comparePaneData[focusedSplitPane].mapName}`
+                  ? `W${focusedSplitPane}`
                   : undefined
               }
             />
@@ -1138,7 +1298,10 @@ function MapPage() {
                 <div className="absolute inset-y-0 left-0 w-px bg-gray-200" />
                 <div className="absolute left-0 top-1/2 h-16 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-300" />
               </div>
-              <PrimitiveDetailPanel primitive={selectedPrimitive} />
+              <PrimitiveDetailPanel
+                primitive={selectedPrimitive}
+                onOpenCrossMapBacklink={openCrossMapBacklink}
+              />
             </div>
           </>
         )}

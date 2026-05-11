@@ -34,13 +34,16 @@ interface HotspotLayerProps {
   onComparePrimitivePatch?: (id: string, patch: Partial<Primitive>) => void;
   compareZoomLocked?: boolean;
   comparePanLocked?: boolean;
+  selectedPrimitiveIdOverride?: string | null;
+  onSelectPrimitiveOverride?: (primitiveId: string) => void;
+  compareBacklinkPickActive?: boolean;
+  onPickCompareBacklinkTarget?: (primitiveId: string) => void;
+  compareLinkFlash?: { primitiveId: string; nonce: number } | null;
 }
 
 const FOCUS_PADDING = 16;
 const PRIORITY_BUBBLE_MIN_WIDTH = 180;
 const PRIORITY_BUBBLE_MAX_WIDTH = 340;
-const PRIORITY_BUBBLE_HANDLE_WIDTH = 44;
-const PRIORITY_BUBBLE_HANDLE_HEIGHT = 6;
 const PRIORITY_BUBBLE_PADDING_X = 14;
 const PRIORITY_BUBBLE_PADDING_TOP = 22;
 const PRIORITY_BUBBLE_PADDING_BOTTOM = 14;
@@ -142,6 +145,11 @@ export default function HotspotLayer({
   onComparePrimitivePatch,
   compareZoomLocked = false,
   comparePanLocked = false,
+  selectedPrimitiveIdOverride,
+  onSelectPrimitiveOverride,
+  compareBacklinkPickActive = false,
+  onPickCompareBacklinkTarget,
+  compareLinkFlash,
 }: HotspotLayerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewportSize, setViewportSize] = useState({ w: 1, h: 1 });
@@ -150,6 +158,8 @@ export default function HotspotLayer({
   const [draftPointer, setDraftPointer] = useState<Point | null>(null);
   const [editingPriorityPrimitiveId, setEditingPriorityPrimitiveId] = useState<string | null>(null);
   const [editingPriorityDraft, setEditingPriorityDraft] = useState('');
+  const [movePriorityPrimitiveId, setMovePriorityPrimitiveId] = useState<string | null>(null);
+  const [linkFlash, setLinkFlash] = useState<{ primitiveId: string; nonce: number } | null>(null);
   const animationIdleTimerRef = useRef<number | null>(null);
   const dragRef = useRef<{
     pointerId: number;
@@ -163,14 +173,14 @@ export default function HotspotLayer({
   const priorityBubbleDragRef = useRef<{
     pointerId: number;
     primitiveId: string;
-    handleOffsetX: number;
-    handleOffsetY: number;
+    anchorOffsetX: number;
+    anchorOffsetY: number;
   } | null>(null);
   const [priorityBubbleDraftAnchors, setPriorityBubbleDraftAnchors] = useState<
     Record<string, Point>
   >({});
 
-  const selectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
+  const storeSelectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
   const hoveredPrimitiveId = useEditorStore((s) => s.hoveredPrimitiveId);
   const selectedOccurrenceIndex = useEditorStore((s) => s.selectedOccurrenceIndex);
   const storeWorkspace = useEditorStore((s) => s.workspace);
@@ -204,6 +214,7 @@ export default function HotspotLayer({
   const groupCollectTargetId = useEditorStore((s) => s.groupCollectTargetId);
   const setActivePage = useMapStore((s) => s.setActivePage);
   const addPrimitiveBacklink = useMapStore((s) => s.addPrimitiveBacklink);
+  const activeMapId = useMapStore((s) => s.activeMapId);
   const activePageIndex = useMapStore(
     (s) => s.maps.find((m) => m.id === s.activeMapId)?.pageIndex ?? 0
   );
@@ -212,6 +223,10 @@ export default function HotspotLayer({
     () => new Map(workspace.primitives.map((p) => [p.id, p])),
     [workspace.primitives]
   );
+  const selectedPrimitiveId = compareOnly ? selectedPrimitiveIdOverride ?? null : storeSelectedPrimitiveId;
+  const setSelectedPrimitive = compareOnly
+    ? (onSelectPrimitiveOverride ?? (() => {}))
+    : setSelectedPrimitiveId;
   const selectedPrimitive = selectedPrimitiveId
     ? primitivesById.get(selectedPrimitiveId) ?? null
     : null;
@@ -429,7 +444,14 @@ export default function HotspotLayer({
   useEffect(() => {
     setEditingPriorityPrimitiveId(null);
     setEditingPriorityDraft('');
+    setMovePriorityPrimitiveId(null);
   }, [workspace.primitives, compareOnly]);
+
+  useEffect(() => {
+    if (!linkFlash) return;
+    const timer = window.setTimeout(() => setLinkFlash(null), 700);
+    return () => window.clearTimeout(timer);
+  }, [linkFlash]);
 
   const simplifyOverlay = viewportAnimating && editorMode === 'none';
 
@@ -488,7 +510,7 @@ export default function HotspotLayer({
         clearDraftPolygon();
         setDraftPointer(null);
         setEditorMode('none');
-        setSelectedPrimitiveId(id);
+        setSelectedPrimitive(id);
       }
       if (event.key === 'Escape') {
         clearDraftPolygon();
@@ -506,7 +528,7 @@ export default function HotspotLayer({
     addPrimitive,
     clearDraftPolygon,
     setEditorMode,
-    setSelectedPrimitiveId,
+    setSelectedPrimitive,
   ]);
 
   const toNormalizedPoint = (event: React.PointerEvent<SVGRectElement>) => {
@@ -543,7 +565,7 @@ export default function HotspotLayer({
           clearDraftPolygon();
           setDraftPointer(null);
           setEditorMode('none');
-          setSelectedPrimitiveId(id);
+          setSelectedPrimitive(id);
           return;
         }
       }
@@ -606,10 +628,11 @@ export default function HotspotLayer({
   const activatePrimitive = useCallback(
     (primitive: Primitive) => {
       if (!isMapSelectablePrimitive(primitive)) return;
-      if (
-        overlaySelectionMode &&
-        primitive.id !== overlayNeighborTargetId
-      ) {
+      if (compareOnly && compareBacklinkPickActive) {
+        onPickCompareBacklinkTarget?.(primitive.id);
+        return;
+      }
+      if (overlaySelectionMode && primitive.id !== overlayNeighborTargetId) {
         if (editorMode === 'groupCollect') {
           if (!isStudyBoxPrimitive(primitive)) return;
           if (groupCollectTargetId) {
@@ -618,16 +641,25 @@ export default function HotspotLayer({
             addDraftGroupMember(makeMemberKey(primitive.id));
           }
         } else if (editorMode === 'overlayNeighborPick') {
-          if (overlayNeighborTargetId && overlayNeighborTargetPageIndex !== null) {
+          if (
+            overlayNeighborTargetId &&
+            overlayNeighborTargetPageIndex !== null &&
+            activeMapId
+          ) {
             void (async () => {
-              await addPrimitiveBacklink(
+              const added = await addPrimitiveBacklink(
+                activeMapId,
                 overlayNeighborTargetPageIndex,
                 overlayNeighborTargetId,
+                activeMapId,
                 activePageIndex,
                 primitive.id
               );
+              if (added) {
+                setLinkFlash({ primitiveId: primitive.id, nonce: Date.now() });
+              }
               await setActivePage(overlayNeighborTargetPageIndex);
-              setSelectedPrimitiveId(overlayNeighborTargetId);
+              setSelectedPrimitive(overlayNeighborTargetId);
               setEditorMode('none');
             })();
           } else {
@@ -636,13 +668,17 @@ export default function HotspotLayer({
         }
         return;
       }
-      setSelectedPrimitiveId(primitive.id);
+      setSelectedPrimitive(primitive.id);
     },
     [
+      compareOnly,
+      compareBacklinkPickActive,
+      onPickCompareBacklinkTarget,
       overlaySelectionMode,
       overlayNeighborTargetId,
       overlayNeighborTargetPageIndex,
       groupCollectTargetId,
+      activeMapId,
       activePageIndex,
       editorMode,
       addDraftGroupMember,
@@ -650,7 +686,7 @@ export default function HotspotLayer({
       addNeighborMember,
       addPrimitiveBacklink,
       setActivePage,
-      setSelectedPrimitiveId,
+      setSelectedPrimitive,
       setEditorMode,
     ]
   );
@@ -770,8 +806,11 @@ export default function HotspotLayer({
   );
 
   const beginPriorityBubbleDrag = useCallback(
-    (event: React.PointerEvent<SVGRectElement>, primitiveId: string) => {
-      if (compareOnly) return;
+    (
+      event: React.PointerEvent<SVGRectElement | SVGTextElement | SVGGElement>,
+      primitiveId: string
+    ) => {
+      if (compareOnly || movePriorityPrimitiveId !== primitiveId) return;
       event.preventDefault();
       event.stopPropagation();
       const bubble = priorityBubbles.find((entry) => entry.primitiveId === primitiveId);
@@ -781,13 +820,13 @@ export default function HotspotLayer({
       const bounds = svg.getBoundingClientRect();
       const pointerX = event.clientX - bounds.left;
       const pointerY = event.clientY - bounds.top;
-      const handleCenterX = bubble.x + bubble.width / 2;
-      const handleCenterY = bubble.y + 8 + PRIORITY_BUBBLE_HANDLE_HEIGHT / 2;
+      const topCenterX = bubble.x + bubble.width / 2;
+      const topY = bubble.y;
       priorityBubbleDragRef.current = {
         pointerId: event.pointerId,
         primitiveId,
-        handleOffsetX: pointerX - handleCenterX,
-        handleOffsetY: pointerY - handleCenterY,
+        anchorOffsetX: pointerX - topCenterX,
+        anchorOffsetY: pointerY - topY,
       };
       try {
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -795,7 +834,7 @@ export default function HotspotLayer({
         // ignore
       }
     },
-    [compareOnly, priorityBubbles]
+    [compareOnly, movePriorityPrimitiveId, priorityBubbles]
   );
 
   const togglePriorityBubbleCollapsed = useCallback(
@@ -819,6 +858,21 @@ export default function HotspotLayer({
       });
     },
     [compareOnly, onComparePrimitivePatch, updatePrimitive]
+  );
+
+  const togglePriorityBubbleMoveMode = useCallback(
+    (
+      event: React.PointerEvent<SVGGElement | SVGCircleElement | SVGTextElement>,
+      primitiveId: string
+    ) => {
+      if (compareOnly) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setMovePriorityPrimitiveId((current) =>
+        current === primitiveId ? null : primitiveId
+      );
+    },
+    [compareOnly]
   );
 
   const beginPriorityBubbleEdit = useCallback(
@@ -873,7 +927,7 @@ export default function HotspotLayer({
   ]);
 
   const continuePriorityBubbleDrag = useCallback(
-    (event: React.PointerEvent<SVGRectElement>) => {
+    (event: React.PointerEvent<SVGRectElement | SVGTextElement | SVGGElement>) => {
       const drag = priorityBubbleDragRef.current;
       if (!drag || drag.pointerId !== event.pointerId) return;
       event.preventDefault();
@@ -883,8 +937,8 @@ export default function HotspotLayer({
       const bounds = svg.getBoundingClientRect();
       const pointerX = event.clientX - bounds.left;
       const pointerY = event.clientY - bounds.top;
-      const topCenterX = pointerX - drag.handleOffsetX;
-      const topY = pointerY - drag.handleOffsetY - 8 - PRIORITY_BUBBLE_HANDLE_HEIGHT / 2;
+      const topCenterX = pointerX - drag.anchorOffsetX;
+      const topY = pointerY - drag.anchorOffsetY;
       const normalized = viewerElementPointToNormalizedPoint(
         viewer,
         topCenterX,
@@ -904,7 +958,7 @@ export default function HotspotLayer({
   );
 
   const endPriorityBubbleDrag = useCallback(
-    (event: React.PointerEvent<SVGRectElement>) => {
+    (event: React.PointerEvent<SVGRectElement | SVGTextElement | SVGGElement>) => {
       const drag = priorityBubbleDragRef.current;
       if (!drag || drag.pointerId !== event.pointerId) return;
       event.preventDefault();
@@ -931,12 +985,13 @@ export default function HotspotLayer({
         return next;
       });
       priorityBubbleDragRef.current = null;
+      setMovePriorityPrimitiveId(null);
     },
     [priorityBubbleDraftAnchors, primitivesById, updatePrimitive]
   );
 
   const cancelPriorityBubbleDrag = useCallback(
-    (event: React.PointerEvent<SVGRectElement>) => {
+    (event: React.PointerEvent<SVGRectElement | SVGTextElement | SVGGElement>) => {
       const drag = priorityBubbleDragRef.current;
       if (!drag || drag.pointerId !== event.pointerId) return;
       event.preventDefault();
@@ -952,12 +1007,14 @@ export default function HotspotLayer({
         return next;
       });
       priorityBubbleDragRef.current = null;
+      setMovePriorityPrimitiveId(null);
     },
     []
   );
 
   // re-render markers when viewport changes
   void viewTick;
+  const activeLinkFlash = compareOnly ? compareLinkFlash : linkFlash;
 
   if (!compareOnly && editorMode === 'textSelect') return null;
 
@@ -1054,7 +1111,7 @@ export default function HotspotLayer({
 
           const interactiveStyle = {
             pointerEvents:
-              compareOnly ||
+              (compareOnly && !compareBacklinkPickActive) ||
               spacePanActive ||
               (editorMode !== 'none' && !overlaySelectionMode) ||
               !isMapSelectablePrimitive(primitive)
@@ -1312,10 +1369,53 @@ export default function HotspotLayer({
         </g>
       )}
 
+      {activeLinkFlash && (() => {
+        const primitive = primitivesById.get(activeLinkFlash.primitiveId);
+        if (!primitive) return null;
+        const bounds = getPrimitiveBounds(primitive, primitivesById);
+        if (!bounds) return null;
+        const rect = bboxToViewerElementRect(viewer, bounds, dims);
+        if (!rect) return null;
+        const x = rect.x + rect.width / 2;
+        const y = rect.y - 10;
+        return (
+          <g
+            className="pointer-events-none"
+            key={`link-flash-${activeLinkFlash.primitiveId}-${activeLinkFlash.nonce}`}
+          >
+            <text
+              x={x}
+              y={y}
+              textAnchor="middle"
+              fill="#0f172a"
+              fontSize={16}
+              fontWeight={800}
+              style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+            >
+              {'< >'}
+              <animate
+                attributeName="opacity"
+                values="0;1;1;0"
+                dur="0.7s"
+                fill="freeze"
+              />
+              <animate
+                attributeName="transform"
+                type="translate"
+                values="0 8;0 0;0 0;0 -6"
+                dur="0.7s"
+                fill="freeze"
+              />
+            </text>
+          </g>
+        );
+      })()}
+
       {priorityBubbles.map((priorityBubble) => (
           <g key={`priority-bubble-${priorityBubble.primitiveId}`}>
             {(() => {
               const isEditing = editingPriorityPrimitiveId === priorityBubble.primitiveId;
+              const isMoveArmed = movePriorityPrimitiveId === priorityBubble.primitiveId;
               return (
                 <>
             {priorityBubble.collapsed ? (
@@ -1386,7 +1486,19 @@ export default function HotspotLayer({
                 stroke="#f59e0b"
                 strokeWidth={2}
                 filter="url(#hotspot-glow)"
-                style={{ cursor: 'text' }}
+                style={{
+                  cursor: isMoveArmed
+                    ? priorityBubbleDragRef.current?.primitiveId === priorityBubble.primitiveId
+                      ? 'grabbing'
+                      : 'grab'
+                    : 'text',
+                }}
+                onPointerDown={(event) =>
+                  beginPriorityBubbleDrag(event, priorityBubble.primitiveId)
+                }
+                onPointerMove={continuePriorityBubbleDrag}
+                onPointerUp={endPriorityBubbleDrag}
+                onPointerCancel={cancelPriorityBubbleDrag}
                 onDoubleClick={(event) =>
                   beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
                 }
@@ -1398,7 +1510,7 @@ export default function HotspotLayer({
                   <>
                     <circle
                       cx={priorityBubble.x + priorityBubble.width - 14}
-                      cy={priorityBubble.y + 14}
+                      cy={priorityBubble.y + priorityBubble.height - 14}
                       r={8}
                       fill="#fff8eb"
                       stroke="#f59e0b"
@@ -1414,7 +1526,7 @@ export default function HotspotLayer({
                     />
                     <text
                       x={priorityBubble.x + priorityBubble.width - 14}
-                      y={priorityBubble.y + 18}
+                      y={priorityBubble.y + priorityBubble.height - 10}
                       fill="#b45309"
                       fontSize={11}
                       fontWeight={700}
@@ -1431,7 +1543,7 @@ export default function HotspotLayer({
                       ◉
                     </text>
                     <g
-                      transform={`translate(${priorityBubble.x + priorityBubble.width - 14} ${priorityBubble.y + 36})`}
+                      transform={`translate(${priorityBubble.x + priorityBubble.width - 36} ${priorityBubble.y + priorityBubble.height - 14})`}
                       style={{ cursor: 'pointer' }}
                       onPointerDown={(event) =>
                         beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
@@ -1444,6 +1556,40 @@ export default function HotspotLayer({
                         pointerEvents="none"
                       />
                     </g>
+                    <g
+                      transform={`translate(${priorityBubble.x + priorityBubble.width - 58} ${priorityBubble.y + priorityBubble.height - 14})`}
+                      style={{
+                        cursor: isMoveArmed
+                          ? priorityBubbleDragRef.current?.primitiveId === priorityBubble.primitiveId
+                            ? 'grabbing'
+                            : 'grab'
+                          : 'pointer',
+                      }}
+                      onPointerDown={(event) =>
+                        togglePriorityBubbleMoveMode(event, priorityBubble.primitiveId)
+                      }
+                    >
+                      <circle
+                        cx={0}
+                        cy={0}
+                        r={8}
+                        fill={isMoveArmed ? '#f59e0b' : '#fff8eb'}
+                        stroke="#f59e0b"
+                        strokeWidth={1.5}
+                      />
+                      <text
+                        x={0}
+                        y={4}
+                        fill={isMoveArmed ? '#ffffff' : '#b45309'}
+                        fontSize={10}
+                        fontWeight={700}
+                        textAnchor="middle"
+                        pointerEvents="none"
+                        style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                      >
+                        {isMoveArmed ? '✊' : '✋'}
+                      </text>
+                    </g>
                   </>
                 )}
               </>
@@ -1451,34 +1597,26 @@ export default function HotspotLayer({
             {!priorityBubble.collapsed && (
               <>
                 {!isEditing && (
-                  <rect
-                    x={priorityBubble.x + (priorityBubble.width - PRIORITY_BUBBLE_HANDLE_WIDTH) / 2}
-                    y={priorityBubble.y + 8}
-                    width={PRIORITY_BUBBLE_HANDLE_WIDTH}
-                    height={PRIORITY_BUBBLE_HANDLE_HEIGHT}
-                    rx={PRIORITY_BUBBLE_HANDLE_HEIGHT / 2}
-                    fill="#f59e0b"
-                    opacity={0.45}
-                    style={{ cursor: compareOnly ? 'default' : 'grab' }}
-                    onPointerDown={(event) =>
-                      beginPriorityBubbleDrag(
-                        event,
-                        priorityBubble.primitiveId
-                      )
-                    }
-                    onPointerMove={continuePriorityBubbleDrag}
-                    onPointerUp={endPriorityBubbleDrag}
-                    onPointerCancel={cancelPriorityBubbleDrag}
-                  />
-                )}
-                {!isEditing && (
                   <text
                     x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
                     y={priorityBubble.y + PRIORITY_BUBBLE_PADDING_TOP}
                     fill="#7c2d12"
                     fontSize={12}
                     fontWeight={600}
-                    style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                    style={{
+                      fontFamily: 'system-ui, -apple-system, sans-serif',
+                      cursor: isMoveArmed
+                        ? priorityBubbleDragRef.current?.primitiveId === priorityBubble.primitiveId
+                          ? 'grabbing'
+                          : 'grab'
+                        : 'text',
+                    }}
+                    onPointerDown={(event) =>
+                      beginPriorityBubbleDrag(event, priorityBubble.primitiveId)
+                    }
+                    onPointerMove={continuePriorityBubbleDrag}
+                    onPointerUp={endPriorityBubbleDrag}
+                    onPointerCancel={cancelPriorityBubbleDrag}
                     onDoubleClick={(event) =>
                       beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
                     }

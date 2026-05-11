@@ -106,10 +106,9 @@ const KIND_DOT_COLORS: Record<Primitive['kind'], string> = {
 
 interface LeftPaneProps {
   splitMode?: boolean;
-  splitTarget?: 1 | 2;
   splitAssignments?: { 1: string | null; 2: string | null };
-  onSetSplitTarget?: (target: 1 | 2) => void;
-  onAssignMapToSplit?: (mapId: string) => void;
+  onAssignMapToSplitPane?: (pane: 1 | 2, mapId: string) => void;
+  focusedSplitPane?: 1 | 2;
   workspaceOverride?: MapWorkspace | null;
   selectedPrimitiveIdOverride?: string | null;
   onSelectPrimitiveOverride?: (primitiveId: string) => void;
@@ -118,10 +117,9 @@ interface LeftPaneProps {
 
 export default function LeftPane({
   splitMode = false,
-  splitTarget = 1,
   splitAssignments = { 1: null, 2: null },
-  onSetSplitTarget,
-  onAssignMapToSplit,
+  onAssignMapToSplitPane,
+  focusedSplitPane = 1,
   workspaceOverride,
   selectedPrimitiveIdOverride = null,
   onSelectPrimitiveOverride,
@@ -276,32 +274,6 @@ export default function LeftPane({
             Maps
           </div>
           <div className="flex items-center gap-1">
-            {splitMode && (
-              <>
-              <button
-                onClick={() => onSetSplitTarget?.(1)}
-                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
-                  splitTarget === 1
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
-                }`}
-                title="Assign next map to window 1"
-              >
-                W1
-              </button>
-              <button
-                onClick={() => onSetSplitTarget?.(2)}
-                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
-                  splitTarget === 2
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                }`}
-                title="Assign next map to window 2"
-              >
-                W2
-              </button>
-              </>
-            )}
             <button
               onClick={() => setAndPersistSortMode('recent')}
               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
@@ -367,7 +339,7 @@ export default function LeftPane({
                   <button
                     onClick={() => {
                       if (splitMode) {
-                        onAssignMapToSplit?.(map.id);
+                        onAssignMapToSplitPane?.(focusedSplitPane, map.id);
                         return;
                       }
                       void setActiveMap(map.id);
@@ -384,16 +356,28 @@ export default function LeftPane({
                 )}
                 {splitMode && (
                   <div className="flex items-center gap-1">
-                    {splitAssignments[1] === map.id && (
-                      <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
+                    <button
+                      onClick={() => onAssignMapToSplitPane?.(1, map.id)}
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition ${
+                        splitAssignments[1] === map.id
+                          ? 'bg-sky-600 text-white'
+                          : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
+                      }`}
+                      title="Show this map in window 1"
+                    >
                         W1
-                      </span>
-                    )}
-                    {splitAssignments[2] === map.id && (
-                      <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    </button>
+                    <button
+                      onClick={() => onAssignMapToSplitPane?.(2, map.id)}
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition ${
+                        splitAssignments[2] === map.id
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      }`}
+                      title="Show this map in window 2"
+                    >
                         W2
-                      </span>
-                    )}
+                    </button>
                   </div>
                 )}
                 <button
@@ -484,8 +468,13 @@ export default function LeftPane({
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
         <div className="flex items-center justify-between gap-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Primitives
+          <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <span>Primitives</span>
+            {splitMode && paneLabel && (
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600">
+                {paneLabel}
+              </span>
+            )}
           </div>
           <button
             onClick={togglePrimitiveAlphaSort}
