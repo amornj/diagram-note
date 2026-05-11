@@ -39,6 +39,7 @@ interface HotspotLayerProps {
   compareBacklinkPickActive?: boolean;
   onPickCompareBacklinkTarget?: (primitiveId: string) => void;
   compareLinkFlash?: { primitiveId: string; nonce: number } | null;
+  compareLinkConfirmIds?: string[];
 }
 
 const FOCUS_PADDING = 16;
@@ -150,6 +151,7 @@ export default function HotspotLayer({
   compareBacklinkPickActive = false,
   onPickCompareBacklinkTarget,
   compareLinkFlash,
+  compareLinkConfirmIds = [],
 }: HotspotLayerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewportSize, setViewportSize] = useState({ w: 1, h: 1 });
@@ -160,6 +162,7 @@ export default function HotspotLayer({
   const [editingPriorityDraft, setEditingPriorityDraft] = useState('');
   const [movePriorityPrimitiveId, setMovePriorityPrimitiveId] = useState<string | null>(null);
   const [linkFlash, setLinkFlash] = useState<{ primitiveId: string; nonce: number } | null>(null);
+  const [linkConfirmIds, setLinkConfirmIds] = useState<string[]>([]);
   const animationIdleTimerRef = useRef<number | null>(null);
   const dragRef = useRef<{
     pointerId: number;
@@ -453,6 +456,18 @@ export default function HotspotLayer({
     return () => window.clearTimeout(timer);
   }, [linkFlash]);
 
+  useEffect(() => {
+    if (compareOnly) return;
+    if (linkConfirmIds.length === 0) return;
+    if (!selectedPrimitiveId) {
+      setLinkConfirmIds([]);
+      return;
+    }
+    if (!linkConfirmIds.includes(selectedPrimitiveId)) {
+      setLinkConfirmIds([]);
+    }
+  }, [compareOnly, linkConfirmIds, selectedPrimitiveId]);
+
   const simplifyOverlay = viewportAnimating && editorMode === 'none';
 
   // re-fit map to selected primitive
@@ -657,6 +672,7 @@ export default function HotspotLayer({
               );
               if (added) {
                 setLinkFlash({ primitiveId: primitive.id, nonce: Date.now() });
+                setLinkConfirmIds([overlayNeighborTargetId, primitive.id]);
               }
               await setActivePage(overlayNeighborTargetPageIndex);
               setSelectedPrimitive(overlayNeighborTargetId);
@@ -1029,6 +1045,7 @@ export default function HotspotLayer({
   // re-render markers when viewport changes
   void viewTick;
   const activeLinkFlash = compareOnly ? compareLinkFlash : linkFlash;
+  const activeLinkConfirmIds = compareOnly ? compareLinkConfirmIds : linkConfirmIds;
 
   if (!compareOnly && editorMode === 'textSelect') return null;
 
@@ -1083,6 +1100,7 @@ export default function HotspotLayer({
               : selectedNameTargets.length > 1
                 ? selectedPrimitiveId
                 : null;
+          const isLinkConfirmed = activeLinkConfirmIds.includes(primitive.id);
 
           const memberNumberBadge =
             !simplifyOverlay && showGroupNumbers && groupEntry ? (
@@ -1111,12 +1129,12 @@ export default function HotspotLayer({
             ) : null;
 
           const focusDot =
-            !simplifyOverlay && activeFocusId === primitive.id ? (
+            !simplifyOverlay && (activeFocusId === primitive.id || isLinkConfirmed) ? (
               <circle
                 cx={boundsRect.x + boundsRect.width - 4}
                 cy={boundsRect.y + 4}
                 r={6}
-                fill="#dc2626"
+                fill={isLinkConfirmed ? '#16a34a' : '#dc2626'}
                 stroke="#ffffff"
                 strokeWidth={2}
                 pointerEvents="none"
@@ -1291,7 +1309,7 @@ export default function HotspotLayer({
                   cx={boundsRect.x + boundsRect.width - 4}
                   cy={boundsRect.y + 4}
                   r={6}
-                  fill="#dc2626"
+                  fill={isLinkConfirmed ? '#16a34a' : '#dc2626'}
                   stroke="#ffffff"
                   strokeWidth={2}
                   pointerEvents="none"

@@ -397,6 +397,7 @@ function ComparePane({
   onStartBacklinkPick,
   onPickBacklinkTarget,
   linkFlash,
+  linkConfirmIds,
 }: {
   mapId: string | null;
   pageIndex: number;
@@ -426,6 +427,7 @@ function ComparePane({
   onStartBacklinkPick: () => void;
   onPickBacklinkTarget: (primitiveId: string) => void;
   linkFlash: { primitiveId: string; nonce: number } | null;
+  linkConfirmIds: string[];
 }) {
   const onLoadedRef = useRef(onLoaded);
   onLoadedRef.current = onLoaded;
@@ -558,6 +560,7 @@ function ComparePane({
           onStartCompareBacklinkPick={onStartBacklinkPick}
           onPickCompareBacklinkTarget={onPickBacklinkTarget}
           compareLinkFlash={linkFlash}
+          compareLinkConfirmIds={linkConfirmIds}
         />
       ) : (
         <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,#1e293b,#020617)] text-white">
@@ -632,6 +635,10 @@ function MapPage() {
     1: { primitiveId: string; nonce: number } | null;
     2: { primitiveId: string; nonce: number } | null;
   }>({ 1: null, 2: null });
+  const [compareLinkConfirmIds, setCompareLinkConfirmIds] = useState<{
+    1: string[];
+    2: string[];
+  }>({ 1: [], 2: [] });
   const [compareFocusNonce, setCompareFocusNonce] = useState(0);
 
   useEffect(() => {
@@ -875,6 +882,10 @@ function MapPage() {
       ...current,
       [pane]: primitiveId,
     }));
+    setCompareLinkConfirmIds((current) => ({
+      ...current,
+      [pane]: current[pane].includes(primitiveId) ? current[pane] : [],
+    }));
     setCompareFocusNonce((value) => value + 1);
   }, []);
 
@@ -914,6 +925,11 @@ function MapPage() {
       setCompareLinkFlash((current) => ({
         ...current,
         [pane]: { primitiveId, nonce: Date.now() },
+      }));
+      setCompareLinkConfirmIds((current) => ({
+        ...current,
+        [splitBacklinkPick.sourcePane]: [splitBacklinkPick.primitiveId],
+        [pane]: splitBacklinkPick.sourcePane === pane ? [splitBacklinkPick.primitiveId, primitiveId] : [primitiveId],
       }));
       setSplitBacklinkPick(null);
       setFocusedSplitPane(splitBacklinkPick.sourcePane);
@@ -1137,6 +1153,7 @@ function MapPage() {
                   void handleSplitBacklinkTarget(1, primitiveId);
                 }}
                 linkFlash={compareLinkFlash[1]}
+                linkConfirmIds={compareLinkConfirmIds[1]}
               />
                 <button
                   onClick={() => {
@@ -1190,6 +1207,7 @@ function MapPage() {
                   void handleSplitBacklinkTarget(2, primitiveId);
                 }}
                 linkFlash={compareLinkFlash[2]}
+                linkConfirmIds={compareLinkConfirmIds[2]}
               />
                 <button
                   onClick={() => {
