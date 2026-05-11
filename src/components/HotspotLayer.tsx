@@ -18,7 +18,6 @@ import {
   getPrimitiveBounds,
   makeMemberKey,
   parseMemberKey,
-  parseRelatedPrimitiveKey,
 } from '../lib/workspace';
 import type { MapWorkspace, Point, Primitive } from '../types';
 import { useMapStore } from '../lib/mapStore';
@@ -41,14 +40,6 @@ interface HotspotLayerProps {
   onPickCompareBacklinkTarget?: (primitiveId: string) => void;
   compareLinkFlash?: { primitiveId: string; nonce: number } | null;
   compareLinkConfirmIds?: string[];
-  onOpenBacklink?: (args: {
-    sourceMapId: string;
-    sourcePageIndex: number;
-    sourcePrimitiveId: string;
-    targetMapId: string;
-    targetPageIndex: number;
-    targetPrimitiveId: string;
-  }) => void;
 }
 
 const FOCUS_PADDING = 16;
@@ -153,7 +144,6 @@ export default function HotspotLayer({
   onPickCompareBacklinkTarget,
   compareLinkFlash,
   compareLinkConfirmIds = [],
-  onOpenBacklink,
 }: HotspotLayerProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewportSize, setViewportSize] = useState({ w: 1, h: 1 });
@@ -184,7 +174,6 @@ export default function HotspotLayer({
   const [priorityBubbleDraftAnchors, setPriorityBubbleDraftAnchors] = useState<
     Record<string, Point>
   >({});
-  const backlinkCycleRef = useRef<Map<string, number>>(new Map());
 
   const storeSelectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
   const hoveredPrimitiveId = useEditorStore((s) => s.hoveredPrimitiveId);
@@ -1063,28 +1052,6 @@ export default function HotspotLayer({
     []
   );
 
-  const handleBubbleLinkClick = useCallback(
-    (event: React.PointerEvent<SVGGElement>, primitiveId: string, backlinkKeys: string[]) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (backlinkKeys.length === 0 || !onOpenBacklink || !activeMapId) return;
-      const idx = backlinkCycleRef.current.get(primitiveId) ?? 0;
-      const key = backlinkKeys[idx % backlinkKeys.length];
-      const parsed = parseRelatedPrimitiveKey(key);
-      if (!parsed) return;
-      onOpenBacklink({
-        sourceMapId: activeMapId,
-        sourcePageIndex: activePageIndex,
-        sourcePrimitiveId: primitiveId,
-        targetMapId: parsed.mapId ?? activeMapId,
-        targetPageIndex: parsed.pageIndex ?? activePageIndex,
-        targetPrimitiveId: parsed.id,
-      });
-      backlinkCycleRef.current.set(primitiveId, (idx + 1) % backlinkKeys.length);
-    },
-    [onOpenBacklink, activeMapId, activePageIndex]
-  );
-
   // re-render markers when viewport changes
   void viewTick;
   const activeLinkFlash = compareOnly ? compareLinkFlash : linkFlash;
@@ -1667,37 +1634,31 @@ export default function HotspotLayer({
                         {isMoveArmed ? '✊' : '✋'}
                       </text>
                     </g>
-                    {!compareOnly && onOpenBacklink && priorityBubble.backlinkKeys.length > 0 && (
+                    {priorityBubble.backlinkKeys.length > 0 && (
                       <g
-                        transform={`translate(${priorityBubble.x + priorityBubble.width - 80} ${priorityBubble.y + priorityBubble.height - 14})`}
-                        style={{ cursor: 'pointer' }}
-                        onPointerDown={(event) =>
-                          handleBubbleLinkClick(event, priorityBubble.primitiveId, priorityBubble.backlinkKeys)
-                        }
+                        transform={`translate(${priorityBubble.x + priorityBubble.width - 84} ${priorityBubble.y + priorityBubble.height - 14})`}
+                        pointerEvents="none"
                       >
-                        <circle cx={0} cy={0} r={8} fill="#fff8eb" stroke="#f59e0b" strokeWidth={1.5} />
-                        {/* chain link icon: two rotated rounded rects */}
-                        <g transform="rotate(-35) scale(0.82)" fill="none" stroke="#b45309" strokeWidth={1.6} strokeLinecap="round">
-                          <rect x="-4.8" y="-1.8" width="5.2" height="3.6" rx="1.8" pointerEvents="none"/>
-                          <rect x="-0.4" y="-1.8" width="5.2" height="3.6" rx="1.8" pointerEvents="none"/>
+                        {/* pill background */}
+                        <rect x={-20} y={-8} width={40} height={16} rx={8} fill="#fff8eb" stroke="#f59e0b" strokeWidth={1.5}/>
+                        {/* chain link icon: two overlapping horizontal ellipses */}
+                        <g fill="none" stroke="#b45309" strokeWidth={1.4} pointerEvents="none">
+                          <ellipse cx={-8} cy={0} rx={4.5} ry={2.4}/>
+                          <ellipse cx={-3} cy={0} rx={4.5} ry={2.4}/>
                         </g>
-                        {priorityBubble.backlinkKeys.length > 1 && (
-                          <>
-                            <circle cx={5.5} cy={-5.5} r={4} fill="#f59e0b" pointerEvents="none"/>
-                            <text
-                              x={5.5}
-                              y={-3}
-                              textAnchor="middle"
-                              fill="#fff"
-                              fontSize={5}
-                              fontWeight={700}
-                              pointerEvents="none"
-                              style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
-                            >
-                              {priorityBubble.backlinkKeys.length}
-                            </text>
-                          </>
-                        )}
+                        {/* link count */}
+                        <text
+                          x={8}
+                          y={4}
+                          textAnchor="middle"
+                          fill="#b45309"
+                          fontSize={11}
+                          fontWeight={700}
+                          pointerEvents="none"
+                          style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                        >
+                          {priorityBubble.backlinkKeys.length}
+                        </text>
                       </g>
                     )}
                   </>
