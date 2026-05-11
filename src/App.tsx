@@ -1166,10 +1166,15 @@ function MapPage() {
                 <button
                   onClick={() => {
                     const otherPaneMapId = splitMaps[2].mapId;
-                    if (otherPaneMapId) {
-                      void useMapStore.getState().setActiveMap(otherPaneMapId);
-                    }
+                    const primitiveToSelect = compareSelectedPrimitiveId[2];
                     setSplitMode(false);
+                    if (otherPaneMapId) {
+                      void useMapStore.getState().setActiveMap(otherPaneMapId).then(() => {
+                        if (primitiveToSelect) {
+                          useEditorStore.getState().setSelectedPrimitiveId(primitiveToSelect);
+                        }
+                      });
+                    }
                   }}
                   className="absolute right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/90 shadow transition hover:bg-black/80"
                   title="Close split compare"
@@ -1221,10 +1226,15 @@ function MapPage() {
                 <button
                   onClick={() => {
                     const otherPaneMapId = splitMaps[1].mapId;
-                    if (otherPaneMapId) {
-                      void useMapStore.getState().setActiveMap(otherPaneMapId);
-                    }
+                    const primitiveToSelect = compareSelectedPrimitiveId[1];
                     setSplitMode(false);
+                    if (otherPaneMapId) {
+                      void useMapStore.getState().setActiveMap(otherPaneMapId).then(() => {
+                        if (primitiveToSelect) {
+                          useEditorStore.getState().setSelectedPrimitiveId(primitiveToSelect);
+                        }
+                      });
+                    }
                   }}
                   className="absolute right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/90 shadow transition hover:bg-black/80"
                   title="Close split compare"
