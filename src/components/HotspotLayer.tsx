@@ -842,7 +842,7 @@ export default function HotspotLayer({
       event: React.PointerEvent<SVGRectElement | SVGTextElement | SVGGElement>,
       primitiveId: string
     ) => {
-      if (compareOnly || movePriorityPrimitiveId !== primitiveId) return;
+      if (movePriorityPrimitiveId !== primitiveId) return;
       event.preventDefault();
       event.stopPropagation();
       const bubble = priorityBubbles.find((entry) => entry.primitiveId === primitiveId);
@@ -866,7 +866,7 @@ export default function HotspotLayer({
         // ignore
       }
     },
-    [compareOnly, movePriorityPrimitiveId, priorityBubbles]
+    [movePriorityPrimitiveId, priorityBubbles]
   );
 
   const togglePriorityBubbleCollapsed = useCallback(
@@ -897,14 +897,13 @@ export default function HotspotLayer({
       event: React.PointerEvent<SVGGElement | SVGCircleElement | SVGTextElement>,
       primitiveId: string
     ) => {
-      if (compareOnly) return;
       event.preventDefault();
       event.stopPropagation();
       setMovePriorityPrimitiveId((current) =>
         current === primitiveId ? null : primitiveId
       );
     },
-    [compareOnly]
+    []
   );
 
   const beginPriorityBubbleEdit = useCallback(
@@ -1004,11 +1003,18 @@ export default function HotspotLayer({
       if (nextAnchor) {
         const primitive = primitivesById.get(drag.primitiveId);
         if (primitive) {
-          const { priorityNoteOffset: _priorityNoteOffset, ...rest } = primitive;
-          updatePrimitive(drag.primitiveId, {
-            ...rest,
-            priorityNoteAnchor: nextAnchor,
-          });
+          if (compareOnly) {
+            onComparePrimitivePatch?.(drag.primitiveId, {
+              priorityNoteAnchor: nextAnchor,
+              priorityNoteOffset: undefined,
+            });
+          } else {
+            const { priorityNoteOffset: _priorityNoteOffset, ...rest } = primitive;
+            updatePrimitive(drag.primitiveId, {
+              ...rest,
+              priorityNoteAnchor: nextAnchor,
+            });
+          }
         }
       }
       setPriorityBubbleDraftAnchors((current) => {
@@ -1019,7 +1025,7 @@ export default function HotspotLayer({
       priorityBubbleDragRef.current = null;
       setMovePriorityPrimitiveId(null);
     },
-    [priorityBubbleDraftAnchors, primitivesById, updatePrimitive]
+    [compareOnly, onComparePrimitivePatch, priorityBubbleDraftAnchors, primitivesById, updatePrimitive]
   );
 
   const cancelPriorityBubbleDrag = useCallback(
@@ -1458,15 +1464,13 @@ export default function HotspotLayer({
                 <>
             {priorityBubble.collapsed ? (
               <g
-                style={{ cursor: compareOnly ? 'default' : 'pointer' }}
+                style={{ cursor: 'pointer' }}
                 onPointerDown={(event) =>
-                  !compareOnly
-                    ? togglePriorityBubbleCollapsed(
-                        event,
-                        priorityBubble.primitiveId,
-                        priorityBubble.collapsed
-                      )
-                    : undefined
+                  togglePriorityBubbleCollapsed(
+                    event,
+                    priorityBubble.primitiveId,
+                    priorityBubble.collapsed
+                  )
                 }
               >
                 <path
@@ -1542,7 +1546,7 @@ export default function HotspotLayer({
                 }
               />
             )}
-            {!compareOnly && !isEditing && (
+            {!isEditing && (
               <>
                 {!priorityBubble.collapsed && (
                   <>
