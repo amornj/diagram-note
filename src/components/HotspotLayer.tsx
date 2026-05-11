@@ -693,6 +693,12 @@ export default function HotspotLayer({
 
   const beginInteractiveDrag = useCallback(
     (event: React.PointerEvent<SVGElement>, activate: () => void) => {
+      if (compareOnly && compareBacklinkPickActive) {
+        event.preventDefault();
+        event.stopPropagation();
+        activate();
+        return;
+      }
       if (spacePanActive || (editorMode !== 'none' && !overlaySelectionMode)) return;
       if (effectivePanLocked) {
         activate();
@@ -714,7 +720,15 @@ export default function HotspotLayer({
         // ignore
       }
     },
-    [editorMode, overlaySelectionMode, effectivePanLocked, spacePanActive, onMapDragActiveChange]
+    [
+      compareOnly,
+      compareBacklinkPickActive,
+      editorMode,
+      overlaySelectionMode,
+      effectivePanLocked,
+      spacePanActive,
+      onMapDragActiveChange,
+    ]
   );
 
   const continueInteractiveDrag = useCallback(
@@ -1116,7 +1130,7 @@ export default function HotspotLayer({
               !isMapSelectablePrimitive(primitive)
                 ? ('none' as const)
                 : ('all' as const),
-            cursor: mapDragActive ? 'grabbing' : 'pointer',
+            cursor: compareOnly && compareBacklinkPickActive ? 'crosshair' : mapDragActive ? 'grabbing' : 'pointer',
           };
 
           if (primitive.kind === 'customline' && primitive.points?.length) {
