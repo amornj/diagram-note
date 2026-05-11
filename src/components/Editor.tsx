@@ -355,7 +355,13 @@ export default function Editor({
 
   const cyclePriorityNoteMode = useCallback(
     (allVisible: boolean, noteFilterVisible: boolean) => {
-      if (allVisible) return;
+      if (allVisible) {
+        const anyExpanded = priorityNotePrimitives.some(
+          (primitive) => primitive.priorityNoteCollapsed !== true
+        );
+        setPriorityNotesCollapsedState(anyExpanded);
+        return;
+      }
       if (!noteFilterVisible) {
         if (compareOnly) onToggleCompareOverlayFilter?.('priorityNote');
         else toggleOverlayFilter('priorityNote');
