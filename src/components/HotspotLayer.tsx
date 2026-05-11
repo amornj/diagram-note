@@ -1636,15 +1636,15 @@ export default function HotspotLayer({
                     </g>
                     {priorityBubble.backlinkKeys.length > 0 && (
                       <g
-                        transform={`translate(${priorityBubble.x + priorityBubble.width - 84} ${priorityBubble.y + priorityBubble.height - 14})`}
+                        transform={`translate(${priorityBubble.x + priorityBubble.width - 92} ${priorityBubble.y + priorityBubble.height - 14})`}
                         pointerEvents="none"
                       >
                         {/* pill background */}
                         <rect x={-20} y={-8} width={40} height={16} rx={8} fill="#fff8eb" stroke="#f59e0b" strokeWidth={1.5}/>
-                        {/* chain link icon: two overlapping horizontal ellipses */}
-                        <g fill="none" stroke="#b45309" strokeWidth={1.4} pointerEvents="none">
-                          <ellipse cx={-8} cy={0} rx={4.5} ry={2.4}/>
-                          <ellipse cx={-3} cy={0} rx={4.5} ry={2.4}/>
+                        {/* chain link icon: two oblique rotated rounded rects */}
+                        <g transform="translate(-8,0) rotate(-35) scale(0.82)" fill="none" stroke="#b45309" strokeWidth={1.6} strokeLinecap="round" pointerEvents="none">
+                          <rect x="-4.8" y="-1.8" width="5.2" height="3.6" rx="1.8"/>
+                          <rect x="-0.4" y="-1.8" width="5.2" height="3.6" rx="1.8"/>
                         </g>
                         {/* link count */}
                         <text
