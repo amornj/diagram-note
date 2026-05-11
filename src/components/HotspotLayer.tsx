@@ -126,14 +126,6 @@ function getPriorityBubbleBasePoint(bounds: Primitive['bbox']) {
   };
 }
 
-function getCollapsedPriorityBubbleAnchor(bounds: Primitive['bbox']) {
-  if (!bounds) return null;
-  return {
-    x: clamp(bounds.x + bounds.w + 0.014, 0.02, 0.98),
-    y: clamp(bounds.y - 0.022, 0.02, 0.98),
-  };
-}
-
 export default function HotspotLayer({
   viewer,
   dims,
@@ -361,14 +353,25 @@ export default function HotspotLayer({
             x: clamp(bounds.x + bounds.w / 2, 0.02, 0.98),
             y: clamp(bounds.y - 0.06, 0.02, 0.98),
           };
-        const collapsedAnchor = getCollapsedPriorityBubbleAnchor(bounds);
-        const anchor = collapsed ? (collapsedAnchor ?? expandedAnchor) : expandedAnchor;
-        const anchorPoint = normalizedPointToViewerElementPoint(viewer, anchor, dims);
-        if (!anchorPoint) return null;
         const width = collapsed ? PRIORITY_BUBBLE_COLLAPSED_WIDTH : layout.width;
         const height = collapsed ? PRIORITY_BUBBLE_COLLAPSED_HEIGHT : layout.height;
-        const x = anchorPoint.x - width / 2;
-        const y = anchorPoint.y;
+        let anchor = expandedAnchor;
+        let x = 0;
+        let y = 0;
+        if (collapsed) {
+          const rect = bboxToViewerElementRect(viewer, bounds, dims);
+          if (!rect) return null;
+          x = rect.x + rect.width - 2;
+          y = rect.y - height - 6;
+          anchor =
+            viewerElementPointToNormalizedPoint(viewer, x + width / 2, y, dims) ??
+            expandedAnchor;
+        } else {
+          const anchorPoint = normalizedPointToViewerElementPoint(viewer, anchor, dims);
+          if (!anchorPoint) return null;
+          x = anchorPoint.x - width / 2;
+          y = anchorPoint.y;
+        }
         return {
           primitiveId: primitive.id,
           anchor,
