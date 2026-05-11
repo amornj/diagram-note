@@ -555,10 +555,8 @@ function ComparePane({
           selectedPrimitiveIdOverride={selectedPrimitiveId}
           onSelectPrimitiveOverride={onSelectPrimitive}
           compareBacklinkPickActive={compareBacklinkPickActive}
-          onPickCompareBacklinkTarget={(primitiveId) => {
-            if (primitiveId === '__start__') onStartBacklinkPick();
-            else onPickBacklinkTarget(primitiveId);
-          }}
+          onStartCompareBacklinkPick={onStartBacklinkPick}
+          onPickCompareBacklinkTarget={onPickBacklinkTarget}
           compareLinkFlash={linkFlash}
         />
       ) : (

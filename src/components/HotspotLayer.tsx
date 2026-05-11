@@ -753,9 +753,9 @@ export default function HotspotLayer({
       } catch {
         // ignore
       }
-      if (!drag.moved && !compareOnly) drag.activate();
+      if (!drag.moved) drag.activate();
     },
-    [onMapDragActiveChange, compareOnly]
+    [onMapDragActiveChange]
   );
 
   const cancelInteractiveDrag = useCallback(
@@ -1111,7 +1111,6 @@ export default function HotspotLayer({
 
           const interactiveStyle = {
             pointerEvents:
-              (compareOnly && !compareBacklinkPickActive) ||
               spacePanActive ||
               (editorMode !== 'none' && !overlaySelectionMode) ||
               !isMapSelectablePrimitive(primitive)

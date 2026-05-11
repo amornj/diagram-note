@@ -70,6 +70,7 @@ interface EditorProps {
   selectedPrimitiveIdOverride?: string | null;
   onSelectPrimitiveOverride?: (primitiveId: string) => void;
   compareBacklinkPickActive?: boolean;
+  onStartCompareBacklinkPick?: () => void;
   onPickCompareBacklinkTarget?: (primitiveId: string) => void;
   compareLinkFlash?: { primitiveId: string; nonce: number } | null;
 }
@@ -105,6 +106,7 @@ export default function Editor({
   selectedPrimitiveIdOverride,
   onSelectPrimitiveOverride,
   compareBacklinkPickActive = false,
+  onStartCompareBacklinkPick,
   onPickCompareBacklinkTarget,
   compareLinkFlash,
 }: EditorProps) {
@@ -538,7 +540,7 @@ export default function Editor({
             break;
           case 'l':
           case 'L':
-            onPickCompareBacklinkTarget?.('__start__');
+            onStartCompareBacklinkPick?.();
             break;
           case '9':
             onToggleCompareZoomLock?.();
@@ -800,6 +802,7 @@ export default function Editor({
     onToggleCompareOverlays,
     onToggleCompareOverlayFilter,
     onSetCompareAllPriorityNotesCollapsed,
+    onStartCompareBacklinkPick,
     onPickCompareBacklinkTarget,
     isFocusedPane,
     effectivePanLocked,
