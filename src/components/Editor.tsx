@@ -69,6 +69,7 @@ interface EditorProps {
   isFocusedPane?: boolean;
   selectedPrimitiveIdOverride?: string | null;
   onSelectPrimitiveOverride?: (primitiveId: string) => void;
+  onClearCompareSelection?: () => void;
   compareBacklinkPickActive?: boolean;
   onStartCompareBacklinkPick?: () => void;
   onPickCompareBacklinkTarget?: (primitiveId: string) => void;
@@ -106,6 +107,7 @@ export default function Editor({
   isFocusedPane = false,
   selectedPrimitiveIdOverride,
   onSelectPrimitiveOverride,
+  onClearCompareSelection,
   compareBacklinkPickActive = false,
   onStartCompareBacklinkPick,
   onPickCompareBacklinkTarget,
@@ -238,6 +240,10 @@ export default function Editor({
       if (!event.quick) return;
       const target = event.originalTarget as HTMLElement | null;
       if (target && target.closest('[data-hotspot]')) return;
+      if (compareOnly) {
+        onClearCompareSelection?.();
+        return;
+      }
       setSelectedPrimitiveId(null);
     });
 
@@ -247,7 +253,7 @@ export default function Editor({
       setViewer(null);
       setViewerReady(false);
     };
-  }, [rasterUrl, setSelectedPrimitiveId]);
+  }, [rasterUrl, setSelectedPrimitiveId, compareOnly, onClearCompareSelection]);
 
   // Reset transient UI when map switches
   useEffect(() => {

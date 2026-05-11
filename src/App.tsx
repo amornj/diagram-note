@@ -393,6 +393,7 @@ function ComparePane({
   focusTarget,
   selectedPrimitiveId,
   onSelectPrimitive,
+  onClearSelection,
   compareBacklinkPickActive,
   onStartBacklinkPick,
   onPickBacklinkTarget,
@@ -423,6 +424,7 @@ function ComparePane({
   focusTarget: { bbox: import('./types').BBox; nonce: number } | null;
   selectedPrimitiveId: string | null;
   onSelectPrimitive: (primitiveId: string) => void;
+  onClearSelection: () => void;
   compareBacklinkPickActive: boolean;
   onStartBacklinkPick: () => void;
   onPickBacklinkTarget: (primitiveId: string) => void;
@@ -556,6 +558,7 @@ function ComparePane({
           isFocusedPane={isFocusedPane}
           selectedPrimitiveIdOverride={selectedPrimitiveId}
           onSelectPrimitiveOverride={onSelectPrimitive}
+          onClearCompareSelection={onClearSelection}
           compareBacklinkPickActive={compareBacklinkPickActive}
           onStartCompareBacklinkPick={onStartBacklinkPick}
           onPickCompareBacklinkTarget={onPickBacklinkTarget}
@@ -876,16 +879,20 @@ function MapPage() {
     setFocusedSplitPane(2);
   }, []);
 
+  const clearSplitLinkConfirmations = useCallback(() => {
+    setCompareLinkConfirmIds({ 1: [], 2: [] });
+  }, []);
+
   const selectSplitPrimitive = useCallback((pane: 1 | 2, primitiveId: string) => {
     setFocusedSplitPane(pane);
     setCompareSelectedPrimitiveId((current) => ({
       ...current,
       [pane]: primitiveId,
     }));
-    setCompareLinkConfirmIds((current) => ({
-      ...current,
-      [pane]: current[pane].includes(primitiveId) ? current[pane] : [],
-    }));
+    setCompareLinkConfirmIds((current) => {
+      const allConfirmed = new Set([...current[1], ...current[2]]);
+      return allConfirmed.has(primitiveId) ? current : { 1: [], 2: [] };
+    });
     setCompareFocusNonce((value) => value + 1);
   }, []);
 
@@ -1147,6 +1154,7 @@ function MapPage() {
                 onPageChange={handleComparePageChange1}
                 selectedPrimitiveId={compareSelectedPrimitiveId[1]}
                 onSelectPrimitive={(primitiveId) => selectSplitPrimitive(1, primitiveId)}
+                onClearSelection={clearSplitLinkConfirmations}
                 compareBacklinkPickActive={splitBacklinkPick !== null}
                 onStartBacklinkPick={() => startSplitBacklinkPick(1)}
                 onPickBacklinkTarget={(primitiveId) => {
@@ -1201,6 +1209,7 @@ function MapPage() {
                 onPageChange={handleComparePageChange2}
                 selectedPrimitiveId={compareSelectedPrimitiveId[2]}
                 onSelectPrimitive={(primitiveId) => selectSplitPrimitive(2, primitiveId)}
+                onClearSelection={clearSplitLinkConfirmations}
                 compareBacklinkPickActive={splitBacklinkPick !== null}
                 onStartBacklinkPick={() => startSplitBacklinkPick(2)}
                 onPickBacklinkTarget={(primitiveId) => {
