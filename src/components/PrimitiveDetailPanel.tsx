@@ -54,6 +54,7 @@ export default function PrimitiveDetailPanel({
   const maps = useMapStore((s) => s.maps);
   const activeMapId = useMapStore((s) => s.activeMapId);
   const activeMap = maps.find((m) => m.id === activeMapId) ?? null;
+  const setActiveMap = useMapStore((s) => s.setActiveMap);
   const setActivePage = useMapStore((s) => s.setActivePage);
   const removePrimitiveBacklink = useMapStore((s) => s.removePrimitiveBacklink);
 
@@ -98,17 +99,25 @@ export default function PrimitiveDetailPanel({
                 : sameMap
                 ? `${memberPrim.name} · Page ${pageIndex + 1}`
                 : `${memberPrim.name} · ${targetMap.name}${targetMap.pageCount > 1 ? ` · Page ${pageIndex + 1}` : ''}`,
-            onClick: async () => {
+            onClick: async (openInSplit: boolean) => {
               if (!activeMap) return;
               if (!sameMap) {
-                onOpenCrossMapBacklink?.({
-                  sourceMapId: activeMap.id,
-                  sourcePageIndex: activeMap.pageIndex,
-                  sourcePrimitiveId: primitive.id,
-                  targetMapId,
-                  targetPageIndex: pageIndex,
-                  targetPrimitiveId: member.id,
-                });
+                if (openInSplit) {
+                  onOpenCrossMapBacklink?.({
+                    sourceMapId: activeMap.id,
+                    sourcePageIndex: activeMap.pageIndex,
+                    sourcePrimitiveId: primitive.id,
+                    targetMapId,
+                    targetPageIndex: pageIndex,
+                    targetPrimitiveId: member.id,
+                  });
+                } else {
+                  await setActiveMap(targetMapId);
+                  if (pageIndex !== targetMap.pageIndex) {
+                    await setActivePage(pageIndex);
+                  }
+                  setSelectedPrimitiveId(member.id);
+                }
                 return;
               }
               if (pageIndex !== activeMap.pageIndex) {
@@ -128,6 +137,7 @@ export default function PrimitiveDetailPanel({
       workspace,
       maps,
       activeMap,
+      setActiveMap,
       setActivePage,
       setSelectedPrimitiveId,
       onOpenCrossMapBacklink,
@@ -350,7 +360,12 @@ export default function PrimitiveDetailPanel({
                   key={member.key}
                   className="group inline-flex items-center rounded-full border border-gray-200 bg-gray-50 pl-2.5 pr-1 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-100"
                 >
-                  <button onClick={member.onClick} className="mr-1">
+                  <button
+                    onClick={(event) => {
+                      void member.onClick(event.shiftKey);
+                    }}
+                    className="mr-1"
+                  >
                     {member.label}
                   </button>
                   <button
