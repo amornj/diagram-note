@@ -198,7 +198,8 @@ export default function Editor({
   useEffect(() => {
     if (!viewer) return;
     const isText = editorMode === 'textSelect';
-    viewer.setMouseNavEnabled(!isText);
+    const isRectDraw = editorMode === 'rectangle';
+    viewer.setMouseNavEnabled(!isText && !isRectDraw);
     // In text mode the PDF.js text layer must receive pointer events directly.
     // Disable hit-testing on the entire OSD surface, not just the canvas.
     const viewerElement = containerRef.current;
