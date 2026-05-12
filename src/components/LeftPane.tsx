@@ -104,6 +104,31 @@ const KIND_DOT_COLORS: Record<Primitive['kind'], string> = {
   group: '#3b82f6',
 };
 
+function CreatedSortIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M7 3v3" />
+      <path d="M13 3v3" />
+      <path d="M5 6.5h10.5c1.1 0 2 .9 2 2V12" />
+      <path d="M5 8.5V18c0 1.1.9 2 2 2h5" />
+      <path d="M8 11h3" />
+      <path d="M8 14h3" />
+      <path d="M8 17h2.5" />
+      <path d="M18 11.5v8" />
+      <path d="m14.5 16 3.5 3.5 3.5-3.5" />
+    </svg>
+  );
+}
+
 interface LeftPaneProps {
   splitMode?: boolean;
   splitAssignments?: { 1: string | null; 2: string | null };
@@ -210,6 +235,12 @@ export default function LeftPane({
     setAndPersistSortMode(mapSortMode === 'alphaAsc' ? 'alphaDesc' : 'alphaAsc');
   };
 
+  const toggleCreatedSort = () => {
+    setAndPersistSortMode(
+      mapSortMode === 'createdDesc' ? 'createdAsc' : 'createdDesc'
+    );
+  };
+
   const togglePrimitiveAlphaSort = () => {
     const nextMode =
       primitiveSortMode === 'alphaAsc'
@@ -297,6 +328,26 @@ export default function LeftPane({
               title="Sort by name"
             >
               {mapSortMode === 'alphaDesc' ? 'Z-A' : 'A-Z'}
+            </button>
+            <button
+              onClick={toggleCreatedSort}
+              className={`flex h-5 w-6 items-center justify-center rounded-full text-[10px] font-semibold transition ${
+                mapSortMode === 'createdDesc' || mapSortMode === 'createdAsc'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title={
+                mapSortMode === 'createdAsc'
+                  ? 'Sort by oldest added first'
+                  : 'Sort by newest added first'
+              }
+              aria-label={
+                mapSortMode === 'createdAsc'
+                  ? 'Sort by oldest added first'
+                  : 'Sort by newest added first'
+              }
+            >
+              <CreatedSortIcon />
             </button>
           </div>
         </div>
