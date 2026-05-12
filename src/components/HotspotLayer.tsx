@@ -1340,17 +1340,14 @@ export default function HotspotLayer({
                     <rect
                       x={boundsRect.x}
                       y={boundsRect.y - 18}
-                      width={Math.min(
-                        Math.max(primitive.name.length * 7 + 14, 60),
-                        Math.max(boundsRect.width, 80)
-                      )}
+                      width={Math.max(primitive.name.length * 7.5 + 16, 60)}
                       height={16}
                       rx={3}
                       fill={primitive.color}
                       opacity={0.9}
                     />
                     <text
-                      x={boundsRect.x + 7}
+                      x={boundsRect.x + 8}
                       y={boundsRect.y - 5}
                       fill="white"
                       fontSize={11}
