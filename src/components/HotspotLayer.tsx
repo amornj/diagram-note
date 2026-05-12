@@ -403,6 +403,10 @@ export default function HotspotLayer({
           y = anchorPoint.y;
         }
         const backlinkKeys = primitive.relatedMemberKeys ?? [];
+        const hasBacklinks = backlinkKeys.length > 0;
+        const showNoteNavigation = noteCount > 1;
+        const canPrevNote = viewIdx > 0;
+        const canNextNote = viewIdx < noteCount - 1;
         return {
           primitiveId: primitive.id,
           anchor,
@@ -413,9 +417,13 @@ export default function HotspotLayer({
           height,
           lines: layout.lines,
           backlinkKeys,
+          hasBacklinks,
           noteCount,
           currentViewIdx: viewIdx,
           currentNoteActualIdx,
+          showNoteNavigation,
+          canPrevNote,
+          canNextNote,
         };
       })
       .filter((bubble): bubble is NonNullable<typeof bubble> => bubble !== null);
@@ -1104,14 +1112,15 @@ export default function HotspotLayer({
         const notes = getNotesWithContent(primitive ?? null);
         const defaultIdx = getPriorityViewIndex(notes);
         const current = prev[primitiveId] ?? defaultIdx;
-        return { ...prev, [primitiveId]: (current + 1) % noteCount };
+        if (current >= noteCount - 1) return prev;
+        return { ...prev, [primitiveId]: current + 1 };
       });
     },
     [primitivesById]
   );
 
   const goPrevNote = useCallback(
-    (event: React.PointerEvent<SVGGElement>, primitiveId: string, noteCount: number) => {
+    (event: React.PointerEvent<SVGGElement>, primitiveId: string) => {
       event.preventDefault();
       event.stopPropagation();
       setNoteBubbleViewIndex((prev) => {
@@ -1119,7 +1128,8 @@ export default function HotspotLayer({
         const notes = getNotesWithContent(primitive ?? null);
         const defaultIdx = getPriorityViewIndex(notes);
         const current = prev[primitiveId] ?? defaultIdx;
-        return { ...prev, [primitiveId]: (current - 1 + noteCount) % noteCount };
+        if (current <= 0) return prev;
+        return { ...prev, [primitiveId]: current - 1 };
       });
     },
     [primitivesById]
@@ -1532,6 +1542,9 @@ export default function HotspotLayer({
             {(() => {
               const isEditing = editingPriorityPrimitiveId === priorityBubble.primitiveId;
               const isMoveArmed = movePriorityPrimitiveId === priorityBubble.primitiveId;
+              const noteNavRightOffset = priorityBubble.hasBacklinks ? 126 : 80;
+              const nextNoteX = priorityBubble.x + priorityBubble.width - noteNavRightOffset;
+              const prevNoteX = nextNoteX - 22;
               return (
                 <>
             {priorityBubble.collapsed ? (
@@ -1704,31 +1717,79 @@ export default function HotspotLayer({
                         {isMoveArmed ? '✊' : '✋'}
                       </text>
                     </g>
-                    {priorityBubble.noteCount > 1 && (
+                    {priorityBubble.showNoteNavigation && (
                       <>
                         <g
-                          transform={`translate(${priorityBubble.x + priorityBubble.width - 126} ${priorityBubble.y + priorityBubble.height - 14})`}
-                          style={{ cursor: 'pointer' }}
-                          onPointerDown={(event) =>
-                            goNextNote(event, priorityBubble.primitiveId, priorityBubble.noteCount)
+                          transform={`translate(${nextNoteX} ${priorityBubble.y + priorityBubble.height - 14})`}
+                          style={{ cursor: priorityBubble.canNextNote ? 'pointer' : 'default' }}
+                          onPointerDown={
+                            priorityBubble.canNextNote
+                              ? (event) =>
+                                  goNextNote(event, priorityBubble.primitiveId, priorityBubble.noteCount)
+                              : undefined
                           }
                         >
-                          <circle cx={0} cy={0} r={8} fill="#fff8eb" stroke="#f59e0b" strokeWidth={1.5}/>
-                          <text x={0} y={4} textAnchor="middle" fill="#b45309" fontSize={11} fontWeight={700} pointerEvents="none" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>›</text>
+                          <circle
+                            cx={0}
+                            cy={0}
+                            r={8}
+                            fill="#fff8eb"
+                            fillOpacity={priorityBubble.canNextNote ? 1 : 0.55}
+                            stroke={priorityBubble.canNextNote ? '#f59e0b' : '#fcd34d'}
+                            strokeOpacity={priorityBubble.canNextNote ? 1 : 0.75}
+                            strokeWidth={priorityBubble.canNextNote ? 1.5 : 1}
+                          />
+                          <text
+                            x={0}
+                            y={4}
+                            textAnchor="middle"
+                            fill={priorityBubble.canNextNote ? '#b45309' : '#d97706'}
+                            fillOpacity={priorityBubble.canNextNote ? 1 : 0.55}
+                            fontSize={11}
+                            fontWeight={700}
+                            pointerEvents="none"
+                            style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                          >
+                            ›
+                          </text>
                         </g>
                         <g
-                          transform={`translate(${priorityBubble.x + priorityBubble.width - 148} ${priorityBubble.y + priorityBubble.height - 14})`}
-                          style={{ cursor: 'pointer' }}
-                          onPointerDown={(event) =>
-                            goPrevNote(event, priorityBubble.primitiveId, priorityBubble.noteCount)
+                          transform={`translate(${prevNoteX} ${priorityBubble.y + priorityBubble.height - 14})`}
+                          style={{ cursor: priorityBubble.canPrevNote ? 'pointer' : 'default' }}
+                          onPointerDown={
+                            priorityBubble.canPrevNote
+                              ? (event) =>
+                                  goPrevNote(event, priorityBubble.primitiveId)
+                              : undefined
                           }
                         >
-                          <circle cx={0} cy={0} r={8} fill="#fff8eb" stroke="#f59e0b" strokeWidth={1.5}/>
-                          <text x={0} y={4} textAnchor="middle" fill="#b45309" fontSize={11} fontWeight={700} pointerEvents="none" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>‹</text>
+                          <circle
+                            cx={0}
+                            cy={0}
+                            r={8}
+                            fill="#fff8eb"
+                            fillOpacity={priorityBubble.canPrevNote ? 1 : 0.55}
+                            stroke={priorityBubble.canPrevNote ? '#f59e0b' : '#fcd34d'}
+                            strokeOpacity={priorityBubble.canPrevNote ? 1 : 0.75}
+                            strokeWidth={priorityBubble.canPrevNote ? 1.5 : 1}
+                          />
+                          <text
+                            x={0}
+                            y={4}
+                            textAnchor="middle"
+                            fill={priorityBubble.canPrevNote ? '#b45309' : '#d97706'}
+                            fillOpacity={priorityBubble.canPrevNote ? 1 : 0.55}
+                            fontSize={11}
+                            fontWeight={700}
+                            pointerEvents="none"
+                            style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                          >
+                            ‹
+                          </text>
                         </g>
                       </>
                     )}
-                    {priorityBubble.backlinkKeys.length > 0 && (
+                    {priorityBubble.hasBacklinks && (
                       <g
                         transform={`translate(${priorityBubble.x + priorityBubble.width - 92} ${priorityBubble.y + priorityBubble.height - 14})`}
                         pointerEvents="none"
