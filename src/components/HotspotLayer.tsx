@@ -192,6 +192,8 @@ export default function HotspotLayer({
     anchorOffsetX: number;
     anchorOffsetY: number;
   } | null>(null);
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStateRef = useRef<{ initialDist: number; initialZoom: number } | null>(null);
   const [priorityBubbleDraftAnchors, setPriorityBubbleDraftAnchors] = useState<
     Record<string, Point>
   >({});
@@ -882,6 +884,75 @@ export default function HotspotLayer({
     [cancelInteractiveDrag]
   );
 
+  // Multi-touch tracking: detects two-finger pinch to drive viewport zoom.
+  // Runs in capture phase so it intercepts events bound for child elements
+  // (primitives, draw overlay, priority bubbles) before they activate any
+  // single-pointer drag. iOS Safari otherwise has no way to pinch-zoom
+  // because OSD's canvas sits behind this SVG and never sees touch events.
+  const handleSvgPointerDownCapture = useCallback(
+    (event: React.PointerEvent<SVGSVGElement>) => {
+      if (event.pointerType === 'mouse') return;
+      activePointersRef.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      if (activePointersRef.current.size === 2) {
+        const pts = Array.from(activePointersRef.current.values());
+        pinchStateRef.current = {
+          initialDist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+          initialZoom: viewer.viewport.getZoom(true),
+        };
+        dragRef.current = null;
+        priorityBubbleDragRef.current = null;
+        onMapDragActiveChange(false);
+        event.stopPropagation();
+      }
+    },
+    [viewer, onMapDragActiveChange]
+  );
+
+  const handleSvgPointerMoveCapture = useCallback(
+    (event: React.PointerEvent<SVGSVGElement>) => {
+      if (!activePointersRef.current.has(event.pointerId)) return;
+      activePointersRef.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      if (activePointersRef.current.size >= 2 && pinchStateRef.current) {
+        event.stopPropagation();
+        if (effectiveZoomLocked) return;
+        const pts = Array.from(activePointersRef.current.values()).slice(0, 2);
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        if (dist < 1) return;
+        const ratio = dist / pinchStateRef.current.initialDist;
+        const newZoom = pinchStateRef.current.initialZoom * ratio;
+        const svg = svgRef.current;
+        if (!svg) return;
+        const bounds = svg.getBoundingClientRect();
+        const midX = (pts[0].x + pts[1].x) / 2 - bounds.left;
+        const midY = (pts[0].y + pts[1].y) / 2 - bounds.top;
+        const viewportPoint = viewer.viewport.pointFromPixel(
+          new OpenSeadragon.Point(midX, midY),
+          true
+        );
+        viewer.viewport.zoomTo(newZoom, viewportPoint, true);
+        viewer.viewport.applyConstraints();
+      }
+    },
+    [viewer, effectiveZoomLocked]
+  );
+
+  const handleSvgPointerUpCapture = useCallback(
+    (event: React.PointerEvent<SVGSVGElement>) => {
+      if (!activePointersRef.current.has(event.pointerId)) return;
+      activePointersRef.current.delete(event.pointerId);
+      if (activePointersRef.current.size < 2) {
+        pinchStateRef.current = null;
+      }
+    },
+    []
+  );
+
   const beginPriorityBubbleDrag = useCallback(
     (
       event: React.PointerEvent<SVGRectElement | SVGTextElement | SVGGElement>,
@@ -1148,7 +1219,11 @@ export default function HotspotLayer({
       className="absolute inset-0 h-full w-full"
       viewBox={`0 0 ${viewportSize.w} ${viewportSize.h}`}
       preserveAspectRatio="none"
-      style={{ overflow: 'visible' }}
+      style={{ overflow: 'visible', touchAction: 'none' }}
+      onPointerDownCapture={handleSvgPointerDownCapture}
+      onPointerMoveCapture={handleSvgPointerMoveCapture}
+      onPointerUpCapture={handleSvgPointerUpCapture}
+      onPointerCancelCapture={handleSvgPointerUpCapture}
       onPointerDown={beginBackgroundDrag}
       onPointerMove={continueBackgroundDrag}
       onPointerUp={endBackgroundDrag}
