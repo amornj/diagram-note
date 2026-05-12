@@ -53,6 +53,16 @@ const PRIORITY_BUBBLE_CHAR_LIMIT = 42;
 const PRIORITY_BUBBLE_COLLAPSED_WIDTH = 30;
 const PRIORITY_BUBBLE_COLLAPSED_HEIGHT = 20;
 
+let _textMeasureCtx: CanvasRenderingContext2D | null = null;
+function measureTextWidth(text: string, font: string): number {
+  if (!_textMeasureCtx) {
+    _textMeasureCtx = document.createElement('canvas').getContext('2d');
+  }
+  if (!_textMeasureCtx) return text.length * 6;
+  _textMeasureCtx.font = font;
+  return _textMeasureCtx.measureText(text).width;
+}
+
 function isStudyBoxPrimitive(primitive: Primitive) {
   return primitive.kind === 'rectangle';
 }
@@ -1340,7 +1350,7 @@ export default function HotspotLayer({
                     <rect
                       x={boundsRect.x}
                       y={boundsRect.y - 18}
-                      width={Math.max(primitive.name.length * 7.5 + 16, 60)}
+                      width={measureTextWidth(primitive.name, '600 11px system-ui, -apple-system, sans-serif') + 16}
                       height={16}
                       rx={3}
                       fill={primitive.color}
