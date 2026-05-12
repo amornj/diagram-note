@@ -226,6 +226,14 @@ export default function Editor({
       visibilityRatio: 0.5,
       constrainDuringPan: true,
       crossOriginPolicy: 'Anonymous',
+      pixelRatio: window.devicePixelRatio,
+      gestureSettingsTouch: {
+        pinchToZoom: true,
+        pinchRotate: false,
+        flickEnabled: true,
+        clickToZoom: false,
+        dblClickToZoom: true,
+      },
     });
 
     viewerRef.current = viewer;
@@ -849,7 +857,7 @@ export default function Editor({
         WebkitUserSelect: editorMode === 'textSelect' ? 'text' : 'none',
       }}
     >
-      <div ref={containerRef} className="absolute inset-0" />
+      <div ref={containerRef} className="absolute inset-0" style={{ touchAction: 'none' }} />
 
       {!viewerReady && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_top,#1e293b,#020617)] text-white">
