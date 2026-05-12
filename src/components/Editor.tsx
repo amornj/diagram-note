@@ -200,11 +200,11 @@ export default function Editor({
     const isText = editorMode === 'textSelect';
     const isRectDraw = editorMode === 'rectangle';
     viewer.setMouseNavEnabled(!isText && !isRectDraw);
-    // In text mode the PDF.js text layer must receive pointer events directly.
-    // Disable hit-testing on the entire OSD surface, not just the canvas.
+    // In text/rect-draw mode disable hit-testing on the OSD surface so the
+    // SVG overlay above receives all pointer events without OSD interference.
     const viewerElement = containerRef.current;
     if (viewerElement) {
-      viewerElement.style.pointerEvents = isText ? 'none' : '';
+      viewerElement.style.pointerEvents = isText || isRectDraw ? 'none' : '';
     }
     const canvas = viewer.canvas as HTMLElement | undefined;
     if (canvas) {
@@ -227,7 +227,6 @@ export default function Editor({
       visibilityRatio: 0.5,
       constrainDuringPan: true,
       crossOriginPolicy: 'Anonymous',
-      pixelRatio: window.devicePixelRatio,
       gestureSettingsTouch: {
         pinchToZoom: true,
         pinchRotate: false,
