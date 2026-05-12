@@ -19,7 +19,7 @@ import {
   makeMemberKey,
   parseMemberKey,
 } from '../lib/workspace';
-import type { MapWorkspace, Point, Primitive } from '../types';
+import type { MapWorkspace, NoteCard, Point, Primitive } from '../types';
 import { useMapStore } from '../lib/mapStore';
 
 interface HotspotLayerProps {
@@ -61,6 +61,15 @@ function measureTextWidth(text: string, font: string): number {
   if (!_textMeasureCtx) return text.length * 6;
   _textMeasureCtx.font = font;
   return _textMeasureCtx.measureText(text).width;
+}
+
+function getNotesWithContent(primitive: Primitive | null): NoteCard[] {
+  return (primitive?.notes ?? []).filter((n) => n.content.trim());
+}
+
+function getPriorityViewIndex(notesWithContent: NoteCard[]): number {
+  const idx = notesWithContent.findIndex((n) => n.isPriority);
+  return idx >= 0 ? idx : 0;
 }
 
 function isStudyBoxPrimitive(primitive: Primitive) {
@@ -162,7 +171,9 @@ export default function HotspotLayer({
   const [draftPointer, setDraftPointer] = useState<Point | null>(null);
   const [editingPriorityPrimitiveId, setEditingPriorityPrimitiveId] = useState<string | null>(null);
   const [editingPriorityDraft, setEditingPriorityDraft] = useState('');
+  const [editingNoteActualIndex, setEditingNoteActualIndex] = useState(-1);
   const [movePriorityPrimitiveId, setMovePriorityPrimitiveId] = useState<string | null>(null);
+  const [noteBubbleViewIndex, setNoteBubbleViewIndex] = useState<Record<string, number>>({});
   const [linkFlash, setLinkFlash] = useState<{ primitiveId: string; nonce: number } | null>(null);
   const [linkConfirmIds, setLinkConfirmIds] = useState<string[]>([]);
   const animationIdleTimerRef = useRef<number | null>(null);
@@ -346,7 +357,16 @@ export default function HotspotLayer({
           dims
         );
         if (!basePoint) return null;
-        const layout = layoutPriorityBubble(priorityNote.content);
+        const notesWithContent = getNotesWithContent(primitive);
+        const noteCount = notesWithContent.length;
+        const defaultViewIdx = getPriorityViewIndex(notesWithContent);
+        const viewIdx = Math.min(
+          noteBubbleViewIndex[primitive.id] ?? defaultViewIdx,
+          Math.max(0, noteCount - 1)
+        );
+        const currentNote = notesWithContent[viewIdx] ?? priorityNote;
+        const currentNoteActualIdx = (primitive.notes ?? []).indexOf(currentNote);
+        const layout = layoutPriorityBubble(currentNote.content);
         const fallbackAnchor = primitive.priorityNoteOffset
           ? (() => {
               const topCenterX = basePoint.x + primitive.priorityNoteOffset.x;
@@ -393,6 +413,9 @@ export default function HotspotLayer({
           height,
           lines: layout.lines,
           backlinkKeys,
+          noteCount,
+          currentViewIdx: viewIdx,
+          currentNoteActualIdx,
         };
       })
       .filter((bubble): bubble is NonNullable<typeof bubble> => bubble !== null);
@@ -405,6 +428,7 @@ export default function HotspotLayer({
     allSingleOverlayFiltersVisible,
     allCompareOverlayFiltersVisible,
     priorityBubbleDraftAnchors,
+    noteBubbleViewIndex,
     primitivesById,
     viewer,
     dims,
@@ -462,6 +486,7 @@ export default function HotspotLayer({
   useEffect(() => {
     setEditingPriorityPrimitiveId(null);
     setEditingPriorityDraft('');
+    setEditingNoteActualIndex(-1);
     setMovePriorityPrimitiveId(null);
   }, [workspace.primitives, compareOnly]);
 
@@ -923,15 +948,18 @@ export default function HotspotLayer({
       event:
         | React.MouseEvent<SVGRectElement | SVGTextElement | SVGGElement>
         | React.PointerEvent<SVGRectElement | SVGGElement>,
-      primitiveId: string
+      primitiveId: string,
+      actualNoteIndex?: number
     ) => {
       event.preventDefault();
       event.stopPropagation();
       const primitive = primitivesById.get(primitiveId);
-      const note = getPriorityNote(primitive ?? null);
+      const noteIdx = actualNoteIndex !== undefined ? actualNoteIndex : getPriorityNoteIndex(primitive ?? null);
+      const note = primitive?.notes?.[noteIdx];
       if (!note) return;
       setEditingPriorityPrimitiveId(primitiveId);
       setEditingPriorityDraft(note.content);
+      setEditingNoteActualIndex(noteIdx);
     },
     [primitivesById]
   );
@@ -939,10 +967,13 @@ export default function HotspotLayer({
   const commitPriorityBubbleEdit = useCallback(() => {
     if (!editingPriorityPrimitiveId) return;
     const primitive = primitivesById.get(editingPriorityPrimitiveId);
-    const noteIndex = getPriorityNoteIndex(primitive ?? null);
+    const noteIndex = editingNoteActualIndex >= 0
+      ? editingNoteActualIndex
+      : getPriorityNoteIndex(primitive ?? null);
     if (!primitive || noteIndex < 0) {
       setEditingPriorityPrimitiveId(null);
       setEditingPriorityDraft('');
+      setEditingNoteActualIndex(-1);
       return;
     }
     const nextContent = editingPriorityDraft.trim();
@@ -960,8 +991,10 @@ export default function HotspotLayer({
     }
     setEditingPriorityPrimitiveId(null);
     setEditingPriorityDraft('');
+    setEditingNoteActualIndex(-1);
   }, [
     compareOnly,
+    editingNoteActualIndex,
     editingPriorityDraft,
     editingPriorityPrimitiveId,
     onComparePrimitivePatch,
@@ -1060,6 +1093,36 @@ export default function HotspotLayer({
       setMovePriorityPrimitiveId(null);
     },
     []
+  );
+
+  const goNextNote = useCallback(
+    (event: React.PointerEvent<SVGGElement>, primitiveId: string, noteCount: number) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setNoteBubbleViewIndex((prev) => {
+        const primitive = primitivesById.get(primitiveId);
+        const notes = getNotesWithContent(primitive ?? null);
+        const defaultIdx = getPriorityViewIndex(notes);
+        const current = prev[primitiveId] ?? defaultIdx;
+        return { ...prev, [primitiveId]: (current + 1) % noteCount };
+      });
+    },
+    [primitivesById]
+  );
+
+  const goPrevNote = useCallback(
+    (event: React.PointerEvent<SVGGElement>, primitiveId: string, noteCount: number) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setNoteBubbleViewIndex((prev) => {
+        const primitive = primitivesById.get(primitiveId);
+        const notes = getNotesWithContent(primitive ?? null);
+        const defaultIdx = getPriorityViewIndex(notes);
+        const current = prev[primitiveId] ?? defaultIdx;
+        return { ...prev, [primitiveId]: (current - 1 + noteCount) % noteCount };
+      });
+    },
+    [primitivesById]
   );
 
   // re-render markers when viewport changes
@@ -1551,7 +1614,7 @@ export default function HotspotLayer({
                 onPointerUp={endPriorityBubbleDrag}
                 onPointerCancel={cancelPriorityBubbleDrag}
                 onDoubleClick={(event) =>
-                  beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
+                  beginPriorityBubbleEdit(event, priorityBubble.primitiveId, priorityBubble.currentNoteActualIdx)
                 }
               />
             )}
@@ -1597,7 +1660,7 @@ export default function HotspotLayer({
                       transform={`translate(${priorityBubble.x + priorityBubble.width - 36} ${priorityBubble.y + priorityBubble.height - 14})`}
                       style={{ cursor: 'pointer' }}
                       onPointerDown={(event) =>
-                        beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
+                        beginPriorityBubbleEdit(event, priorityBubble.primitiveId, priorityBubble.currentNoteActualIdx)
                       }
                     >
                       <circle cx={0} cy={0} r={8} fill="#fff8eb" stroke="#f59e0b" strokeWidth={1.5} />
@@ -1641,6 +1704,30 @@ export default function HotspotLayer({
                         {isMoveArmed ? '✊' : '✋'}
                       </text>
                     </g>
+                    {priorityBubble.noteCount > 1 && (
+                      <>
+                        <g
+                          transform={`translate(${priorityBubble.x + priorityBubble.width - 126} ${priorityBubble.y + priorityBubble.height - 14})`}
+                          style={{ cursor: 'pointer' }}
+                          onPointerDown={(event) =>
+                            goNextNote(event, priorityBubble.primitiveId, priorityBubble.noteCount)
+                          }
+                        >
+                          <circle cx={0} cy={0} r={8} fill="#fff8eb" stroke="#f59e0b" strokeWidth={1.5}/>
+                          <text x={0} y={4} textAnchor="middle" fill="#b45309" fontSize={11} fontWeight={700} pointerEvents="none" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>›</text>
+                        </g>
+                        <g
+                          transform={`translate(${priorityBubble.x + priorityBubble.width - 148} ${priorityBubble.y + priorityBubble.height - 14})`}
+                          style={{ cursor: 'pointer' }}
+                          onPointerDown={(event) =>
+                            goPrevNote(event, priorityBubble.primitiveId, priorityBubble.noteCount)
+                          }
+                        >
+                          <circle cx={0} cy={0} r={8} fill="#fff8eb" stroke="#f59e0b" strokeWidth={1.5}/>
+                          <text x={0} y={4} textAnchor="middle" fill="#b45309" fontSize={11} fontWeight={700} pointerEvents="none" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>‹</text>
+                        </g>
+                      </>
+                    )}
                     {priorityBubble.backlinkKeys.length > 0 && (
                       <g
                         transform={`translate(${priorityBubble.x + priorityBubble.width - 92} ${priorityBubble.y + priorityBubble.height - 14})`}
@@ -1696,7 +1783,7 @@ export default function HotspotLayer({
                     onPointerUp={endPriorityBubbleDrag}
                     onPointerCancel={cancelPriorityBubbleDrag}
                     onDoubleClick={(event) =>
-                      beginPriorityBubbleEdit(event, priorityBubble.primitiveId)
+                      beginPriorityBubbleEdit(event, priorityBubble.primitiveId, priorityBubble.currentNoteActualIdx)
                     }
                   >
                     {priorityBubble.lines.map((line, index) => (
