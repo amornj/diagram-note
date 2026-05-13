@@ -207,6 +207,8 @@ function rectsOverlap(
   );
 }
 
+type PixelRect = { pxL: number; pyT: number; pxR: number; pyB: number };
+
 function positionBubble(
   primitive: Primitive,
   bounds: BBox,
@@ -215,6 +217,7 @@ function positionBubble(
   W: number,
   H: number,
   scale: number,
+  otherPrimitiveBounds: BBox[],
   occupied: BubbleRect[]
 ): BubbleRect {
   const margin = 12 * scale;
@@ -226,25 +229,41 @@ function positionBubble(
   const primCx = (pxL + pxR) / 2;
   const primCy = (pyT + pyB) / 2;
 
-  const fitsPage = (bx: number, by: number) =>
-    bx >= margin &&
-    bx + bw <= W - margin &&
-    by >= margin &&
-    by + bh <= H - margin;
+  const otherRects: PixelRect[] = otherPrimitiveBounds.map((b) => ({
+    pxL: b.x * W,
+    pyT: b.y * H,
+    pxR: (b.x + b.w) * W,
+    pyB: (b.y + b.h) * H,
+  }));
 
   const overlapsPrim = (bx: number, by: number) =>
     rectsOverlap({ bx, by, bw, bh }, pxL, pyT, pxR, pyB, 2 * scale);
 
-  const overlapsOther = (bx: number, by: number) =>
-    occupied.some((rect) =>
-      rectsOverlap(
-        { bx, by, bw, bh },
-        rect.bx,
-        rect.by,
-        rect.bx + rect.bw,
-        rect.by + rect.bh,
-        0
-      )
+  const countOtherPrimOverlaps = (bx: number, by: number) => {
+    let count = 0;
+    for (const r of otherRects) {
+      if (rectsOverlap({ bx, by, bw, bh }, r.pxL, r.pyT, r.pxR, r.pyB, 2 * scale)) {
+        count++;
+      }
+    }
+    return count;
+  };
+
+  const countBubbleOverlaps = (bx: number, by: number) =>
+    occupied.reduce(
+      (acc, rect) =>
+        acc +
+        (rectsOverlap(
+          { bx, by, bw, bh },
+          rect.bx,
+          rect.by,
+          rect.bx + rect.bw,
+          rect.by + rect.bh,
+          0
+        )
+          ? 1
+          : 0),
+      0
     );
 
   const candidates: Array<{ bx: number; by: number }> = [];
@@ -255,24 +274,35 @@ function positionBubble(
       by: primitive.priorityNoteAnchor.y * H,
     });
   }
-  // Above, below, right, left of primitive (centered on its corresponding edge)
+  // Above primitive — three horizontal alignments
   candidates.push({ bx: primCx - bw / 2, by: pyT - bh - gap });
+  candidates.push({ bx: pxL, by: pyT - bh - gap });
+  candidates.push({ bx: pxR - bw, by: pyT - bh - gap });
+  // Below primitive
   candidates.push({ bx: primCx - bw / 2, by: pyB + gap });
+  candidates.push({ bx: pxL, by: pyB + gap });
+  candidates.push({ bx: pxR - bw, by: pyB + gap });
+  // Right and left of primitive
   candidates.push({ bx: pxR + gap, by: primCy - bh / 2 });
+  candidates.push({ bx: pxR + gap, by: pyT });
   candidates.push({ bx: pxL - bw - gap, by: primCy - bh / 2 });
+  candidates.push({ bx: pxL - bw - gap, by: pyT });
 
   let best: { bx: number; by: number; score: number } | null = null;
   for (const c of candidates) {
     let score = 0;
-    if (!fitsPage(c.bx, c.by)) {
-      const overflowX =
-        Math.max(0, margin - c.bx) + Math.max(0, c.bx + bw - (W - margin));
-      const overflowY =
-        Math.max(0, margin - c.by) + Math.max(0, c.by + bh - (H - margin));
-      score += (overflowX + overflowY) * 100;
-    }
+    // Page overflow — proportional to how far off-page the bubble goes
+    const overflowX =
+      Math.max(0, margin - c.bx) + Math.max(0, c.bx + bw - (W - margin));
+    const overflowY =
+      Math.max(0, margin - c.by) + Math.max(0, c.by + bh - (H - margin));
+    score += (overflowX + overflowY) * 100;
+    // Covering own parent primitive — worst case
     if (overlapsPrim(c.bx, c.by)) score += 10000;
-    if (overlapsOther(c.bx, c.by)) score += 500;
+    // Covering each neighbouring primitive — strongly discouraged
+    score += countOtherPrimOverlaps(c.bx, c.by) * 4000;
+    // Covering an already-placed bubble — lightly discouraged
+    score += countBubbleOverlaps(c.bx, c.by) * 800;
     if (best === null || score < best.score) {
       best = { ...c, score };
     }
@@ -294,13 +324,24 @@ function drawSpeechBubble(
   W: number,
   H: number,
   scale: number,
+  otherPrimitiveBounds: BBox[],
   occupied: BubbleRect[]
 ): BubbleRect {
   const layout = layoutBubble(content);
   const bw = layout.width * scale;
   const bh = layout.height * scale;
 
-  const placed = positionBubble(primitive, bounds, bw, bh, W, H, scale, occupied);
+  const placed = positionBubble(
+    primitive,
+    bounds,
+    bw,
+    bh,
+    W,
+    H,
+    scale,
+    otherPrimitiveBounds,
+    occupied
+  );
   const { bx, by } = placed;
 
   const primCenterX = (bounds.x + bounds.w / 2) * W;
@@ -384,6 +425,14 @@ export async function buildMapOverlayPdf(
     drawPrimitive(ctx, primitive, W, H, strokeWidth);
   }
 
+  // Every drawn primitive's bbox is an obstacle the bubble should avoid.
+  const drawnBoundsById = new Map<string, BBox>();
+  for (const p of workspace.primitives) {
+    if (p.kind === 'group') continue;
+    const b = getPrimitiveBounds(p, primitivesById);
+    if (b) drawnBoundsById.set(p.id, b);
+  }
+
   // Draw bubbles for smaller primitives first so larger ones (which have more
   // room around them) can yield space — and so we don't paint a giant bubble
   // over a tiny neighbour.
@@ -399,6 +448,10 @@ export async function buildMapOverlayPdf(
   for (const { primitive, bounds } of bubbleQueue) {
     const priorityNote = getPriorityNote(primitive);
     if (!priorityNote) continue;
+    const otherBounds: BBox[] = [];
+    for (const [id, b] of drawnBoundsById) {
+      if (id !== primitive.id) otherBounds.push(b);
+    }
     const rect = drawSpeechBubble(
       ctx,
       primitive,
@@ -407,6 +460,7 @@ export async function buildMapOverlayPdf(
       W,
       H,
       bubbleScale,
+      otherBounds,
       placedBubbles
     );
     placedBubbles.push(rect);
