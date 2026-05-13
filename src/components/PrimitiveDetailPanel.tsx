@@ -63,6 +63,7 @@ export default function PrimitiveDetailPanel({
   const [nameDraft, setNameDraft] = useState(primitive.name);
   const [aliasDraft, setAliasDraft] = useState((primitive.aliases ?? []).join(', '));
   const [draggedGroupIndex, setDraggedGroupIndex] = useState<number | null>(null);
+  const [deletingBacklinks, setDeletingBacklinks] = useState(false);
   const primitivesById = useMemo(
     () => new Map(workspace.primitives.map((p) => [p.id, p])),
     [workspace.primitives]
@@ -156,6 +157,7 @@ export default function PrimitiveDetailPanel({
     setAliasDraft((primitive.aliases ?? []).join(', '));
     setEditingName(false);
     setConfirmDelete(false);
+    setDeletingBacklinks(false);
   }, [primitive.id, primitive.name, primitive.aliases]);
 
   // Auto-focus name input on freshly-created primitives
@@ -332,25 +334,49 @@ export default function PrimitiveDetailPanel({
             <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
               Backlinks
             </div>
-            <button
-              onClick={() =>
-                isPickingRelated
-                  ? cancelNeighborPick()
-                  : startNeighborPick(primitive.id, activeMap?.pageIndex ?? 0)
-              }
-              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
-                isPickingRelated
-                  ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              {isPickingRelated ? <X size={12} /> : <Plus size={12} />}
-              {isPickingRelated ? 'Cancel pick' : 'Add'}
-            </button>
+            <div className="flex items-center gap-2">
+              {relatedMembers.length > 0 && (
+                <button
+                  onClick={() => setDeletingBacklinks((value) => !value)}
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border transition ${
+                    deletingBacklinks
+                      ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                      : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                  }`}
+                  aria-label={deletingBacklinks ? 'Stop deleting backlinks' : 'Delete backlinks'}
+                  title={deletingBacklinks ? 'Tap a backlink chip to delete' : 'Delete backlinks'}
+                >
+                  {deletingBacklinks ? <X size={12} /> : <Trash2 size={12} />}
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setDeletingBacklinks(false);
+                  if (isPickingRelated) {
+                    cancelNeighborPick();
+                  } else {
+                    startNeighborPick(primitive.id, activeMap?.pageIndex ?? 0);
+                  }
+                }}
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                  isPickingRelated
+                    ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {isPickingRelated ? <X size={12} /> : <Plus size={12} />}
+                {isPickingRelated ? 'Cancel pick' : 'Add'}
+              </button>
+            </div>
           </div>
           {isPickingRelated && (
             <div className="mt-1 text-xs text-gray-500">
               Click a primitive on the map to backlink it.
+            </div>
+          )}
+          {deletingBacklinks && (
+            <div className="mt-1 text-xs text-rose-600">
+              Tap a backlink chip to delete it.
             </div>
           )}
           {relatedMembers.length > 0 ? (
@@ -358,38 +384,62 @@ export default function PrimitiveDetailPanel({
               {relatedMembers.map((member) => (
                 <div
                   key={member.key}
-                  className="group inline-flex items-center rounded-full border border-gray-200 bg-gray-50 pl-2.5 pr-1 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-100"
+                  className={`group inline-flex items-center rounded-full border py-1 text-xs font-medium transition ${
+                    deletingBacklinks
+                      ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                      : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                  } ${deletingBacklinks ? 'px-2.5' : 'pl-2.5 pr-1'}`}
                 >
                   <button
                     onClick={(event) => {
+                      if (deletingBacklinks) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setDeletingBacklinks(false);
+                        if (activeMap) {
+                          void removePrimitiveBacklink(
+                            activeMap.id,
+                            activeMap.pageIndex,
+                            primitive.id,
+                            member.mapId,
+                            member.pageIndex,
+                            member.id
+                          );
+                          return;
+                        }
+                        removeNeighborMember(primitive.id, member.key);
+                        return;
+                      }
                       void member.onClick(event.shiftKey);
                     }}
-                    className="mr-1"
+                    className={deletingBacklinks ? '' : 'mr-1'}
                   >
                     {member.label}
                   </button>
-                  <button
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (activeMap) {
-                        void removePrimitiveBacklink(
-                          activeMap.id,
-                          activeMap.pageIndex,
-                          primitive.id,
-                          member.mapId,
-                          member.pageIndex,
-                          member.id
-                        );
-                        return;
-                      }
-                      removeNeighborMember(primitive.id, member.key);
-                    }}
-                    className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                    aria-label={`Remove ${member.label}`}
-                  >
-                    <X size={12} />
-                  </button>
+                  {!deletingBacklinks && (
+                    <button
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (activeMap) {
+                          void removePrimitiveBacklink(
+                            activeMap.id,
+                            activeMap.pageIndex,
+                            primitive.id,
+                            member.mapId,
+                            member.pageIndex,
+                            member.id
+                          );
+                          return;
+                        }
+                        removeNeighborMember(primitive.id, member.key);
+                      }}
+                      className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                      aria-label={`Remove ${member.label}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
