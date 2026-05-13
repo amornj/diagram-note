@@ -640,7 +640,7 @@ export default function LeftPane({
                 <span className="flex-1 truncate text-sm text-gray-800">
                   {p.name}
                 </span>
-                <span className="flex shrink-0 flex-col items-end gap-0.5">
+                <span className="flex shrink-0 items-center gap-1.5">
                   {(hasNote || hasBacklink) && (
                     <span className="flex items-center gap-1 text-amber-500">
                       {hasNote && <NoteMetaIcon />}
