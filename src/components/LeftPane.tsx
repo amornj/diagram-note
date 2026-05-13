@@ -8,7 +8,7 @@ import GoogleAuthButton from './GoogleAuthButton';
 import { EMPTY_WORKSPACE } from '../lib/workspace';
 
 type MapSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
-type PrimitiveSortMode = 'default' | 'alphaAsc' | 'alphaDesc';
+type PrimitiveSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
 
 const MAP_SORT_STORAGE_KEY = 'diagram-note-map-sort-mode';
 const PRIMITIVE_SORT_STORAGE_KEY = 'diagram-note-primitive-sort-mode';
@@ -49,12 +49,18 @@ function persistMapSortMode(mode: MapSortMode) {
 }
 
 function loadPrimitiveSortMode(): PrimitiveSortMode {
-  if (typeof window === 'undefined') return 'default';
+  if (typeof window === 'undefined') return 'recent';
   const raw = window.localStorage.getItem(PRIMITIVE_SORT_STORAGE_KEY);
-  if (raw === 'default' || raw === 'alphaAsc' || raw === 'alphaDesc') {
+  if (
+    raw === 'recent' ||
+    raw === 'alphaAsc' ||
+    raw === 'alphaDesc' ||
+    raw === 'createdDesc' ||
+    raw === 'createdAsc'
+  ) {
     return raw;
   }
-  return 'default';
+  return 'recent';
 }
 
 function persistPrimitiveSortMode(mode: PrimitiveSortMode) {
@@ -240,13 +246,24 @@ export default function LeftPane({
     const base = !activeTagFilter
       ? effectiveWorkspace.primitives
       : effectiveWorkspace.primitives.filter((p) => p.tags?.includes(activeTagFilter));
-    if (primitiveSortMode === 'default') return base;
     const next = [...base];
-    next.sort((a, b) =>
-      primitiveSortMode === 'alphaDesc'
-        ? b.name.localeCompare(a.name, undefined, { sensitivity: 'base' })
-        : a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-    );
+    next.sort((a, b) => {
+      const aIndex = base.findIndex((p) => p.id === a.id);
+      const bIndex = base.findIndex((p) => p.id === b.id);
+      switch (primitiveSortMode) {
+        case 'alphaAsc':
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        case 'alphaDesc':
+          return b.name.localeCompare(a.name, undefined, { sensitivity: 'base' });
+        case 'createdAsc':
+          return aIndex - bIndex;
+        case 'createdDesc':
+          return bIndex - aIndex;
+        case 'recent':
+        default:
+          return bIndex - aIndex;
+      }
+    });
     return next;
   }, [effectiveWorkspace.primitives, activeTagFilter, primitiveSortMode]);
 
@@ -281,14 +298,20 @@ export default function LeftPane({
   };
 
   const togglePrimitiveAlphaSort = () => {
-    const nextMode =
-      primitiveSortMode === 'alphaAsc'
-        ? 'alphaDesc'
-        : primitiveSortMode === 'alphaDesc'
-          ? 'default'
-          : 'alphaAsc';
+    const nextMode = primitiveSortMode === 'alphaAsc' ? 'alphaDesc' : 'alphaAsc';
     setPrimitiveSortMode(nextMode);
     persistPrimitiveSortMode(nextMode);
+  };
+
+  const setAndPersistPrimitiveSortMode = (mode: PrimitiveSortMode) => {
+    setPrimitiveSortMode(mode);
+    persistPrimitiveSortMode(mode);
+  };
+
+  const togglePrimitiveCreatedSort = () => {
+    setAndPersistPrimitiveSortMode(
+      primitiveSortMode === 'createdDesc' ? 'createdAsc' : 'createdDesc'
+    );
   };
 
   const startMapsResize = (startY: number, startHeight: number) => {
@@ -579,21 +602,41 @@ export default function LeftPane({
               </span>
             )}
           </div>
-          <button
-            onClick={togglePrimitiveAlphaSort}
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
-              primitiveSortMode === 'alphaAsc' || primitiveSortMode === 'alphaDesc'
-                ? 'bg-slate-900 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-            title="Sort primitives by name"
-          >
-            {primitiveSortMode === 'alphaDesc'
-              ? 'Z-A'
-              : primitiveSortMode === 'alphaAsc'
-                ? 'A-Z'
-                : 'A-Z'}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setAndPersistPrimitiveSortMode('recent')}
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                primitiveSortMode === 'recent'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Sort primitives by recent update"
+            >
+              Recent
+            </button>
+            <button
+              onClick={togglePrimitiveAlphaSort}
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                primitiveSortMode === 'alphaAsc' || primitiveSortMode === 'alphaDesc'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Sort primitives by name"
+            >
+              {primitiveSortMode === 'alphaDesc' ? 'Z-A' : 'A-Z'}
+            </button>
+            <button
+              onClick={togglePrimitiveCreatedSort}
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                primitiveSortMode === 'createdAsc' || primitiveSortMode === 'createdDesc'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Sort primitives by created date"
+            >
+              <CreatedSortIcon />
+            </button>
+          </div>
         </div>
         <div className="mt-2 space-y-1">
           {filteredPrimitives.length === 0 && (
