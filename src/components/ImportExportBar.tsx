@@ -4,6 +4,7 @@ import { useMapStore } from '../lib/mapStore';
 import { FIXED_RENDER_SCALE } from '../lib/mapStore';
 import { useEditorStore } from '../lib/store';
 import { downloadBlob, exportDnote, importDnote } from '../lib/bundle';
+import { buildMapOverlayPdf } from '../lib/exportPdf';
 import * as idb from '../lib/idb';
 import type { MapWorkspace } from '../types';
 import { EMPTY_WORKSPACE } from '../lib/workspace';
@@ -173,6 +174,26 @@ export default function ImportExportBar() {
     setBusy(null);
   };
 
+  const handleExportPdf = async () => {
+    if (!activeMap) return;
+    setBusy('Building PDF…');
+    setError(null);
+    try {
+      const blob = await buildMapOverlayPdf(
+        { ...activeMap, workspace },
+        workspace
+      );
+      const safeName = activeMap.name.replace(/[^a-z0-9-_ ]+/gi, '_');
+      const suffix =
+        (activeMap.pageCount ?? 1) > 1 ? ` p${activeMap.pageIndex + 1}` : '';
+      downloadBlob(blob, `${safeName}${suffix} overlays.pdf`);
+      setMenuOpen(false);
+    } catch (err) {
+      setError((err as Error).message ?? 'Failed to export PDF');
+    }
+    setBusy(null);
+  };
+
   const handleExportNotes = () => {
     if (!activeMap) return;
 
@@ -312,6 +333,15 @@ export default function ImportExportBar() {
           >
             <Download size={14} />
             Export .dnote
+          </button>
+          <button
+            onClick={() => void handleExportPdf()}
+            disabled={!activeMap || busy !== null}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            role="menuitem"
+          >
+            <Download size={14} />
+            Export PDF (overlays)
           </button>
           <button
             onClick={handleExportJson}
