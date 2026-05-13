@@ -6,6 +6,7 @@ import {
   Columns2,
   Eye,
   Home,
+  Link2,
   Lock,
   Map,
   Pin,
@@ -1086,6 +1087,21 @@ export default function Editor({
               title="Maps (M)"
             >
               <Map size={15} />
+            </button>
+            <button
+              onClick={onStartCompareBacklinkPick}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                compareBacklinkPickActive
+                  ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                  : 'bg-white/90 text-gray-700 hover:bg-white'
+              }`}
+              title={
+                compareBacklinkPickActive
+                  ? 'Pick backlink target in the other window (L)'
+                  : 'Start cross-map backlink pick (L)'
+              }
+            >
+              <Link2 size={15} />
             </button>
             <button
               onClick={onToggleCompareOverlays}
