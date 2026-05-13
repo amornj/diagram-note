@@ -129,6 +129,45 @@ function CreatedSortIcon() {
   );
 }
 
+function NoteMetaIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M7 4.5h7l4 4v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2Z" />
+      <path d="M14 4.5v4h4" />
+      <path d="M8.5 12h7" />
+      <path d="M8.5 15.5h5.5" />
+    </svg>
+  );
+}
+
+function BacklinkMetaIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M10.5 13.5 8 16a3 3 0 1 1-4.2-4.2l3.3-3.3A3 3 0 0 1 11.3 8" />
+      <path d="m13.5 10.5 2.5-2.5a3 3 0 1 1 4.2 4.2l-3.3 3.3A3 3 0 0 1 12.7 16" />
+      <path d="m9 15 6-6" />
+    </svg>
+  );
+}
+
 interface LeftPaneProps {
   splitMode?: boolean;
   splitAssignments?: { 1: string | null; 2: string | null };
@@ -568,6 +607,8 @@ export default function LeftPane({
           )}
           {filteredPrimitives.map((p) => {
             const isSelected = p.id === effectiveSelectedPrimitiveId;
+            const hasNote = (p.notes ?? []).some((note) => note.content.trim());
+            const hasBacklink = (p.relatedMemberKeys?.length ?? 0) > 0;
             return (
               <button
                 key={p.id}
@@ -599,8 +640,16 @@ export default function LeftPane({
                 <span className="flex-1 truncate text-sm text-gray-800">
                   {p.name}
                 </span>
-                <span className="text-[10px] text-gray-400">
-                  {KIND_LABELS[p.kind]}
+                <span className="flex shrink-0 flex-col items-end gap-0.5">
+                  <span className="text-[10px] leading-none text-gray-400">
+                    {KIND_LABELS[p.kind]}
+                  </span>
+                  {(hasNote || hasBacklink) && (
+                    <span className="flex items-center gap-1 text-amber-500">
+                      {hasNote && <NoteMetaIcon />}
+                      {hasBacklink && <BacklinkMetaIcon />}
+                    </span>
+                  )}
                 </span>
               </button>
             );
