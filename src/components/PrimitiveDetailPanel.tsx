@@ -335,20 +335,6 @@ export default function PrimitiveDetailPanel({
               Backlinks
             </div>
             <div className="flex items-center gap-2">
-              {relatedMembers.length > 0 && (
-                <button
-                  onClick={() => setDeletingBacklinks((value) => !value)}
-                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full border transition ${
-                    deletingBacklinks
-                      ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                      : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-                  }`}
-                  aria-label={deletingBacklinks ? 'Stop deleting backlinks' : 'Delete backlinks'}
-                  title={deletingBacklinks ? 'Tap a backlink chip to delete' : 'Delete backlinks'}
-                >
-                  {deletingBacklinks ? <X size={12} /> : <Trash2 size={12} />}
-                </button>
-              )}
               <button
                 onClick={() => {
                   setDeletingBacklinks(false);
@@ -367,16 +353,25 @@ export default function PrimitiveDetailPanel({
                 {isPickingRelated ? <X size={12} /> : <Plus size={12} />}
                 {isPickingRelated ? 'Cancel pick' : 'Add'}
               </button>
+              {relatedMembers.length > 0 && (
+                <button
+                  onClick={() => setDeletingBacklinks((value) => !value)}
+                  className={`inline-flex items-center rounded-full border bg-white p-1 transition ${
+                    deletingBacklinks
+                      ? 'border-rose-200 text-rose-600 hover:bg-rose-50'
+                      : 'border-rose-200 text-rose-600 hover:bg-rose-50'
+                  }`}
+                  aria-label={deletingBacklinks ? 'Stop deleting backlinks' : 'Delete backlinks'}
+                  title="Delete backlinks"
+                >
+                  {deletingBacklinks ? <X size={14} /> : <Trash2 size={14} />}
+                </button>
+              )}
             </div>
           </div>
           {isPickingRelated && (
             <div className="mt-1 text-xs text-gray-500">
               Click a primitive on the map to backlink it.
-            </div>
-          )}
-          {deletingBacklinks && (
-            <div className="mt-1 text-xs text-rose-600">
-              Tap a backlink chip to delete it.
             </div>
           )}
           {relatedMembers.length > 0 ? (
