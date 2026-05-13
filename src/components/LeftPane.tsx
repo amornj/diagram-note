@@ -641,15 +641,15 @@ export default function LeftPane({
                   {p.name}
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-0.5">
-                  <span className="text-[10px] leading-none text-gray-400">
-                    {KIND_LABELS[p.kind]}
-                  </span>
                   {(hasNote || hasBacklink) && (
                     <span className="flex items-center gap-1 text-amber-500">
                       {hasNote && <NoteMetaIcon />}
                       {hasBacklink && <BacklinkMetaIcon />}
                     </span>
                   )}
+                  <span className="text-[10px] leading-none text-gray-400">
+                    {KIND_LABELS[p.kind]}
+                  </span>
                 </span>
               </button>
             );
