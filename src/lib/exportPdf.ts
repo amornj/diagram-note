@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import * as idb from './idb';
-import { getPrimitiveBounds, parseMemberKey } from './workspace';
+import { getPrimitiveBounds } from './workspace';
 import type { BBox, DiagramMap, MapWorkspace, Primitive } from '../types';
 
 const BUBBLE_MIN_W = 180;
@@ -189,6 +189,103 @@ function drawLabel(
   ctx.restore();
 }
 
+type BubbleRect = { bx: number; by: number; bw: number; bh: number };
+
+function rectsOverlap(
+  a: BubbleRect,
+  pxL: number,
+  pyT: number,
+  pxR: number,
+  pyB: number,
+  pad: number
+) {
+  return (
+    a.bx + a.bw > pxL - pad &&
+    a.bx < pxR + pad &&
+    a.by + a.bh > pyT - pad &&
+    a.by < pyB + pad
+  );
+}
+
+function positionBubble(
+  primitive: Primitive,
+  bounds: BBox,
+  bw: number,
+  bh: number,
+  W: number,
+  H: number,
+  scale: number,
+  occupied: BubbleRect[]
+): BubbleRect {
+  const margin = 12 * scale;
+  const gap = 14 * scale;
+  const pxL = bounds.x * W;
+  const pyT = bounds.y * H;
+  const pxR = (bounds.x + bounds.w) * W;
+  const pyB = (bounds.y + bounds.h) * H;
+  const primCx = (pxL + pxR) / 2;
+  const primCy = (pyT + pyB) / 2;
+
+  const fitsPage = (bx: number, by: number) =>
+    bx >= margin &&
+    bx + bw <= W - margin &&
+    by >= margin &&
+    by + bh <= H - margin;
+
+  const overlapsPrim = (bx: number, by: number) =>
+    rectsOverlap({ bx, by, bw, bh }, pxL, pyT, pxR, pyB, 2 * scale);
+
+  const overlapsOther = (bx: number, by: number) =>
+    occupied.some((rect) =>
+      rectsOverlap(
+        { bx, by, bw, bh },
+        rect.bx,
+        rect.by,
+        rect.bx + rect.bw,
+        rect.by + rect.bh,
+        0
+      )
+    );
+
+  const candidates: Array<{ bx: number; by: number }> = [];
+
+  if (primitive.priorityNoteAnchor) {
+    candidates.push({
+      bx: primitive.priorityNoteAnchor.x * W - bw / 2,
+      by: primitive.priorityNoteAnchor.y * H,
+    });
+  }
+  // Above, below, right, left of primitive (centered on its corresponding edge)
+  candidates.push({ bx: primCx - bw / 2, by: pyT - bh - gap });
+  candidates.push({ bx: primCx - bw / 2, by: pyB + gap });
+  candidates.push({ bx: pxR + gap, by: primCy - bh / 2 });
+  candidates.push({ bx: pxL - bw - gap, by: primCy - bh / 2 });
+
+  let best: { bx: number; by: number; score: number } | null = null;
+  for (const c of candidates) {
+    let score = 0;
+    if (!fitsPage(c.bx, c.by)) {
+      const overflowX =
+        Math.max(0, margin - c.bx) + Math.max(0, c.bx + bw - (W - margin));
+      const overflowY =
+        Math.max(0, margin - c.by) + Math.max(0, c.by + bh - (H - margin));
+      score += (overflowX + overflowY) * 100;
+    }
+    if (overlapsPrim(c.bx, c.by)) score += 10000;
+    if (overlapsOther(c.bx, c.by)) score += 500;
+    if (best === null || score < best.score) {
+      best = { ...c, score };
+    }
+  }
+
+  let bx = best!.bx;
+  let by = best!.by;
+  // Final hard clamp so the bubble cannot leave the page.
+  bx = Math.max(margin, Math.min(W - bw - margin, bx));
+  by = Math.max(margin, Math.min(H - bh - margin, by));
+  return { bx, by, bw, bh };
+}
+
 function drawSpeechBubble(
   ctx: CanvasRenderingContext2D,
   primitive: Primitive,
@@ -196,26 +293,23 @@ function drawSpeechBubble(
   bounds: BBox,
   W: number,
   H: number,
-  scale: number
-) {
+  scale: number,
+  occupied: BubbleRect[]
+): BubbleRect {
   const layout = layoutBubble(content);
   const bw = layout.width * scale;
   const bh = layout.height * scale;
 
-  const anchor =
-    primitive.priorityNoteAnchor ?? {
-      x: clamp(bounds.x + bounds.w / 2, 0.02, 0.98),
-      y: clamp(bounds.y - 0.06, 0.02, 0.98),
-    };
-
-  const bx = anchor.x * W - bw / 2;
-  const by = anchor.y * H;
+  const placed = positionBubble(primitive, bounds, bw, bh, W, H, scale, occupied);
+  const { bx, by } = placed;
 
   const primCenterX = (bounds.x + bounds.w / 2) * W;
   const primTopY = bounds.y * H;
+  const primBotY = (bounds.y + bounds.h) * H;
   const tailGap = 14 * scale;
   const bubbleBottom = by + bh;
   const hasTail = bubbleBottom + tailGap < primTopY;
+  const tailUp = by > primBotY + tailGap;
   const tailMidX = clamp(primCenterX, bx + 24 * scale, bx + bw - 24 * scale);
 
   ctx.save();
@@ -226,6 +320,11 @@ function drawSpeechBubble(
   const r = 18 * scale;
   ctx.beginPath();
   ctx.moveTo(bx + r, by);
+  if (tailUp) {
+    ctx.lineTo(tailMidX - 6 * scale, by);
+    ctx.lineTo(tailMidX, primBotY + 2 * scale);
+    ctx.lineTo(tailMidX + 8 * scale, by);
+  }
   ctx.lineTo(bx + bw - r, by);
   ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + r);
   ctx.lineTo(bx + bw, by + bh - r);
@@ -253,6 +352,8 @@ function drawSpeechBubble(
     textY += BUBBLE_LINE_HEIGHT * scale;
   }
   ctx.restore();
+
+  return placed;
 }
 
 export async function buildMapOverlayPdf(
@@ -283,35 +384,32 @@ export async function buildMapOverlayPdf(
     drawPrimitive(ctx, primitive, W, H, strokeWidth);
   }
 
-  for (const primitive of workspace.primitives) {
-    if (primitive.showPriorityNote !== true) continue;
+  // Draw bubbles for smaller primitives first so larger ones (which have more
+  // room around them) can yield space — and so we don't paint a giant bubble
+  // over a tiny neighbour.
+  const bubbleQueue = workspace.primitives
+    .filter((p) => p.showPriorityNote === true && getPriorityNote(p))
+    .map((p) => ({ primitive: p, bounds: getPrimitiveBounds(p, primitivesById) }))
+    .filter(
+      (entry): entry is { primitive: Primitive; bounds: BBox } => entry.bounds !== null
+    )
+    .sort((a, b) => a.bounds.w * a.bounds.h - b.bounds.w * b.bounds.h);
+
+  const placedBubbles: BubbleRect[] = [];
+  for (const { primitive, bounds } of bubbleQueue) {
     const priorityNote = getPriorityNote(primitive);
     if (!priorityNote) continue;
-    let bounds: BBox | null;
-    if (primitive.kind === 'group') {
-      bounds = null;
-      const keys = primitive.groupMemberKeys ?? [];
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const key of keys) {
-        const parsed = parseMemberKey(key);
-        if (!parsed) continue;
-        const member = primitivesById.get(parsed.id);
-        if (!member) continue;
-        const mb = getPrimitiveBounds(member, primitivesById);
-        if (!mb) continue;
-        minX = Math.min(minX, mb.x);
-        minY = Math.min(minY, mb.y);
-        maxX = Math.max(maxX, mb.x + mb.w);
-        maxY = Math.max(maxY, mb.y + mb.h);
-      }
-      if (Number.isFinite(minX)) {
-        bounds = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-      }
-    } else {
-      bounds = getPrimitiveBounds(primitive, primitivesById);
-    }
-    if (!bounds) continue;
-    drawSpeechBubble(ctx, primitive, priorityNote.content, bounds, W, H, bubbleScale);
+    const rect = drawSpeechBubble(
+      ctx,
+      primitive,
+      priorityNote.content,
+      bounds,
+      W,
+      H,
+      bubbleScale,
+      placedBubbles
+    );
+    placedBubbles.push(rect);
   }
 
   // Force landscape: PDF page is sized so width >= height.
