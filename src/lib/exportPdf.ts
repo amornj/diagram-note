@@ -301,12 +301,24 @@ export async function buildMapOverlayPdf(
       }
     };
 
-    // Section title.
-    ensureSpace(26);
+    // Section title — "Notes From <map name> <DD Month YYYY>". Long map names
+    // wrap onto a second line via splitTextToSize so the date is never lost.
+    const dateStr = new Intl.DateTimeFormat('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date());
+    const titleText = `Notes From ${map.name || 'Untitled map'} ${dateStr}`;
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(15);
-    pdf.text('Notes', contentX, y + 14);
-    y += 26;
+    const titleLineHeight = 19;
+    const titleLines = pdf.splitTextToSize(titleText, contentW) as string[];
+    ensureSpace(titleLines.length * titleLineHeight + 8);
+    for (const line of titleLines) {
+      pdf.text(line, contentX, y + 14);
+      y += titleLineHeight;
+    }
+    y += 8;
 
     for (const { primitive, number } of numbered) {
       const notes = getContentNotes(primitive);
