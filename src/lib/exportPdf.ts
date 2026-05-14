@@ -329,15 +329,30 @@ export async function buildMapOverlayPdf(
         continue;
       }
 
+      // When a primitive has more than one note, each is bulleted so the
+      // list is visually scannable. A single-note primitive stays flat.
+      const useBullets = notes.length > 1;
+      const bulletX = contentX + 12;
+      const textX = contentX + (useBullets ? 22 : 12);
+      const wrapWidth = contentW - (useBullets ? 22 : 12);
+
       for (let i = 0; i < notes.length; i++) {
         const note = notes[i];
+        let bulletDrawn = false;
+        const drawBullet = (baselineY: number) => {
+          if (!useBullets || bulletDrawn) return;
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(bodySize);
+          pdf.text('•', bulletX, baselineY);
+          bulletDrawn = true;
+        };
 
-        // Optional per-note name when the primitive has multiple notes
-        if (notes.length > 1 && note.name.trim()) {
+        if (useBullets && note.name.trim()) {
           ensureSpace(noteNameLineHeight);
+          drawBullet(y + noteNameSize);
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(noteNameSize);
-          pdf.text(note.name.trim(), contentX + 12, y + noteNameSize);
+          pdf.text(note.name.trim(), textX, y + noteNameSize);
           y += noteNameLineHeight;
         }
 
@@ -345,11 +360,12 @@ export async function buildMapOverlayPdf(
         pdf.setFontSize(bodySize);
         const lines = pdf.splitTextToSize(
           note.content.trim(),
-          contentW - 12
+          wrapWidth
         ) as string[];
-        for (const line of lines) {
+        for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
           ensureSpace(bodyLineHeight);
-          pdf.text(line, contentX + 12, y + bodySize);
+          if (lineIdx === 0) drawBullet(y + bodySize);
+          pdf.text(lines[lineIdx], textX, y + bodySize);
           y += bodyLineHeight;
         }
         if (i < notes.length - 1) y += interNoteSpacing;
