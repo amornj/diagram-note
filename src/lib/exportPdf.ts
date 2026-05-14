@@ -7,6 +7,57 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
+const GREEK_TO_LATIN: Record<string, string> = {
+  α: 'alpha', β: 'beta', γ: 'gamma', δ: 'delta', ε: 'epsilon',
+  ζ: 'zeta', η: 'eta', θ: 'theta', ι: 'iota', κ: 'kappa',
+  λ: 'lambda', μ: 'mu', ν: 'nu', ξ: 'xi', ο: 'o', π: 'pi',
+  ρ: 'rho', σ: 'sigma', ς: 'sigma', τ: 'tau', υ: 'upsilon',
+  φ: 'phi', χ: 'chi', ψ: 'psi', ω: 'omega',
+  Α: 'Alpha', Β: 'Beta', Γ: 'Gamma', Δ: 'Delta', Ε: 'Epsilon',
+  Ζ: 'Zeta', Η: 'Eta', Θ: 'Theta', Ι: 'Iota', Κ: 'Kappa',
+  Λ: 'Lambda', Μ: 'Mu', Ν: 'Nu', Ξ: 'Xi', Ο: 'O', Π: 'Pi',
+  Ρ: 'Rho', Σ: 'Sigma', Τ: 'Tau', Υ: 'Upsilon', Φ: 'Phi',
+  Χ: 'Chi', Ψ: 'Psi', Ω: 'Omega',
+};
+
+// jsPDF's built-in Helvetica is WinAnsi-only. Any character outside that
+// encoding makes splitTextToSize fall back to per-character spacing — which
+// is what made notes containing arrows/Greek render with huge gaps between
+// every letter. Map common scientific glyphs to ASCII and strip the rest.
+function sanitizeForPdf(text: string): string {
+  if (!text) return text;
+  let s = text;
+  s = s.replace(/[→⇒⟶⟹]/g, ' -> ');
+  s = s.replace(/[←⇐⟵⟸]/g, ' <- ');
+  s = s.replace(/[↔⇔⟷⟺]/g, ' <-> ');
+  s = s.replace(/[↑⇑]/g, '^');
+  s = s.replace(/[↓⇓]/g, 'v');
+  s = s.replace(/[≈∼∽]/g, '~');
+  s = s.replace(/≡/g, '===');
+  s = s.replace(/≠/g, '!=');
+  s = s.replace(/≤/g, '<=');
+  s = s.replace(/≥/g, '>=');
+  s = s.replace(/[×⨯]/g, 'x');
+  s = s.replace(/÷/g, '/');
+  s = s.replace(/√/g, 'sqrt');
+  s = s.replace(/∞/g, 'inf');
+  s = s.replace(/[∑]/g, 'Sum');
+  s = s.replace(/[∏]/g, 'Prod');
+  s = s.replace(/[∫]/g, 'Int');
+  s = s.replace(/[∂]/g, 'd');
+  s = s.replace(/[Ͱ-Ͽ]/g, (c) => GREEK_TO_LATIN[c] ?? '?');
+  // Final guard: anything still outside Latin-1 + WinAnsi punctuation
+  // (smart quotes, em/en dash, bullet, ellipsis, euro, trademark) gets `?`
+  // so a stray glyph never breaks layout for the whole line.
+  s = s.replace(
+    /[^\x00-\xFF‘’‚“”„†‡•…‰‹›€™]/g,
+    '?'
+  );
+  // Collapse the double-spaces introduced by inserting ' -> ' etc.
+  s = s.replace(/ {2,}/g, ' ');
+  return s;
+}
+
 function getPriorityNote(p: Primitive) {
   return p.notes?.find((n) => n.isPriority && n.content.trim()) ?? null;
 }
@@ -308,7 +359,9 @@ export async function buildMapOverlayPdf(
       month: 'long',
       year: 'numeric',
     }).format(new Date());
-    const titleText = `Notes From ${map.name || 'Untitled map'} ${dateStr}`;
+    const titleText = sanitizeForPdf(
+      `Notes From ${map.name || 'Untitled map'} ${dateStr}`
+    );
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(15);
     const titleLineHeight = 19;
@@ -327,7 +380,7 @@ export async function buildMapOverlayPdf(
       // "1. Glycolysis" — the numbered heading
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(headingSize);
-      const heading = `${number}. ${primitive.name || 'Untitled'}`;
+      const heading = sanitizeForPdf(`${number}. ${primitive.name || 'Untitled'}`);
       pdf.text(heading, contentX, y + headingSize);
       y += headingLineHeight;
 
@@ -364,14 +417,14 @@ export async function buildMapOverlayPdf(
           drawBullet(y + noteNameSize);
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(noteNameSize);
-          pdf.text(note.name.trim(), textX, y + noteNameSize);
+          pdf.text(sanitizeForPdf(note.name.trim()), textX, y + noteNameSize);
           y += noteNameLineHeight;
         }
 
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(bodySize);
         const lines = pdf.splitTextToSize(
-          note.content.trim(),
+          sanitizeForPdf(note.content.trim()),
           wrapWidth
         ) as string[];
         for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
