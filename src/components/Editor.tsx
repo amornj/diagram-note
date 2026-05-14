@@ -129,6 +129,7 @@ export default function Editor({
   const [groupBuilderFocusSignal, setGroupBuilderFocusSignal] = useState(0);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [hintCollapsed, setHintCollapsed] = useState(true);
+  const [topToolbarCollapsed, setTopToolbarCollapsed] = useState(false);
   const [panelOffsets, setPanelOffsets] = useState<Record<DraggablePanelKey, PanelOffset>>({
     search: DEFAULT_PANEL_OFFSET,
     map: DEFAULT_PANEL_OFFSET,
@@ -901,220 +902,239 @@ export default function Editor({
         />
       )}
 
-      <div
-        className="absolute top-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-white/10 bg-black/45 px-2 py-2 shadow-lg backdrop-blur"
-      >
-        {compareOnly && title && (
-          <div className="mr-2 rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-white/90">
-            {title}
+      <div className="absolute top-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3">
+        {topToolbarCollapsed ? (
+          <button
+            onClick={() => setTopToolbarCollapsed(false)}
+            className="flex h-5 w-5 items-center justify-center rounded border border-white/10 bg-black/50 text-white/50 backdrop-blur transition hover:text-white/90"
+            title="Show top toolbar"
+          >
+            <span style={{ fontSize: 8, lineHeight: 1 }}>▲</span>
+          </button>
+        ) : (
+          <div className="flex items-center rounded-2xl border border-white/10 bg-black/45 px-2 py-2 shadow-lg backdrop-blur">
+            {compareOnly && title && (
+              <div className="mr-2 rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-white/90">
+                {title}
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={zoomIn}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
+                title="Zoom in (+)"
+              >
+                <Plus size={17} />
+              </button>
+              <button
+                onClick={zoomOut}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
+                title="Zoom out (-)"
+              >
+                <Minus size={17} />
+              </button>
+              <button
+                onClick={compareOnly ? onToggleCompareZoomLock : toggleZoomLock}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                  effectiveZoomLocked
+                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                    : 'bg-white/90 text-gray-700 hover:bg-white'
+                }`}
+                title={
+                  effectiveZoomLocked
+                    ? `Zoom locked at ${zoomPercent}%`
+                    : 'Lock zoom (apply to focus & search)'
+                }
+              >
+                {effectiveZoomLocked ? <Lock size={15} /> : <Unlock size={15} />}
+              </button>
+              {compareOnly && (
+                <button
+                  onClick={onToggleComparePanLock}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    effectivePanLocked
+                      ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title={effectivePanLocked ? 'Pinned viewport (P)' : 'Pin viewport (P)'}
+                >
+                  <Pin size={15} />
+                </button>
+              )}
+              {!compareOnly && (
+                <button
+                  onClick={togglePanLock}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    effectivePanLocked
+                      ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title={effectivePanLocked ? 'Pin focus movement off (P)' : 'Pin viewport while focusing (P)'}
+                >
+                  <Pin size={15} />
+                </button>
+              )}
+              <button
+                onClick={goHome}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
+                title="Reset view (0)"
+              >
+                <Home size={16} />
+              </button>
+              {!compareOnly && (
+                <button
+                  onClick={onToggleSplitMode}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    splitMode
+                      ? 'bg-sky-500 text-white hover:bg-sky-600'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title={splitMode ? 'Exit split compare' : 'Split compare'}
+                >
+                  <Columns2 size={15} />
+                </button>
+              )}
+              {!compareOnly && activeMap?.sourceType === 'pdf' && (
+                <button
+                  onClick={() => setEditorMode(editorMode === 'textSelect' ? 'none' : 'textSelect')}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    editorMode === 'textSelect'
+                      ? 'bg-sky-500 text-white hover:bg-sky-600'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title={editorMode === 'textSelect' ? 'Exit text mode (T or Esc)' : 'Select text (T)'}
+                >
+                  <span className="text-[13px] font-bold leading-none">T</span>
+                </button>
+              )}
+              {!compareOnly && (
+                <button
+                  onClick={openSearch}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    showQuickSearch
+                      ? 'bg-sky-500 text-white hover:bg-sky-600'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title="Search (5)"
+                >
+                  <Search size={15} />
+                </button>
+              )}
+              {!compareOnly && (
+                <button
+                  onClick={openStudyBoxTool}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    floatingTool === 'studybox' || editorMode === 'rectangle'
+                      ? 'bg-sky-500 text-white hover:bg-sky-600'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title="Study box (6)"
+                >
+                  <Square size={15} />
+                </button>
+              )}
+              {!compareOnly && (
+                <button
+                  onClick={openGroupTool}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    floatingTool === 'group'
+                      ? 'bg-sky-500 text-white hover:bg-sky-600'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title="Group (7)"
+                >
+                  <Shapes size={15} />
+                </button>
+              )}
+              {!compareOnly && (
+                <button
+                  onClick={openPolylineTool}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    floatingTool === 'polyline' || editorMode === 'polygon'
+                      ? 'bg-sky-500 text-white hover:bg-sky-600'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title="Polyline (8)"
+                >
+                  <PenTool size={15} />
+                </button>
+              )}
+              {!compareOnly && (
+                <button
+                  onClick={toggleMapPicker}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    showMapPicker
+                      ? 'bg-sky-500 text-white hover:bg-sky-600'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title="Maps (M)"
+                >
+                  <Map size={15} />
+                </button>
+              )}
+              {!compareOnly && (
+                <button
+                  onClick={toggleShowAllOverlayFilters}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    allOverlayFiltersVisible
+                      ? 'bg-sky-500 text-white hover:bg-sky-600'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title={allOverlayFiltersVisible ? 'Hide all overlays (\\)' : 'Show all overlays (\\)'}
+                >
+                  <Eye size={15} />
+                </button>
+              )}
+              {compareOnly && (
+                <>
+                  <button
+                    onClick={toggleMapPicker}
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                      showMapPicker
+                        ? 'bg-sky-500 text-white hover:bg-sky-600'
+                        : 'bg-white/90 text-gray-700 hover:bg-white'
+                    }`}
+                    title="Maps (M)"
+                  >
+                    <Map size={15} />
+                  </button>
+                  <button
+                    onClick={onStartCompareBacklinkPick}
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                      compareBacklinkPickActive
+                        ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                        : 'bg-white/90 text-gray-700 hover:bg-white'
+                    }`}
+                    title={
+                      compareBacklinkPickActive
+                        ? 'Pick backlink target in the other window (L)'
+                        : 'Start cross-map backlink pick (L)'
+                    }
+                  >
+                    <Link2 size={15} />
+                  </button>
+                  <button
+                    onClick={onToggleCompareOverlays}
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                      allCompareOverlayFiltersVisible
+                        ? 'bg-sky-500 text-white hover:bg-sky-600'
+                        : 'bg-white/90 text-gray-700 hover:bg-white'
+                    }`}
+                    title={allCompareOverlayFiltersVisible ? 'Hide overlays (\\)' : 'Show overlays (\\)'}
+                  >
+                    <Eye size={15} />
+                  </button>
+                </>
+              )}
+            </div>
+            <button
+              onClick={() => setTopToolbarCollapsed(true)}
+              className="pl-2 pr-1 text-white/40 transition hover:text-white/80"
+              title="Collapse top toolbar"
+            >
+              <span style={{ fontSize: 8, lineHeight: 1 }}>▶</span>
+            </button>
           </div>
-        )}
-        <button
-          onClick={zoomIn}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
-          title="Zoom in (+)"
-        >
-          <Plus size={17} />
-        </button>
-        <button
-          onClick={zoomOut}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
-          title="Zoom out (-)"
-        >
-          <Minus size={17} />
-        </button>
-        <button
-          onClick={compareOnly ? onToggleCompareZoomLock : toggleZoomLock}
-          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-            effectiveZoomLocked
-              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-              : 'bg-white/90 text-gray-700 hover:bg-white'
-          }`}
-          title={
-            effectiveZoomLocked
-              ? `Zoom locked at ${zoomPercent}%`
-              : 'Lock zoom (apply to focus & search)'
-          }
-        >
-          {effectiveZoomLocked ? <Lock size={15} /> : <Unlock size={15} />}
-        </button>
-        {compareOnly && (
-          <button
-            onClick={onToggleComparePanLock}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-              effectivePanLocked
-                ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
-                : 'bg-white/90 text-gray-700 hover:bg-white'
-            }`}
-            title={effectivePanLocked ? 'Pinned viewport (P)' : 'Pin viewport (P)'}
-          >
-            <Pin size={15} />
-          </button>
-        )}
-        {!compareOnly && (
-          <button
-            onClick={togglePanLock}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-              effectivePanLocked
-                ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
-                : 'bg-white/90 text-gray-700 hover:bg-white'
-            }`}
-            title={effectivePanLocked ? 'Pin focus movement off (P)' : 'Pin viewport while focusing (P)'}
-          >
-            <Pin size={15} />
-          </button>
-        )}
-        <button
-          onClick={goHome}
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-700 shadow transition hover:bg-white"
-          title="Reset view (0)"
-        >
-          <Home size={16} />
-        </button>
-        {!compareOnly && (
-          <button
-            onClick={onToggleSplitMode}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-              splitMode
-                ? 'bg-sky-500 text-white hover:bg-sky-600'
-                : 'bg-white/90 text-gray-700 hover:bg-white'
-            }`}
-            title={splitMode ? 'Exit split compare' : 'Split compare'}
-          >
-            <Columns2 size={15} />
-          </button>
-        )}
-        {!compareOnly && activeMap?.sourceType === 'pdf' && (
-          <button
-            onClick={() => setEditorMode(editorMode === 'textSelect' ? 'none' : 'textSelect')}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-              editorMode === 'textSelect'
-                ? 'bg-sky-500 text-white hover:bg-sky-600'
-                : 'bg-white/90 text-gray-700 hover:bg-white'
-            }`}
-            title={editorMode === 'textSelect' ? 'Exit text mode (T or Esc)' : 'Select text (T)'}
-          >
-            <span className="text-[13px] font-bold leading-none">T</span>
-          </button>
-        )}
-        {!compareOnly && (
-          <button
-          onClick={openSearch}
-          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-            showQuickSearch
-              ? 'bg-sky-500 text-white hover:bg-sky-600'
-              : 'bg-white/90 text-gray-700 hover:bg-white'
-          }`}
-          title="Search (5)"
-        >
-          <Search size={15} />
-          </button>
-        )}
-        {!compareOnly && (
-          <button
-          onClick={openStudyBoxTool}
-          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-            floatingTool === 'studybox' || editorMode === 'rectangle'
-              ? 'bg-sky-500 text-white hover:bg-sky-600'
-              : 'bg-white/90 text-gray-700 hover:bg-white'
-          }`}
-          title="Study box (6)"
-        >
-          <Square size={15} />
-          </button>
-        )}
-        {!compareOnly && (
-          <button
-          onClick={openGroupTool}
-          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-            floatingTool === 'group'
-              ? 'bg-sky-500 text-white hover:bg-sky-600'
-              : 'bg-white/90 text-gray-700 hover:bg-white'
-          }`}
-          title="Group (7)"
-        >
-          <Shapes size={15} />
-          </button>
-        )}
-        {!compareOnly && (
-          <button
-          onClick={openPolylineTool}
-          className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-            floatingTool === 'polyline' || editorMode === 'polygon'
-              ? 'bg-sky-500 text-white hover:bg-sky-600'
-              : 'bg-white/90 text-gray-700 hover:bg-white'
-          }`}
-          title="Polyline (8)"
-        >
-          <PenTool size={15} />
-          </button>
-        )}
-        {!compareOnly && (
-          <button
-            onClick={toggleMapPicker}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-              showMapPicker
-                ? 'bg-sky-500 text-white hover:bg-sky-600'
-                : 'bg-white/90 text-gray-700 hover:bg-white'
-            }`}
-            title="Maps (M)"
-          >
-            <Map size={15} />
-          </button>
-        )}
-        {!compareOnly && (
-          <button
-            onClick={toggleShowAllOverlayFilters}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-            allOverlayFiltersVisible
-              ? 'bg-sky-500 text-white hover:bg-sky-600'
-              : 'bg-white/90 text-gray-700 hover:bg-white'
-          }`}
-          title={allOverlayFiltersVisible ? 'Hide all overlays (\\)' : 'Show all overlays (\\)'}
-        >
-          <Eye size={15} />
-          </button>
-        )}
-        {compareOnly && (
-          <>
-            <button
-              onClick={toggleMapPicker}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-                showMapPicker
-                  ? 'bg-sky-500 text-white hover:bg-sky-600'
-                  : 'bg-white/90 text-gray-700 hover:bg-white'
-              }`}
-              title="Maps (M)"
-            >
-              <Map size={15} />
-            </button>
-            <button
-              onClick={onStartCompareBacklinkPick}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-                compareBacklinkPickActive
-                  ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                  : 'bg-white/90 text-gray-700 hover:bg-white'
-              }`}
-              title={
-                compareBacklinkPickActive
-                  ? 'Pick backlink target in the other window (L)'
-                  : 'Start cross-map backlink pick (L)'
-              }
-            >
-              <Link2 size={15} />
-            </button>
-            <button
-              onClick={onToggleCompareOverlays}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-                allCompareOverlayFiltersVisible
-                  ? 'bg-sky-500 text-white hover:bg-sky-600'
-                  : 'bg-white/90 text-gray-700 hover:bg-white'
-              }`}
-              title={allCompareOverlayFiltersVisible ? 'Hide overlays (\\)' : 'Show overlays (\\)'}
-            >
-              <Eye size={15} />
-            </button>
-          </>
         )}
       </div>
 
