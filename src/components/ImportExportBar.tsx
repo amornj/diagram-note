@@ -1,5 +1,6 @@
-import { Download, FilePlus2, Menu, Upload, X } from 'lucide-react';
+import { Download, FilePlus2, Menu, Package, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { zipSync } from 'fflate';
 import { useMapStore } from '../lib/mapStore';
 import { FIXED_RENDER_SCALE } from '../lib/mapStore';
 import { useEditorStore } from '../lib/store';
@@ -105,6 +106,60 @@ export default function ImportExportBar() {
       setMenuOpen(false);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to export .dnote');
+    }
+    setBusy(null);
+  };
+
+  const handleExportAllDnotes = async () => {
+    if (maps.length === 0) return;
+    setError(null);
+    try {
+      const entries: Record<string, Uint8Array> = {};
+      const usedNames = new Set<string>();
+      let skipped = 0;
+      let index = 0;
+      for (const m of maps) {
+        index += 1;
+        setBusy(`Bundling ${index} of ${maps.length}…`);
+        const sourceBlob = await idb.getPdfBlob(m.id);
+        if (!sourceBlob) {
+          skipped += 1;
+          continue;
+        }
+        // Use the live workspace for the currently-open map; stored data for the rest.
+        const mapForExport =
+          m.id === activeMapId
+            ? { ...m, workspace, updatedAt: Date.now() }
+            : m;
+        const result = await exportDnote(mapForExport, sourceBlob);
+        let filename = result.filename;
+        if (usedNames.has(filename)) {
+          const dot = filename.lastIndexOf('.');
+          const base = dot === -1 ? filename : filename.slice(0, dot);
+          const ext = dot === -1 ? '' : filename.slice(dot);
+          let n = 2;
+          while (usedNames.has(`${base} (${n})${ext}`)) n += 1;
+          filename = `${base} (${n})${ext}`;
+        }
+        usedNames.add(filename);
+        entries[filename] = new Uint8Array(await result.blob.arrayBuffer());
+      }
+      if (Object.keys(entries).length === 0) {
+        throw new Error('No source files available to bundle');
+      }
+      setBusy('Compressing archive…');
+      const zipped = zipSync(entries);
+      const zipBuf = new ArrayBuffer(zipped.length);
+      new Uint8Array(zipBuf).set(zipped);
+      const today = new Date().toISOString().slice(0, 10);
+      const filename = `diagram-note maps ${today}.zip`;
+      downloadBlob(new Blob([zipBuf], { type: 'application/zip' }), filename);
+      if (skipped > 0) {
+        setError(`${skipped} map${skipped === 1 ? '' : 's'} skipped (source file missing)`);
+      }
+      setMenuOpen(false);
+    } catch (err) {
+      setError((err as Error).message ?? 'Failed to bundle .dnote archive');
     }
     setBusy(null);
   };
@@ -272,6 +327,15 @@ export default function ImportExportBar() {
           >
             <Download size={14} />
             Export .dnote
+          </button>
+          <button
+            onClick={() => void handleExportAllDnotes()}
+            disabled={maps.length === 0 || busy !== null}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            role="menuitem"
+          >
+            <Package size={14} />
+            Export all .dnote (zip)
           </button>
           <button
             onClick={() => void handleExportPdf()}
