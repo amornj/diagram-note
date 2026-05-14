@@ -901,10 +901,9 @@ export default function Editor({
         />
       )}
 
-      <div className="absolute left-2 right-2 top-4 z-10 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div
-          className="mx-auto flex w-max min-w-full items-center gap-1 rounded-2xl border border-white/10 bg-black/45 px-2 py-2 shadow-lg backdrop-blur"
-        >
+      <div
+        className="absolute top-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-white/10 bg-black/45 px-2 py-2 shadow-lg backdrop-blur"
+      >
         {compareOnly && title && (
           <div className="mr-2 rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-white/90">
             {title}
@@ -1117,7 +1116,6 @@ export default function Editor({
             </button>
           </>
         )}
-        </div>
       </div>
 
       {showMapPicker && (
