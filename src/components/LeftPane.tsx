@@ -96,6 +96,13 @@ function sortMaps(maps: DiagramMap[], mode: MapSortMode, activeMapId: string | n
   return next;
 }
 
+function getMonthGroupLabel(timestamp: number) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(timestamp));
+}
+
 const KIND_LABELS: Record<Primitive['kind'], string> = {
   rectangle: 'Study box',
   polygon: 'Region',
@@ -222,6 +229,7 @@ export default function LeftPane({
   const [primitiveSortMode, setPrimitiveSortMode] =
     useState<PrimitiveSortMode>(loadPrimitiveSortMode);
   const [pinnedMapIds, setPinnedMapIds] = useState<Set<string>>(loadPinnedMapIds);
+  const [collapsedMapMonths, setCollapsedMapMonths] = useState<Record<string, boolean>>({});
 
   const [mapsHeight, setMapsHeight] = useState(() => {
     if (typeof window === 'undefined') return 192;
@@ -271,6 +279,23 @@ export default function LeftPane({
     () => sortMaps(maps, mapSortMode, activeMapId, pinnedMapIds),
     [maps, mapSortMode, activeMapId, pinnedMapIds]
   );
+  const pinnedMaps = useMemo(
+    () => sortedMaps.filter((map) => pinnedMapIds.has(map.id)),
+    [sortedMaps, pinnedMapIds]
+  );
+  const monthGroupedMaps = useMemo(() => {
+    const groups: Array<{ label: string; maps: DiagramMap[] }> = [];
+    for (const map of sortedMaps) {
+      const label = getMonthGroupLabel(map.createdAt);
+      const lastGroup = groups.at(-1);
+      if (lastGroup && lastGroup.label === label) {
+        lastGroup.maps.push(map);
+      } else {
+        groups.push({ label, maps: [map] });
+      }
+    }
+    return groups;
+  }, [sortedMaps]);
 
   const togglePinMap = (id: string) => {
     setPinnedMapIds((prev) => {
@@ -294,6 +319,141 @@ export default function LeftPane({
   const toggleCreatedSort = () => {
     setAndPersistSortMode(
       mapSortMode === 'createdDesc' ? 'createdAsc' : 'createdDesc'
+    );
+  };
+
+  const toggleMapMonthGroup = (label: string) => {
+    setCollapsedMapMonths((prev) => ({
+      ...prev,
+      [label]: !prev[label],
+    }));
+  };
+
+  const renderMapRow = (map: DiagramMap) => {
+    const isActive = map.id === activeMapId;
+    return (
+      <div
+        key={map.id}
+        className={`flex items-center justify-between gap-1 rounded-lg px-2 py-1.5 transition ${
+          isActive ? 'bg-sky-50 border border-sky-200' : 'hover:bg-gray-50'
+        }`}
+      >
+        {renamingId === map.id ? (
+          <input
+            value={renameDraft}
+            onChange={(event) => setRenameDraft(event.target.value)}
+            onBlur={() => {
+              const trimmed = renameDraft.trim();
+              if (trimmed && trimmed !== map.name) {
+                renameMap(map.id, trimmed);
+              }
+              setRenamingId(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.currentTarget.blur();
+              }
+              if (event.key === 'Escape') {
+                setRenamingId(null);
+              }
+            }}
+            autoFocus
+            className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm outline-none focus:border-sky-300"
+          />
+        ) : (
+          <button
+            onClick={() => {
+              if (splitMode) {
+                if (splitTarget !== null) {
+                  onAssignMapToSplitPane?.(splitTarget, map.id);
+                  onSetSplitTarget?.(null);
+                }
+                return;
+              }
+              void setActiveMap(map.id);
+            }}
+            onDoubleClick={() => {
+              setRenamingId(map.id);
+              setRenameDraft(map.name);
+            }}
+            className="flex-1 truncate text-left text-sm font-medium text-gray-800"
+            title={`${map.name} — double-click to rename`}
+          >
+            {map.name}
+          </button>
+        )}
+        {splitMode && (
+          <div className="flex items-center gap-1">
+            {splitAssignments[1] === map.id && (
+              <button
+                onClick={() =>
+                  onSetSplitTarget?.(splitTarget === 1 ? null : 1)
+                }
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition ${
+                  splitTarget === 1
+                    ? 'bg-sky-600 text-white'
+                    : 'bg-sky-100 text-sky-700 hover:bg-sky-200'
+                }`}
+                title="Select window 1, then click another map"
+              >
+                W1
+              </button>
+            )}
+            {splitAssignments[2] === map.id && (
+              <button
+                onClick={() =>
+                  onSetSplitTarget?.(splitTarget === 2 ? null : 2)
+                }
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition ${
+                  splitTarget === 2
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                }`}
+                title="Select window 2, then click another map"
+              >
+                W2
+              </button>
+            )}
+          </div>
+        )}
+        <button
+          onClick={() => togglePinMap(map.id)}
+          className="rounded-full p-1 transition"
+          aria-label={pinnedMapIds.has(map.id) ? `Unpin ${map.name}` : `Pin ${map.name}`}
+          title={pinnedMapIds.has(map.id) ? 'Unpin map' : 'Pin to top'}
+          style={{ color: pinnedMapIds.has(map.id) ? '#f59e0b' : '#d1d5db' }}
+        >
+          <Pin size={12} />
+        </button>
+        {confirmDeleteId === map.id ? (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                deleteMap(map.id);
+                setConfirmDeleteId(null);
+              }}
+              className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white"
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setConfirmDeleteId(null)}
+              className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDeleteId(map.id)}
+            className="rounded-full p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+            aria-label={`Delete ${map.name}`}
+            title="Delete map"
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -419,133 +579,32 @@ export default function LeftPane({
               No maps yet. Load a PDF, PNG, JPEG, WEBP, or .dnote.
             </div>
           )}
-          {sortedMaps.map((map) => {
-            const isActive = map.id === activeMapId;
-            return (
-              <div
-                key={map.id}
-                className={`flex items-center justify-between gap-1 rounded-lg px-2 py-1.5 transition ${
-                  isActive ? 'bg-sky-50 border border-sky-200' : 'hover:bg-gray-50'
-                }`}
-              >
-                {renamingId === map.id ? (
-                  <input
-                    value={renameDraft}
-                    onChange={(event) => setRenameDraft(event.target.value)}
-                    onBlur={() => {
-                      const trimmed = renameDraft.trim();
-                      if (trimmed && trimmed !== map.name) {
-                        renameMap(map.id, trimmed);
-                      }
-                      setRenamingId(null);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.currentTarget.blur();
-                      }
-                      if (event.key === 'Escape') {
-                        setRenamingId(null);
-                      }
-                    }}
-                    autoFocus
-                    className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm outline-none focus:border-sky-300"
-                  />
-                ) : (
-                  <button
-                    onClick={() => {
-                      if (splitMode) {
-                        if (splitTarget !== null) {
-                          onAssignMapToSplitPane?.(splitTarget, map.id);
-                          onSetSplitTarget?.(null);
-                        }
-                        return;
-                      }
-                      void setActiveMap(map.id);
-                    }}
-                    onDoubleClick={() => {
-                      setRenamingId(map.id);
-                      setRenameDraft(map.name);
-                    }}
-                    className="flex-1 truncate text-left text-sm font-medium text-gray-800"
-                    title={`${map.name} — double-click to rename`}
-                  >
-                    {map.name}
-                  </button>
-                )}
-                {splitMode && (
-                  <div className="flex items-center gap-1">
-                    {splitAssignments[1] === map.id && (
-                      <button
-                        onClick={() =>
-                          onSetSplitTarget?.(splitTarget === 1 ? null : 1)
-                        }
-                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition ${
-                          splitTarget === 1
-                            ? 'bg-sky-600 text-white'
-                            : 'bg-sky-100 text-sky-700 hover:bg-sky-200'
-                        }`}
-                        title="Select window 1, then click another map"
-                      >
-                        W1
-                      </button>
-                    )}
-                    {splitAssignments[2] === map.id && (
-                      <button
-                        onClick={() =>
-                          onSetSplitTarget?.(splitTarget === 2 ? null : 2)
-                        }
-                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition ${
-                          splitTarget === 2
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                        }`}
-                        title="Select window 2, then click another map"
-                      >
-                        W2
-                      </button>
-                    )}
-                  </div>
-                )}
-                <button
-                  onClick={() => togglePinMap(map.id)}
-                  className="rounded-full p-1 transition"
-                  aria-label={pinnedMapIds.has(map.id) ? `Unpin ${map.name}` : `Pin ${map.name}`}
-                  title={pinnedMapIds.has(map.id) ? 'Unpin map' : 'Pin to top'}
-                  style={{ color: pinnedMapIds.has(map.id) ? '#f59e0b' : '#d1d5db' }}
-                >
-                  <Pin size={12} />
-                </button>
-                {confirmDeleteId === map.id ? (
-                  <div className="flex items-center gap-1">
+          {(mapSortMode === 'createdAsc' || mapSortMode === 'createdDesc') ? (
+            <>
+              {pinnedMaps.map((map) => renderMapRow(map))}
+              {monthGroupedMaps.map((group) => {
+                const isCollapsed = collapsedMapMonths[group.label] === true;
+                return (
+                  <div key={group.label} className="space-y-1">
                     <button
-                      onClick={() => {
-                        deleteMap(map.id);
-                        setConfirmDeleteId(null);
-                      }}
-                      className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white"
+                      onClick={() => toggleMapMonthGroup(group.label)}
+                      className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-left transition hover:bg-gray-50"
                     >
-                      Delete
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        {group.label}
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        {isCollapsed ? '▶' : '▼'}
+                      </span>
                     </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600"
-                    >
-                      Cancel
-                    </button>
+                    {!isCollapsed && group.maps.map((map) => renderMapRow(map))}
                   </div>
-                ) : (
-                  <button
-                    onClick={() => setConfirmDeleteId(map.id)}
-                    className="rounded-full p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
-                    aria-label={`Delete ${map.name}`}
-                    title="Delete map"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </>
+          ) : (
+            sortedMaps.map((map) => renderMapRow(map))
+          )}
         </div>
       </div>
       <div
