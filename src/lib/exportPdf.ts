@@ -256,34 +256,34 @@ export async function buildMapOverlayPdf(
     drawNumberedBubble(ctx, bounds, number, W, H, bubbleScale);
   }
 
-  // Portrait A4 PDF — first page holds the map, following pages list the notes.
+  // Portrait A4 PDF. The map sits at the top of page 1 and the notes flow
+  // directly beneath it; a new page is only added when the notes actually
+  // run past the bottom margin.
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 36;
+  const contentX = margin;
+  const contentW = pageW - margin * 2;
 
-  // --- Page 1: the map ---
-  const availW = pageW - margin * 2;
-  const availH = pageH - margin * 2;
+  // --- Map at the top of page 1 ---
+  // Fit to content width, preserving aspect. Cap height so at least the notes
+  // section heading fits on the same page when the map is portrait-ish.
   const canvasAspect = W / H;
-  const availAspect = availW / availH;
-  let drawW: number;
-  let drawH: number;
-  if (canvasAspect > availAspect) {
-    drawW = availW;
-    drawH = availW / canvasAspect;
-  } else {
-    drawH = availH;
-    drawW = availH * canvasAspect;
+  const maxMapH = (pageH - margin * 2) * 0.75;
+  let mapDrawW = contentW;
+  let mapDrawH = mapDrawW / canvasAspect;
+  if (mapDrawH > maxMapH) {
+    mapDrawH = maxMapH;
+    mapDrawW = mapDrawH * canvasAspect;
   }
-  const drawX = (pageW - drawW) / 2;
-  const drawY = (pageH - drawH) / 2;
+  const mapDrawX = (pageW - mapDrawW) / 2;
+  const mapDrawY = margin;
   const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-  pdf.addImage(dataUrl, 'JPEG', drawX, drawY, drawW, drawH);
+  pdf.addImage(dataUrl, 'JPEG', mapDrawX, mapDrawY, mapDrawW, mapDrawH);
 
-  // --- Subsequent pages: numbered notes ---
+  // --- Notes flow directly beneath the map ---
   if (numbered.length > 0) {
-    pdf.addPage();
     const headingSize = 13;
     const noteNameSize = 11;
     const bodySize = 10;
@@ -292,9 +292,7 @@ export async function buildMapOverlayPdf(
     const bodyLineHeight = 14;
     const interNoteSpacing = 4;
     const interItemSpacing = 12;
-    const contentX = margin;
-    const contentW = pageW - margin * 2;
-    let y = margin;
+    let y = mapDrawY + mapDrawH + 18;
 
     const ensureSpace = (need: number) => {
       if (y + need > pageH - margin) {
@@ -303,7 +301,8 @@ export async function buildMapOverlayPdf(
       }
     };
 
-    // Top-of-section title.
+    // Section title.
+    ensureSpace(26);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(15);
     pdf.text('Notes', contentX, y + 14);
