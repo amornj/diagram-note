@@ -393,8 +393,10 @@ export default function HotspotLayer({
         if (collapsed) {
           const rect = bboxToViewerElementRect(viewer, bounds, dims);
           if (!rect) return null;
-          x = rect.x + rect.width - 2;
-          y = rect.y - height - 6;
+          // Park the collapsed bubble to the right of the primitive (not above)
+          // so it stays clear of an always-on label that sits above the box.
+          x = rect.x + rect.width + 6;
+          y = rect.y;
           anchor =
             viewerElementPointToNormalizedPoint(viewer, x + width / 2, y, dims) ??
             expandedAnchor;
@@ -1640,20 +1642,18 @@ export default function HotspotLayer({
                     `Q ${priorityBubble.x + priorityBubble.width} ${priorityBubble.y} ${
                       priorityBubble.x + priorityBubble.width
                     } ${priorityBubble.y + 7}`,
-                    `V ${priorityBubble.y + priorityBubble.height - 8}`,
+                    `V ${priorityBubble.y + priorityBubble.height - 7}`,
                     `Q ${priorityBubble.x + priorityBubble.width} ${
                       priorityBubble.y + priorityBubble.height
                     } ${priorityBubble.x + priorityBubble.width - 7} ${
                       priorityBubble.y + priorityBubble.height
                     }`,
-                    `H ${priorityBubble.x + 16}`,
-                    `L ${priorityBubble.x + 10} ${priorityBubble.y + priorityBubble.height + 6}`,
-                    `L ${priorityBubble.x + 11} ${priorityBubble.y + priorityBubble.height}`,
                     `H ${priorityBubble.x + 7}`,
                     `Q ${priorityBubble.x} ${priorityBubble.y + priorityBubble.height} ${
                       priorityBubble.x
-                    } ${priorityBubble.y + priorityBubble.height - 8}`,
-                    `V ${priorityBubble.y + 7}`,
+                    } ${priorityBubble.y + priorityBubble.height - 7}`,
+                    `L ${priorityBubble.x - 6} ${priorityBubble.y + priorityBubble.height / 2}`,
+                    `L ${priorityBubble.x} ${priorityBubble.y + 7}`,
                     `Q ${priorityBubble.x} ${priorityBubble.y} ${priorityBubble.x + 7} ${
                       priorityBubble.y
                     }`,
