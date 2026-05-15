@@ -19,6 +19,7 @@ import {
   makeMemberKey,
   parseMemberKey,
 } from '../lib/workspace';
+import { composeNoteContent, splitNoteContent } from '../lib/noteLinks';
 import type { MapWorkspace, NoteCard, Point, Primitive } from '../types';
 import { useMapStore } from '../lib/mapStore';
 
@@ -119,11 +120,11 @@ function wrapPriorityText(content: string, limit = PRIORITY_BUBBLE_CHAR_LIMIT) {
   return paragraphs.length > 0 ? paragraphs : [''];
 }
 
-function layoutPriorityBubble(content: string) {
+function layoutPriorityBubble(content: string, hasLink: boolean) {
   const rawLines = content.trim().split(/\r?\n/);
   const longestRawLine = rawLines.reduce((max, line) => Math.max(max, line.trim().length), 0);
   const targetChars = clamp(Math.max(18, Math.min(longestRawLine, PRIORITY_BUBBLE_CHAR_LIMIT)), 18, PRIORITY_BUBBLE_CHAR_LIMIT);
-  const lines = wrapPriorityText(content, targetChars);
+  const lines = content.trim() ? wrapPriorityText(content, targetChars) : [];
   const longestWrappedLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
   const width = clamp(
     longestWrappedLine * 6.8 + PRIORITY_BUBBLE_PADDING_X * 2,
@@ -133,7 +134,8 @@ function layoutPriorityBubble(content: string) {
   const height =
     PRIORITY_BUBBLE_PADDING_TOP +
     PRIORITY_BUBBLE_PADDING_BOTTOM +
-    lines.length * PRIORITY_BUBBLE_LINE_HEIGHT;
+    lines.length * PRIORITY_BUBBLE_LINE_HEIGHT +
+    (hasLink ? 28 : 0);
   return { lines, width, height };
 }
 
@@ -368,7 +370,8 @@ export default function HotspotLayer({
         );
         const currentNote = notesWithContent[viewIdx] ?? priorityNote;
         const currentNoteActualIdx = (primitive.notes ?? []).indexOf(currentNote);
-        const layout = layoutPriorityBubble(currentNote.content);
+        const parsedNote = splitNoteContent(currentNote.content);
+        const layout = layoutPriorityBubble(parsedNote.body, parsedNote.urls.length > 0);
         const fallbackAnchor = primitive.priorityNoteOffset
           ? (() => {
               const topCenterX = basePoint.x + primitive.priorityNoteOffset.x;
@@ -420,6 +423,7 @@ export default function HotspotLayer({
           width,
           height,
           lines: layout.lines,
+          linkUrls: parsedNote.urls,
           backlinkKeys,
           hasBacklinks,
           noteCount,
@@ -1039,7 +1043,7 @@ export default function HotspotLayer({
       const note = primitive?.notes?.[noteIdx];
       if (!note) return;
       setEditingPriorityPrimitiveId(primitiveId);
-      setEditingPriorityDraft(note.content);
+      setEditingPriorityDraft(splitNoteContent(note.content).body);
       setEditingNoteActualIndex(noteIdx);
     },
     [primitivesById]
@@ -1057,8 +1061,13 @@ export default function HotspotLayer({
       setEditingNoteActualIndex(-1);
       return;
     }
-    const nextContent = editingPriorityDraft.trim();
     const currentNotes = primitive.notes ?? [];
+    const currentUrls = splitNoteContent(currentNotes[noteIndex]?.content ?? '').urls;
+    const nextParsed = splitNoteContent(editingPriorityDraft);
+    const nextContent = composeNoteContent(
+      nextParsed.body,
+      Array.from(new Set([...currentUrls, ...nextParsed.urls]))
+    );
     if (currentNotes[noteIndex]?.content !== nextContent) {
       const nextNotes = currentNotes.map((note, index) =>
         index === noteIndex ? { ...note, content: nextContent } : note
@@ -1898,40 +1907,76 @@ export default function HotspotLayer({
             {!priorityBubble.collapsed && (
               <>
                 {!isEditing && (
-                  <text
-                    x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
-                    y={priorityBubble.y + PRIORITY_BUBBLE_PADDING_TOP}
-                    fill="#7c2d12"
-                    fontSize={12}
-                    fontWeight={600}
-                    style={{
-                      fontFamily: 'system-ui, -apple-system, sans-serif',
-                      cursor: isMoveArmed
-                        ? priorityBubbleDragRef.current?.primitiveId === priorityBubble.primitiveId
-                          ? 'grabbing'
-                          : 'grab'
-                        : 'text',
-                    }}
-                    onPointerDown={(event) =>
-                      beginPriorityBubbleDrag(event, priorityBubble.primitiveId)
-                    }
-                    onPointerMove={continuePriorityBubbleDrag}
-                    onPointerUp={endPriorityBubbleDrag}
-                    onPointerCancel={cancelPriorityBubbleDrag}
-                    onDoubleClick={(event) =>
-                      beginPriorityBubbleEdit(event, priorityBubble.primitiveId, priorityBubble.currentNoteActualIdx)
-                    }
-                  >
-                    {priorityBubble.lines.map((line, index) => (
-                      <tspan
-                        key={`${priorityBubble.primitiveId}-priority-line-${index}`}
+                  <>
+                    {priorityBubble.lines.length > 0 && (
+                      <text
                         x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
-                        dy={index === 0 ? 0 : PRIORITY_BUBBLE_LINE_HEIGHT}
+                        y={priorityBubble.y + PRIORITY_BUBBLE_PADDING_TOP}
+                        fill="#7c2d12"
+                        fontSize={12}
+                        fontWeight={600}
+                        style={{
+                          fontFamily: 'system-ui, -apple-system, sans-serif',
+                          cursor: isMoveArmed
+                            ? priorityBubbleDragRef.current?.primitiveId === priorityBubble.primitiveId
+                              ? 'grabbing'
+                              : 'grab'
+                            : 'text',
+                        }}
+                        onPointerDown={(event) =>
+                          beginPriorityBubbleDrag(event, priorityBubble.primitiveId)
+                        }
+                        onPointerMove={continuePriorityBubbleDrag}
+                        onPointerUp={endPriorityBubbleDrag}
+                        onPointerCancel={cancelPriorityBubbleDrag}
+                        onDoubleClick={(event) =>
+                          beginPriorityBubbleEdit(event, priorityBubble.primitiveId, priorityBubble.currentNoteActualIdx)
+                        }
                       >
-                        {line}
-                      </tspan>
-                    ))}
-                  </text>
+                        {priorityBubble.lines.map((line, index) => (
+                          <tspan
+                            key={`${priorityBubble.primitiveId}-priority-line-${index}`}
+                            x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
+                            dy={index === 0 ? 0 : PRIORITY_BUBBLE_LINE_HEIGHT}
+                          >
+                            {line}
+                          </tspan>
+                        ))}
+                      </text>
+                    )}
+                    {priorityBubble.linkUrls.length > 0 && (
+                      <g
+                        transform={`translate(${priorityBubble.x + PRIORITY_BUBBLE_PADDING_X} ${priorityBubble.y + priorityBubble.height - 24})`}
+                        style={{ cursor: 'pointer' }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          window.open(priorityBubble.linkUrls[0], '_blank', 'noopener,noreferrer');
+                        }}
+                      >
+                        <rect
+                          x={0}
+                          y={0}
+                          rx={10}
+                          width={44}
+                          height={18}
+                          fill="#e0f2fe"
+                          stroke="#7dd3fc"
+                        />
+                        <text
+                          x={22}
+                          y={12}
+                          textAnchor="middle"
+                          fill="#0369a1"
+                          fontSize={10}
+                          fontWeight={700}
+                          style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                        >
+                          Link
+                        </text>
+                      </g>
+                    )}
+                  </>
                 )}
                 {isEditing && (
                   <foreignObject

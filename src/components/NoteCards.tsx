@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, ExternalLink, Link2, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { NoteCard } from '../types';
+import { composeNoteContent, splitNoteContent } from '../lib/noteLinks';
 
 interface NoteCardsProps {
   notes: NoteCard[];
@@ -23,27 +24,6 @@ function ensurePriorityNote(notes: NoteCard[]) {
     ...note,
     isPriority: index === 0,
   }));
-}
-
-function normalizeUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  try {
-    const url = new URL(candidate);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-function extractUrls(value: string): string[] {
-  const matches = value.match(/https?:\/\/[^\s<>()"']+/gi) ?? [];
-  const urls = matches
-    .map((match) => normalizeUrl(match))
-    .filter((url): url is string => url !== null);
-  return Array.from(new Set(urls));
 }
 
 export default function NoteCards({
@@ -70,7 +50,8 @@ export default function NoteCards({
 
   const currentNote = notes[currentIndex];
   const currentContent = notes.length > 0 ? currentNote?.content ?? '' : emptyDraft;
-  const clickableUrls = extractUrls(currentContent);
+  const currentParsed = splitNoteContent(currentContent);
+  const clickableUrls = currentParsed.urls;
 
   const handlePrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
   const handleNext = () => setCurrentIndex((i) => Math.min(notes.length - 1, i + 1));
@@ -100,14 +81,19 @@ export default function NoteCards({
   };
 
   const handleUpdateContent = (value: string) => {
+    const nextParsed = splitNoteContent(value);
     if (notes.length === 0) {
-      setEmptyDraft(value);
-      onChange([{ name: '', content: value, isPriority: true }]);
+      const mergedUrls = Array.from(new Set(nextParsed.urls));
+      const nextContent = composeNoteContent(nextParsed.body, mergedUrls);
+      setEmptyDraft(nextContent);
+      onChange([{ name: '', content: nextContent, isPriority: true }]);
       setCurrentIndex(0);
       return;
     }
+    const mergedUrls = Array.from(new Set([...currentParsed.urls, ...nextParsed.urls]));
+    const nextContent = composeNoteContent(nextParsed.body, mergedUrls);
     const nextNotes = ensurePriorityNote(notes.map((n, i) =>
-      i === currentIndex ? { ...n, content: value } : n
+      i === currentIndex ? { ...n, content: nextContent } : n
     ));
     onChange(nextNotes);
   };
@@ -185,7 +171,7 @@ export default function NoteCards({
           <div className="relative">
             <textarea
               ref={textareaRef}
-              value={currentNote?.content ?? ''}
+              value={currentParsed.body}
               onChange={(event) => handleUpdateContent(event.target.value)}
               onMouseUp={persistHeight}
               onTouchEnd={persistHeight}
@@ -214,7 +200,7 @@ export default function NoteCards({
                   title={url}
                 >
                   <Link2 size={12} />
-                  <span className="truncate">{url}</span>
+                  <span>Link</span>
                   <ExternalLink size={12} />
                 </a>
               ))}
@@ -226,7 +212,7 @@ export default function NoteCards({
           <div className="relative">
             <textarea
               ref={textareaRef}
-              value={emptyDraft}
+              value={currentParsed.body}
               onChange={(event) => handleUpdateContent(event.target.value)}
               onMouseUp={persistHeight}
               onTouchEnd={persistHeight}
@@ -255,7 +241,7 @@ export default function NoteCards({
                   title={url}
                 >
                   <Link2 size={12} />
-                  <span className="truncate">{url}</span>
+                  <span>Link</span>
                   <ExternalLink size={12} />
                 </a>
               ))}
