@@ -324,6 +324,7 @@ export default function PrimitiveDetailPanel({
         </div>
 
         <NoteCards
+          key={primitive.id}
           notes={primitive.notes ?? []}
           onChange={(notes) => updatePrimitive(primitive.id, { notes })}
           placeholder="Link"
