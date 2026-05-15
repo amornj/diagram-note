@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
+import { splitNoteContent } from '../lib/noteLinks';
 import { getPrimitiveBounds } from '../lib/workspace';
 import type { DiagramMap, Primitive } from '../types';
 
@@ -117,7 +118,8 @@ export default function SearchBox({
         if (!matchesType) continue;
 
         const baseFields = [primitive.name, ...(primitive.aliases ?? [])];
-        const noteFields = primitive.notes?.map((n) => n.content) ?? [];
+        const noteFields =
+          primitive.notes?.map((n) => splitNoteContent(n.content).body).filter(Boolean) ?? [];
         const tagFields = primitive.tags ?? [];
         const searchableFields =
           activeContentFilters.length === 0
