@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import * as idb from './idb';
 import { getPrimitiveBounds } from './workspace';
+import { splitNoteContent } from './noteLinks';
 import type { BBox, DiagramMap, MapWorkspace, Primitive } from '../types';
 
 function clamp(v: number, min: number, max: number) {
@@ -59,11 +60,13 @@ function sanitizeForPdf(text: string): string {
 }
 
 function getPriorityNote(p: Primitive) {
-  return p.notes?.find((n) => n.isPriority && n.content.trim()) ?? null;
+  return (
+    p.notes?.find((n) => n.isPriority && splitNoteContent(n.content).body.trim()) ?? null
+  );
 }
 
 function getContentNotes(p: Primitive) {
-  return (p.notes ?? []).filter((n) => n.content.trim());
+  return (p.notes ?? []).filter((n) => splitNoteContent(n.content).body.trim());
 }
 
 function hexWithAlpha(hex: string, alpha: number): string {
@@ -403,6 +406,7 @@ export async function buildMapOverlayPdf(
 
       for (let i = 0; i < notes.length; i++) {
         const note = notes[i];
+        const noteBody = splitNoteContent(note.content).body.trim();
         let bulletDrawn = false;
         const drawBullet = (baselineY: number) => {
           if (!useBullets || bulletDrawn) return;
@@ -424,7 +428,7 @@ export async function buildMapOverlayPdf(
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(bodySize);
         const lines = pdf.splitTextToSize(
-          sanitizeForPdf(note.content.trim()),
+          sanitizeForPdf(noteBody),
           wrapWidth
         ) as string[];
         for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
