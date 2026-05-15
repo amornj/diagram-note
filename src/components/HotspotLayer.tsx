@@ -19,7 +19,7 @@ import {
   makeMemberKey,
   parseMemberKey,
 } from '../lib/workspace';
-import { composeNoteContent, splitNoteContent } from '../lib/noteLinks';
+import { composeNoteContent, openUrlsInTabs, splitNoteContent } from '../lib/noteLinks';
 import type { MapWorkspace, NoteCard, Point, Primitive } from '../types';
 import { useMapStore } from '../lib/mapStore';
 
@@ -1951,29 +1951,62 @@ export default function HotspotLayer({
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-                          window.open(priorityBubble.linkUrls[0], '_blank', 'noopener,noreferrer');
+                          openUrlsInTabs(priorityBubble.linkUrls);
                         }}
                       >
                         <rect
                           x={0}
                           y={0}
                           rx={10}
-                          width={44}
+                          width={priorityBubble.linkUrls.length > 1 ? 62 : 28}
                           height={18}
-                          fill="#e0f2fe"
-                          stroke="#7dd3fc"
+                          fill="#fff8eb"
+                          stroke="#f59e0b"
                         />
-                        <text
-                          x={22}
-                          y={12}
-                          textAnchor="middle"
-                          fill="#0369a1"
-                          fontSize={10}
-                          fontWeight={700}
-                          style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
-                        >
-                          Link
-                        </text>
+                        <path
+                          d="M7 11V5.6C7 4.72 7.72 4 8.6 4H14"
+                          fill="none"
+                          stroke="#b45309"
+                          strokeWidth={1.6}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M10 14H5.6C4.72 14 4 13.28 4 12.4V8"
+                          fill="none"
+                          stroke="#b45309"
+                          strokeWidth={1.6}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M9 9 14 4"
+                          fill="none"
+                          stroke="#b45309"
+                          strokeWidth={1.6}
+                          strokeLinecap="round"
+                        />
+                        <path
+                          d="M11 4H14V7"
+                          fill="none"
+                          stroke="#b45309"
+                          strokeWidth={1.6}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        {priorityBubble.linkUrls.length > 1 && (
+                          <text
+                            x={46}
+                            y={12}
+                            textAnchor="middle"
+                            fill="#b45309"
+                            fontSize={10}
+                            fontWeight={700}
+                            style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                          >
+                            {priorityBubble.linkUrls.length}
+                          </text>
+                        )}
                       </g>
                     )}
                   </>

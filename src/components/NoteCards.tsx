@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, ExternalLink, Link2, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { NoteCard } from '../types';
-import { composeNoteContent, splitNoteContent } from '../lib/noteLinks';
+import { composeNoteContent, openUrlsInTabs, splitNoteContent } from '../lib/noteLinks';
 
 interface NoteCardsProps {
   notes: NoteCard[];
@@ -108,6 +108,21 @@ export default function NoteCards({
     }
   };
 
+  const linkTitle =
+    clickableUrls.length > 1 ? `Open ${clickableUrls.length} links` : 'Open link';
+
+  const renderLinkAction = (withTopMargin = false) => (
+    <button
+      type="button"
+      onClick={() => openUrlsInTabs(clickableUrls)}
+      className={`${withTopMargin ? 'mt-2 ' : ''}inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100`}
+      title={linkTitle}
+    >
+      <ExternalLink size={13} strokeWidth={2.4} />
+      {clickableUrls.length > 1 && <span>{clickableUrls.length}</span>}
+    </button>
+  );
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
       <div className="flex items-center justify-between gap-2">
@@ -188,24 +203,7 @@ export default function NoteCards({
               </div>
             )}
           </div>
-          {clickableUrls.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {clickableUrls.map((url) => (
-                <a
-                  key={url}
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
-                  title={url}
-                >
-                  <Link2 size={12} />
-                  <span>Link</span>
-                  <ExternalLink size={12} />
-                </a>
-              ))}
-            </div>
-          )}
+          {clickableUrls.length > 0 && renderLinkAction()}
         </div>
       ) : (
         <div className="mt-2">
@@ -229,24 +227,7 @@ export default function NoteCards({
               </div>
             )}
           </div>
-          {clickableUrls.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {clickableUrls.map((url) => (
-                <a
-                  key={url}
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
-                  title={url}
-                >
-                  <Link2 size={12} />
-                  <span>Link</span>
-                  <ExternalLink size={12} />
-                </a>
-              ))}
-            </div>
-          )}
+          {clickableUrls.length > 0 && renderLinkAction(true)}
         </div>
       )}
     </div>

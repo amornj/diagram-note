@@ -44,3 +44,9 @@ export function splitNoteContent(value: string) {
     urls: extractUrls(value),
   };
 }
+
+export function openUrlsInTabs(urls: string[]) {
+  for (const url of urls) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
