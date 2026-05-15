@@ -1639,29 +1639,35 @@ export default function HotspotLayer({
               const isEditing = editingPriorityPrimitiveId === priorityBubble.primitiveId;
               const isMoveArmed = movePriorityPrimitiveId === priorityBubble.primitiveId;
               const hasLinks = priorityBubble.linkUrls.length > 0;
+              const footerIconSize = 16;
+              const footerIconGap = 6;
+              const footerBottomY = priorityBubble.y + priorityBubble.height - 14;
+              const footerRightInset = 14;
               const linkBadgeWidth = hasLinks
                 ? priorityBubble.linkUrls.length > 1
                   ? 40
-                  : 16
+                  : footerIconSize
                 : 0;
               const backlinkBadgeWidth = priorityBubble.hasBacklinks ? 40 : 0;
-              const footerGap = hasLinks && priorityBubble.hasBacklinks ? 6 : 0;
-              const footerRightInset = 14;
-              const footerRightX = priorityBubble.x + priorityBubble.width - footerRightInset;
-              const linkIconX = hasLinks
-                ? footerRightX - linkBadgeWidth / 2
-                : footerRightX;
+              let footerCursorX = priorityBubble.x + priorityBubble.width - footerRightInset;
+              const reserveFooterSlot = (slotWidth: number) => {
+                const centerX = footerCursorX - slotWidth / 2;
+                footerCursorX -= slotWidth + footerIconGap;
+                return centerX;
+              };
+              const hideToolX = reserveFooterSlot(footerIconSize);
+              const editToolX = reserveFooterSlot(footerIconSize);
+              const handToolX = reserveFooterSlot(footerIconSize);
+              const linkIconX = hasLinks ? reserveFooterSlot(linkBadgeWidth) : null;
               const backlinkX = priorityBubble.hasBacklinks
-                ? footerRightX - linkBadgeWidth - footerGap - backlinkBadgeWidth / 2
-                : footerRightX;
-              const footerReservedWidth =
-                (hasLinks ? linkBadgeWidth : 0) +
-                (priorityBubble.hasBacklinks ? backlinkBadgeWidth : 0) +
-                footerGap;
-              const noteNavRightOffset =
-                58 + footerReservedWidth;
-              const nextNoteX = priorityBubble.x + priorityBubble.width - noteNavRightOffset;
-              const prevNoteX = nextNoteX - 22;
+                ? reserveFooterSlot(backlinkBadgeWidth)
+                : null;
+              const nextNoteX = priorityBubble.showNoteNavigation
+                ? reserveFooterSlot(footerIconSize)
+                : null;
+              const prevNoteX = priorityBubble.showNoteNavigation
+                ? reserveFooterSlot(footerIconSize)
+                : null;
               return (
                 <>
             {priorityBubble.collapsed ? (
@@ -1751,8 +1757,8 @@ export default function HotspotLayer({
                 {!priorityBubble.collapsed && (
                   <>
                     <circle
-                      cx={priorityBubble.x + priorityBubble.width - 14}
-                      cy={priorityBubble.y + priorityBubble.height - 14}
+                      cx={hideToolX}
+                      cy={footerBottomY}
                       r={8}
                       fill="#fff8eb"
                       stroke="#f59e0b"
@@ -1767,8 +1773,8 @@ export default function HotspotLayer({
                       }
                     />
                     <text
-                      x={priorityBubble.x + priorityBubble.width - 14}
-                      y={priorityBubble.y + priorityBubble.height - 10}
+                      x={hideToolX}
+                      y={footerBottomY + 4}
                       fill="#b45309"
                       fontSize={11}
                       fontWeight={700}
@@ -1785,7 +1791,7 @@ export default function HotspotLayer({
                       ◉
                     </text>
                     <g
-                      transform={`translate(${priorityBubble.x + priorityBubble.width - 36} ${priorityBubble.y + priorityBubble.height - 14})`}
+                      transform={`translate(${editToolX} ${footerBottomY})`}
                       style={{ cursor: 'pointer' }}
                       onPointerDown={(event) =>
                         beginPriorityBubbleEdit(event, priorityBubble.primitiveId, priorityBubble.currentNoteActualIdx)
@@ -1799,7 +1805,7 @@ export default function HotspotLayer({
                       />
                     </g>
                     <g
-                      transform={`translate(${priorityBubble.x + priorityBubble.width - 58} ${priorityBubble.y + priorityBubble.height - 14})`}
+                      transform={`translate(${handToolX} ${footerBottomY})`}
                       style={{
                         cursor: isMoveArmed
                           ? priorityBubbleDragRef.current?.primitiveId === priorityBubble.primitiveId
@@ -1835,7 +1841,7 @@ export default function HotspotLayer({
                     {priorityBubble.showNoteNavigation && (
                       <>
                         <g
-                          transform={`translate(${nextNoteX} ${priorityBubble.y + priorityBubble.height - 14})`}
+                          transform={`translate(${nextNoteX} ${footerBottomY})`}
                           style={{ cursor: priorityBubble.canNextNote ? 'pointer' : 'default' }}
                           onPointerDown={
                             priorityBubble.canNextNote
@@ -1869,7 +1875,7 @@ export default function HotspotLayer({
                           </text>
                         </g>
                         <g
-                          transform={`translate(${prevNoteX} ${priorityBubble.y + priorityBubble.height - 14})`}
+                          transform={`translate(${prevNoteX} ${footerBottomY})`}
                           style={{ cursor: priorityBubble.canPrevNote ? 'pointer' : 'default' }}
                           onPointerDown={
                             priorityBubble.canPrevNote
@@ -1906,7 +1912,7 @@ export default function HotspotLayer({
                     )}
                     {priorityBubble.hasBacklinks && (
                       <g
-                        transform={`translate(${backlinkX} ${priorityBubble.y + priorityBubble.height - 14})`}
+                        transform={`translate(${backlinkX} ${footerBottomY})`}
                         pointerEvents="none"
                       >
                         {/* pill background */}
@@ -1977,7 +1983,7 @@ export default function HotspotLayer({
                     )}
                     {hasLinks && (
                       <g
-                        transform={`translate(${linkIconX} ${priorityBubble.y + priorityBubble.height - 14})`}
+                        transform={`translate(${linkIconX} ${footerBottomY})`}
                         pointerEvents="none"
                       >
                         {priorityBubble.linkUrls.length > 1 ? (
