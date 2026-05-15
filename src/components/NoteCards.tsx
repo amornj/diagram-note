@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Link2, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { NoteCard } from '../types';
 
@@ -25,10 +25,23 @@ function ensurePriorityNote(notes: NoteCard[]) {
   }));
 }
 
+function normalizeUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export default function NoteCards({
   notes,
   onChange,
-  placeholder = 'Write a note snippet...',
+  placeholder = 'Link',
 }: NoteCardsProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [currentIndex, setCurrentIndex] = useState(Math.max(0, notes.length - 1));
@@ -48,6 +61,8 @@ export default function NoteCards({
   }, [notes, notes.length, currentIndex]);
 
   const currentNote = notes[currentIndex];
+  const currentContent = notes.length > 0 ? currentNote?.content ?? '' : emptyDraft;
+  const clickableUrl = normalizeUrl(currentContent);
 
   const handlePrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
   const handleNext = () => setCurrentIndex((i) => Math.min(notes.length - 1, i + 1));
@@ -159,33 +174,75 @@ export default function NoteCards({
 
       {notes.length > 0 ? (
         <div className="mt-2 space-y-2">
-          <textarea
-            ref={textareaRef}
-            value={currentNote?.content ?? ''}
-            onChange={(event) => handleUpdateContent(event.target.value)}
-            onMouseUp={persistHeight}
-            onTouchEnd={persistHeight}
-            onBlur={persistHeight}
-            placeholder={placeholder}
-            style={{ height: `${noteHeight}px` }}
-            rows={4}
-            className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-sky-300"
-          />
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={currentNote?.content ?? ''}
+              onChange={(event) => handleUpdateContent(event.target.value)}
+              onMouseUp={persistHeight}
+              onTouchEnd={persistHeight}
+              onBlur={persistHeight}
+              placeholder=""
+              style={{ height: `${noteHeight}px` }}
+              rows={4}
+              className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-sky-300"
+            />
+            {!currentContent.trim() && (
+              <div className="pointer-events-none absolute left-3 top-2.5 inline-flex items-center gap-2 text-sm text-slate-400">
+                <Link2 size={14} />
+                <span>{placeholder}</span>
+              </div>
+            )}
+          </div>
+          {clickableUrl && (
+            <a
+              href={clickableUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
+              title={clickableUrl}
+            >
+              <Link2 size={12} />
+              <span className="truncate">{clickableUrl}</span>
+              <ExternalLink size={12} />
+            </a>
+          )}
         </div>
       ) : (
         <div className="mt-2">
-          <textarea
-            ref={textareaRef}
-            value={emptyDraft}
-            onChange={(event) => handleUpdateContent(event.target.value)}
-            onMouseUp={persistHeight}
-            onTouchEnd={persistHeight}
-            onBlur={persistHeight}
-            placeholder={placeholder}
-            style={{ height: `${noteHeight}px` }}
-            rows={4}
-            className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-sky-300"
-          />
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={emptyDraft}
+              onChange={(event) => handleUpdateContent(event.target.value)}
+              onMouseUp={persistHeight}
+              onTouchEnd={persistHeight}
+              onBlur={persistHeight}
+              placeholder=""
+              style={{ height: `${noteHeight}px` }}
+              rows={4}
+              className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-sky-300"
+            />
+            {!currentContent.trim() && (
+              <div className="pointer-events-none absolute left-3 top-2.5 inline-flex items-center gap-2 text-sm text-slate-400">
+                <Link2 size={14} />
+                <span>{placeholder}</span>
+              </div>
+            )}
+          </div>
+          {clickableUrl && (
+            <a
+              href={clickableUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
+              title={clickableUrl}
+            >
+              <Link2 size={12} />
+              <span className="truncate">{clickableUrl}</span>
+              <ExternalLink size={12} />
+            </a>
+          )}
         </div>
       )}
     </div>
