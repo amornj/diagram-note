@@ -1964,28 +1964,71 @@ export default function HotspotLayer({
                         transform={`translate(${linkIconX} ${priorityBubble.y + priorityBubble.height - 14})`}
                         pointerEvents="none"
                       >
-                        <circle
-                          cx={0}
-                          cy={0}
-                          r={8}
-                          fill="#fff8eb"
-                          stroke="#f59e0b"
-                          strokeWidth={1.5}
-                        />
-                        <foreignObject x={-6} y={-6} width={12} height={12}>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '100%',
-                              height: '100%',
-                              color: '#b45309',
-                            }}
-                          >
-                            <ExternalLink size={10} strokeWidth={2.4} />
-                          </div>
-                        </foreignObject>
+                        {priorityBubble.linkUrls.length > 1 ? (
+                          <>
+                            <rect
+                              x={-20}
+                              y={-8}
+                              width={40}
+                              height={16}
+                              rx={8}
+                              fill="#fff8eb"
+                              stroke="#f59e0b"
+                              strokeWidth={1.5}
+                            />
+                            <foreignObject x={-14} y={-6} width={12} height={12}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: '100%',
+                                  height: '100%',
+                                  color: '#b45309',
+                                }}
+                              >
+                                <ExternalLink size={10} strokeWidth={2.4} />
+                              </div>
+                            </foreignObject>
+                            <text
+                              x={8}
+                              y={4}
+                              textAnchor="middle"
+                              fill="#b45309"
+                              fontSize={11}
+                              fontWeight={700}
+                              pointerEvents="none"
+                              style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                            >
+                              {priorityBubble.linkUrls.length}
+                            </text>
+                          </>
+                        ) : (
+                          <>
+                            <circle
+                              cx={0}
+                              cy={0}
+                              r={8}
+                              fill="#fff8eb"
+                              stroke="#f59e0b"
+                              strokeWidth={1.5}
+                            />
+                            <foreignObject x={-6} y={-6} width={12} height={12}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: '100%',
+                                  height: '100%',
+                                  color: '#b45309',
+                                }}
+                              >
+                                <ExternalLink size={10} strokeWidth={2.4} />
+                              </div>
+                            </foreignObject>
+                          </>
+                        )}
                       </g>
                     )}
                   </>
