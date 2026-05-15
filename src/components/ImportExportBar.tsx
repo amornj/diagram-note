@@ -1,4 +1,4 @@
-import { Download, FilePlus2, Menu, Package, Upload, X } from 'lucide-react';
+import { ArchiveRestore, Download, FilePlus2, Menu, Package, RotateCcw, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { zipSync } from 'fflate';
 import { useMapStore } from '../lib/mapStore';
@@ -29,18 +29,25 @@ export default function ImportExportBar() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [confirmPermanentDeleteId, setConfirmPermanentDeleteId] = useState<string | null>(null);
   const [deleteAllInput, setDeleteAllInput] = useState('');
   const activeMapId = useMapStore((s) => s.activeMapId);
   const maps = useMapStore((s) => s.maps);
   const createMapFromPdf = useMapStore((s) => s.createMapFromPdf);
   const importDnoteMap = useMapStore((s) => s.importDnoteMap);
   const clearMapOverlays = useMapStore((s) => s.clearMapOverlays);
+  const restoreMap = useMapStore((s) => s.restoreMap);
+  const permanentlyDeleteMap = useMapStore((s) => s.permanentlyDeleteMap);
   const saveActiveWorkspace = useMapStore((s) => s.saveActiveWorkspace);
   const workspace = useEditorStore((s) => s.workspace);
   const setWorkspace = useEditorStore((s) => s.setWorkspace);
 
   const activeMap = maps.find((m) => m.id === activeMapId && m.archivedAt === undefined);
   const exportableMaps = maps.filter((map) => map.archivedAt === undefined);
+  const archivedMaps = maps
+    .filter((map) => map.archivedAt !== undefined)
+    .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -48,6 +55,8 @@ export default function ImportExportBar() {
       if (!rootRef.current?.contains(event.target as Node)) {
         setMenuOpen(false);
         setShowDeleteAllConfirm(false);
+        setArchiveOpen(false);
+        setConfirmPermanentDeleteId(null);
         setDeleteAllInput('');
       }
     };
@@ -55,6 +64,8 @@ export default function ImportExportBar() {
       if (event.key === 'Escape') {
         setMenuOpen(false);
         setShowDeleteAllConfirm(false);
+        setArchiveOpen(false);
+        setConfirmPermanentDeleteId(null);
         setDeleteAllInput('');
       }
     };
@@ -396,6 +407,75 @@ export default function ImportExportBar() {
                   Delete all
                 </button>
               </div>
+            </div>
+          )}
+          <div className="my-2 border-t border-gray-100" />
+          <button
+            onClick={() => setArchiveOpen((value) => !value)}
+            className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            role="menuitem"
+          >
+            <span className="flex items-center gap-2">
+              <ArchiveRestore size={14} />
+              Archive
+            </span>
+            <span className="text-[11px] text-gray-400">
+              {archivedMaps.length} {archiveOpen ? '▼' : '▶'}
+            </span>
+          </button>
+          {archiveOpen && (
+            <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-2">
+              {archivedMaps.length === 0 ? (
+                <div className="px-2 py-2 text-xs text-gray-400">
+                  Deleted maps will appear here.
+                </div>
+              ) : (
+                <div className="max-h-56 space-y-2 overflow-y-auto">
+                  {archivedMaps.map((map) => (
+                    <div
+                      key={map.id}
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2"
+                    >
+                      <div className="truncate text-sm font-medium text-gray-800">{map.name}</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => void restoreMap(map.id)}
+                          className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100"
+                        >
+                          <RotateCcw size={11} />
+                          Restore
+                        </button>
+                        {confirmPermanentDeleteId === map.id ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                void permanentlyDeleteMap(map.id);
+                                setConfirmPermanentDeleteId(null);
+                              }}
+                              className="rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-semibold text-white"
+                            >
+                              Permanent delete
+                            </button>
+                            <button
+                              onClick={() => setConfirmPermanentDeleteId(null)}
+                              className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-200"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmPermanentDeleteId(map.id)}
+                            className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:bg-red-100"
+                          >
+                            Permanent delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {(busy || error) && <div className="my-2 border-t border-gray-100" />}

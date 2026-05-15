@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArchiveRestore, ChevronLeft, ChevronRight, Pin, RotateCcw, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pin, Trash2 } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import type { DiagramMap, MapWorkspace, Primitive } from '../types';
@@ -220,20 +220,16 @@ export default function LeftPane({
   const setActiveMap = useMapStore((s) => s.setActiveMap);
   const renameMap = useMapStore((s) => s.renameMap);
   const deleteMap = useMapStore((s) => s.deleteMap);
-  const restoreMap = useMapStore((s) => s.restoreMap);
-  const permanentlyDeleteMap = useMapStore((s) => s.permanentlyDeleteMap);
 
   const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [confirmPermanentDeleteId, setConfirmPermanentDeleteId] = useState<string | null>(null);
   const [mapSortMode, setMapSortMode] = useState<MapSortMode>(loadMapSortMode);
   const [primitiveSortMode, setPrimitiveSortMode] =
     useState<PrimitiveSortMode>(loadPrimitiveSortMode);
   const [pinnedMapIds, setPinnedMapIds] = useState<Set<string>>(loadPinnedMapIds);
   const [collapsedMapMonths, setCollapsedMapMonths] = useState<Record<string, boolean>>({});
-  const [archiveOpen, setArchiveOpen] = useState(true);
 
   const [mapsHeight, setMapsHeight] = useState(() => {
     if (typeof window === 'undefined') return 192;
@@ -281,13 +277,6 @@ export default function LeftPane({
 
   const visibleMaps = useMemo(
     () => maps.filter((map) => map.archivedAt === undefined),
-    [maps]
-  );
-  const archivedMaps = useMemo(
-    () =>
-      [...maps]
-        .filter((map) => map.archivedAt !== undefined)
-        .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)),
     [maps]
   );
   const sortedMaps = useMemo(
@@ -521,9 +510,8 @@ export default function LeftPane({
         <div>
           <div className="text-sm font-bold text-gray-900">diagram-note</div>
           <div className="text-[11px] text-gray-500">
-              {visibleMaps.length} map{visibleMaps.length === 1 ? '' : 's'}
-              {archivedMaps.length > 0 ? ` · ${archivedMaps.length} archived` : ''} ·{' '}
-              {effectiveWorkspace.primitives.length} primitive
+            {visibleMaps.length} map{visibleMaps.length === 1 ? '' : 's'} ·{' '}
+            {effectiveWorkspace.primitives.length} primitive
             {effectiveWorkspace.primitives.length === 1 ? '' : 's'}
             {splitMode && paneLabel ? ` · ${paneLabel}` : ''}
           </div>
@@ -623,73 +611,6 @@ export default function LeftPane({
             sortedMaps.map((map) => renderMapRow(map))
           )}
         </div>
-      </div>
-      <div className="border-t border-gray-100 px-3 py-3">
-        <button
-          onClick={() => setArchiveOpen((value) => !value)}
-          className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-left transition hover:bg-gray-50"
-        >
-          <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            <ArchiveRestore size={12} />
-            Archive
-          </span>
-          <span className="text-[10px] text-gray-400">
-            {archivedMaps.length} {archiveOpen ? '▼' : '▶'}
-          </span>
-        </button>
-        {archiveOpen && (
-          <div className="mt-2 space-y-2">
-            {archivedMaps.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-400">
-                Deleted maps will appear here.
-              </div>
-            ) : (
-              archivedMaps.map((map) => (
-                <div
-                  key={map.id}
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
-                >
-                  <div className="truncate text-sm font-medium text-gray-800">{map.name}</div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      onClick={() => void restoreMap(map.id)}
-                      className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-50"
-                    >
-                      <RotateCcw size={11} />
-                      Restore
-                    </button>
-                    {confirmPermanentDeleteId === map.id ? (
-                      <>
-                        <button
-                          onClick={() => {
-                            void permanentlyDeleteMap(map.id);
-                            setConfirmPermanentDeleteId(null);
-                          }}
-                          className="rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-semibold text-white"
-                        >
-                          Permanent delete
-                        </button>
-                        <button
-                          onClick={() => setConfirmPermanentDeleteId(null)}
-                          className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-600"
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => setConfirmPermanentDeleteId(map.id)}
-                        className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:bg-red-50"
-                      >
-                        Permanent delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
       </div>
       <div
         className="relative z-10 h-2 cursor-row-resize"
