@@ -22,19 +22,16 @@ export function extractUrls(value: string): string[] {
 export function stripUrlsFromContent(value: string): string {
   return value
     .replace(/https?:\/\/[^\s<>()"']+/gi, '')
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .replace(/\r\n/g, '\n');
 }
 
 export function composeNoteContent(body: string, urls: string[]): string {
-  const trimmedBody = body.trim();
-  if (trimmedBody && urls.length > 0) {
-    return `${trimmedBody}\n\n${urls.join('\n')}`;
+  const normalizedBody = body.replace(/\r\n/g, '\n');
+  const hasBody = normalizedBody.trim().length > 0;
+  if (hasBody && urls.length > 0) {
+    return `${normalizedBody}\n\n${urls.join('\n')}`;
   }
-  if (trimmedBody) return trimmedBody;
+  if (hasBody) return normalizedBody;
   return urls.join('\n');
 }
 
@@ -46,7 +43,37 @@ export function splitNoteContent(value: string) {
 }
 
 export function openUrlsInTabs(urls: string[]) {
-  for (const url of urls) {
-    window.open(url, '_blank', 'noopener,noreferrer');
+  if (urls.length === 0) return;
+  if (urls.length === 1) {
+    window.open(urls[0], '_blank', 'noopener,noreferrer');
+    return;
   }
+  const escapedLinks = urls
+    .map(
+      (url, index) =>
+        `<li style="margin:0 0 12px"><a href="${url.replace(/"/g, '&quot;')}" target="_blank" rel="noreferrer noopener" style="color:#0369a1;text-decoration:none;word-break:break-all">Link ${index + 1}</a></li>`
+    )
+    .join('');
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Note Links</title>
+  </head>
+  <body style="margin:0;font-family:system-ui,-apple-system,sans-serif;background:#fff8eb;color:#7c2d12">
+    <div style="max-width:720px;margin:0 auto;padding:24px">
+      <h1 style="margin:0 0 16px;font-size:20px">Note Links</h1>
+      <p style="margin:0 0 20px;font-size:14px">Open any link below.</p>
+      <ol style="padding-left:20px;margin:0">${escapedLinks}</ol>
+    </div>
+  </body>
+</html>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const blobUrl = URL.createObjectURL(blob);
+  const opened = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+  if (!opened) {
+    URL.revokeObjectURL(blobUrl);
+    return;
+  }
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }
