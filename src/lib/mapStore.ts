@@ -60,6 +60,8 @@ export interface MapStoreState {
     targetId: string
   ) => Promise<void>;
   deleteMap: (id: string) => Promise<void>;
+  restoreMap: (id: string) => Promise<void>;
+  permanentlyDeleteMap: (id: string) => Promise<void>;
   renameMap: (id: string, name: string) => Promise<void>;
   reorderMaps: (fromIndex: number, toIndex: number) => Promise<void>;
   saveActiveWorkspace: (workspace: MapWorkspace) => Promise<void>;
@@ -91,6 +93,14 @@ interface LoadedMapPage {
 }
 
 let lastObjectUrl: string | null = null;
+
+function isArchivedMap(map: DiagramMap) {
+  return typeof map.archivedAt === 'number';
+}
+
+function getActiveMaps(maps: DiagramMap[]) {
+  return maps.filter((map) => !isArchivedMap(map));
+}
 
 function setObjectUrl(url: string | null) {
   if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
@@ -481,7 +491,8 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         return oa !== ob ? oa - ob : b.updatedAt - a.updatedAt;
       });
 
-      const mostRecent = [...maps]
+      const availableMaps = getActiveMaps(maps);
+      const mostRecent = [...availableMaps]
         .sort((a, b) => {
           const aRecent = a.lastOpenedAt ?? a.updatedAt ?? a.createdAt;
           const bRecent = b.lastOpenedAt ?? b.updatedAt ?? b.createdAt;
@@ -489,9 +500,14 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         })[0];
       const preferredIds = [
         mostRecent?.id ?? null,
-        ...maps.map((m) => m.id),
+        ...availableMaps.map((m) => m.id),
       ].filter((id, index, items): id is string => Boolean(id) && items.indexOf(id) === index);
       set({ maps, activeMapId: preferredIds[0] ?? null, loading: false, initialized: true });
+      if (preferredIds.length === 0) {
+        setObjectUrl(null);
+        useEditorStore.getState().setWorkspace(EMPTY_WORKSPACE);
+        return;
+      }
       for (const candidateId of preferredIds) {
         const loaded = await get().setActiveMap(candidateId);
         if (loaded) return;
@@ -542,6 +558,10 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       setObjectUrl(null);
       set({ activeMapId: null, activeRasterUrl: null });
       useEditorStore.getState().setWorkspace(EMPTY_WORKSPACE);
+      return false;
+    }
+    if (isArchivedMap(map)) {
+      debugMap('set active map rejected archived map', { requestedMapId: id });
       return false;
     }
     debugMap('set active map loaded record', {
@@ -953,15 +973,51 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
   },
 
   deleteMap: async (id) => {
+    const map = await idb.getMap(id);
+    if (!map || map.isDefault || isArchivedMap(map)) return;
+    const archived: DiagramMap = {
+      ...map,
+      archivedAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    await idb.putMap(archived);
+    const nextMaps = get().maps.map((entry) => (entry.id === id ? archived : entry));
+    set({ maps: nextMaps });
+    if (get().activeMapId === id) {
+      const fallbackId = getActiveMaps(nextMaps)[0]?.id ?? null;
+      await get().setActiveMap(fallbackId);
+    }
+  },
+
+  restoreMap: async (id) => {
+    const map = await idb.getMap(id);
+    if (!map || !isArchivedMap(map)) return;
+    const restored: DiagramMap = {
+      ...map,
+      archivedAt: undefined,
+      updatedAt: Date.now(),
+    };
+    await idb.putMap(restored);
+    set({
+      maps: get().maps.map((entry) => (entry.id === id ? restored : entry)),
+    });
+    if (!get().activeMapId) {
+      await get().setActiveMap(id);
+    }
+  },
+
+  permanentlyDeleteMap: async (id) => {
     const map = get().maps.find((m) => m.id === id);
-    if (map?.sourceStoragePath) {
+    if (!map || map.isDefault) return;
+    if (map.sourceStoragePath) {
       await deleteMapSource(map.sourceStoragePath);
     }
     await idb.deleteMap(id);
     const next = get().maps.filter((m) => m.id !== id);
     set({ maps: next });
     if (get().activeMapId === id) {
-      await get().setActiveMap(next[0]?.id ?? null);
+      const fallbackId = getActiveMaps(next)[0]?.id ?? null;
+      await get().setActiveMap(fallbackId);
     }
   },
 

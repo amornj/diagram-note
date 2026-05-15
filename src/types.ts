@@ -79,6 +79,8 @@ export interface DiagramMap {
   isDefault?: boolean;
   /** Last time the user opened this map in the editor. */
   lastOpenedAt?: number;
+  /** Soft-delete marker; archived maps stay recoverable until permanently deleted. */
+  archivedAt?: number;
   createdAt: number;
   updatedAt: number;
 }

@@ -76,6 +76,14 @@ function mapForCloud(map: DiagramMap): DiagramMap {
   return stripUndefinedDeep(rest);
 }
 
+function isArchivedMap(map: DiagramMap) {
+  return typeof map.archivedAt === 'number';
+}
+
+function getVisibleMaps(maps: DiagramMap[]) {
+  return maps.filter((map) => !isArchivedMap(map));
+}
+
 function getWorkspaceForMapPage(map: DiagramMap, pageIndex: number): MapWorkspace {
   return map.pages?.[pageIndex]?.workspace ?? map.workspace ?? EMPTY_WORKSPACE;
 }
@@ -229,7 +237,7 @@ async function mergeCloudMaps(
 
   const activeId = useMapStore.getState().activeMapId;
   if (activeId && !afterIds.has(activeId)) {
-    const fallbackId = useMapStore.getState().maps[0]?.id ?? null;
+    const fallbackId = getVisibleMaps(useMapStore.getState().maps)[0]?.id ?? null;
     await useMapStore.getState().setActiveMap(fallbackId);
   } else if (activeId && mergeById.has(activeId)) {
     const activeMap = mergeById.get(activeId)!;
@@ -760,7 +768,7 @@ function MapPage() {
 
   const mapOptions = useMemo(
     () =>
-      [...maps]
+      [...getVisibleMaps(maps)]
         .sort((a, b) => {
           const aRecent = a.lastOpenedAt ?? a.updatedAt ?? a.createdAt;
           const bRecent = b.lastOpenedAt ?? b.updatedAt ?? b.createdAt;
@@ -1116,10 +1124,32 @@ function MapPage() {
     window.addEventListener('mouseup', handleUp);
   };
 
-  if (!activeMap || !activeRasterUrl) {
+  if (maps.length === 0) {
     return (
       <SyncStatusContext.Provider value={syncStatus}>
         <Landing />
+      </SyncStatusContext.Provider>
+    );
+  }
+
+  if (!activeMap || !activeRasterUrl) {
+    return (
+      <SyncStatusContext.Provider value={syncStatus}>
+        <div className="relative h-screen w-screen overflow-hidden bg-gray-50">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="rounded-2xl border border-gray-200 bg-white px-6 py-5 text-center shadow-sm">
+              <div className="text-sm font-semibold text-gray-900">No active map</div>
+              <div className="mt-1 text-sm text-gray-500">
+                Restore a map from Archive or load a new one from the menu.
+              </div>
+            </div>
+          </div>
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-30">
+            <div className="pointer-events-auto relative h-full">
+              <LeftPane />
+            </div>
+          </div>
+        </div>
       </SyncStatusContext.Provider>
     );
   }
@@ -1252,7 +1282,7 @@ function MapPage() {
               leftInset={leftSidebarCollapsed ? 0 : leftPaneWidth}
               splitMode={splitMode}
               onToggleSplitMode={toggleSplitMode}
-              mapOptions={[...maps]
+              mapOptions={[...getVisibleMaps(maps)]
                 .sort((a, b) => {
                   const aRecent = a.lastOpenedAt ?? a.updatedAt ?? a.createdAt;
                   const bRecent = b.lastOpenedAt ?? b.updatedAt ?? b.createdAt;

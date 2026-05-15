@@ -83,6 +83,7 @@ export default function SearchBox({
     const q = deferredQuery.trim().toLowerCase();
     if (!q || !activeTypeFilters.includes('map')) return [];
     return maps
+      .filter((map) => map.archivedAt === undefined)
       .filter((map) => map.name.toLowerCase().includes(q))
       .slice(0, 20);
   }, [activeTypeFilters, deferredQuery, maps]);
@@ -92,8 +93,8 @@ export default function SearchBox({
     if (!q || activeTypeFilters.includes('map')) return [];
     const searchAcrossAllMaps = activeTypeFilters.includes('allmap');
     const sourceMaps = searchAcrossAllMaps
-      ? maps
-      : maps.filter((map) => map.id === activeMapId);
+      ? maps.filter((map) => map.archivedAt === undefined)
+      : maps.filter((map) => map.id === activeMapId && map.archivedAt === undefined);
 
     const primitiveTypeFilters = activeTypeFilters.filter(
       (filter): filter is Exclude<SearchTypeFilter, 'map' | 'allmap'> =>

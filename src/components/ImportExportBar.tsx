@@ -39,7 +39,8 @@ export default function ImportExportBar() {
   const workspace = useEditorStore((s) => s.workspace);
   const setWorkspace = useEditorStore((s) => s.setWorkspace);
 
-  const activeMap = maps.find((m) => m.id === activeMapId);
+  const activeMap = maps.find((m) => m.id === activeMapId && m.archivedAt === undefined);
+  const exportableMaps = maps.filter((map) => map.archivedAt === undefined);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -111,16 +112,16 @@ export default function ImportExportBar() {
   };
 
   const handleExportAllDnotes = async () => {
-    if (maps.length === 0) return;
+    if (exportableMaps.length === 0) return;
     setError(null);
     try {
       const entries: Record<string, Uint8Array> = {};
       const usedNames = new Set<string>();
       let skipped = 0;
       let index = 0;
-      for (const m of maps) {
+      for (const m of exportableMaps) {
         index += 1;
-        setBusy(`Bundling ${index} of ${maps.length}…`);
+        setBusy(`Bundling ${index} of ${exportableMaps.length}…`);
         const sourceBlob = await idb.getPdfBlob(m.id);
         if (!sourceBlob) {
           skipped += 1;
@@ -330,7 +331,7 @@ export default function ImportExportBar() {
           </button>
           <button
             onClick={() => void handleExportAllDnotes()}
-            disabled={maps.length === 0 || busy !== null}
+            disabled={exportableMaps.length === 0 || busy !== null}
             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             role="menuitem"
           >
