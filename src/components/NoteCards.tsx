@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, ExternalLink, Link2, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { NoteCard } from '../types';
-import { composeNoteContent, openUrlsInTabs, splitNoteContent } from '../lib/noteLinks';
+import { composeNoteContent, splitNoteContent } from '../lib/noteLinks';
 
 interface NoteCardsProps {
   notes: NoteCard[];
@@ -108,11 +108,7 @@ export default function NoteCards({
     }
   };
 
-  const linkTitle =
-    clickableUrls.length > 1 ? `Open ${clickableUrls.length} links` : 'Open link';
-
-  const handleRemoveLinks = () => {
-    const nextContent = composeNoteContent(currentParsed.body, []);
+  const updateCurrentNoteContent = (nextContent: string) => {
     if (notes.length === 0) {
       setEmptyDraft(nextContent);
       onChange([{ name: '', content: nextContent, isPriority: true }]);
@@ -127,25 +123,41 @@ export default function NoteCards({
     onChange(nextNotes);
   };
 
-  const renderLinkAction = (withTopMargin = false) => (
-    <div className={`${withTopMargin ? 'mt-2 ' : ''}group inline-flex items-center gap-1`}>
-      <button
-        type="button"
-        onClick={() => openUrlsInTabs(clickableUrls)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100"
-        title={linkTitle}
-      >
-        <ExternalLink size={13} strokeWidth={2.4} />
-        {clickableUrls.length > 1 && <span>{clickableUrls.length}</span>}
-      </button>
-      <button
-        type="button"
-        onClick={handleRemoveLinks}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-500 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 focus:opacity-100 group-hover:opacity-100"
-        title={clickableUrls.length > 1 ? 'Remove links' : 'Remove link'}
-      >
-        <X size={12} strokeWidth={2.4} />
-      </button>
+  const handleRemoveUrl = (urlToRemove: string) => {
+    updateCurrentNoteContent(
+      composeNoteContent(
+        currentParsed.body,
+        clickableUrls.filter((url) => url !== urlToRemove)
+      )
+    );
+  };
+
+  const renderLinkList = (withTopMargin = false) => (
+    <div className={`${withTopMargin ? 'mt-2 ' : ''}space-y-2`}>
+      {clickableUrls.map((url) => (
+        <div
+          key={url}
+          className="group flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
+        >
+          <button
+            type="button"
+            onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm text-sky-700 transition hover:text-sky-800"
+            title={url}
+          >
+            <ExternalLink size={14} strokeWidth={2.4} className="shrink-0" />
+            <span className="truncate">{url}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRemoveUrl(url)}
+            className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
+            title="Remove link"
+          >
+            <X size={12} strokeWidth={2.4} />
+          </button>
+        </div>
+      ))}
     </div>
   );
 
@@ -229,7 +241,7 @@ export default function NoteCards({
               </div>
             )}
           </div>
-          {clickableUrls.length > 0 && renderLinkAction()}
+          {clickableUrls.length > 0 && renderLinkList()}
         </div>
       ) : (
         <div className="mt-2">
@@ -253,7 +265,7 @@ export default function NoteCards({
               </div>
             )}
           </div>
-          {clickableUrls.length > 0 && renderLinkAction(true)}
+          {clickableUrls.length > 0 && renderLinkList(true)}
         </div>
       )}
     </div>
