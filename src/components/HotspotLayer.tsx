@@ -1629,7 +1629,12 @@ export default function HotspotLayer({
             {(() => {
               const isEditing = editingPriorityPrimitiveId === priorityBubble.primitiveId;
               const isMoveArmed = movePriorityPrimitiveId === priorityBubble.primitiveId;
-              const noteNavRightOffset = priorityBubble.hasBacklinks ? 126 : 80;
+              const hasLinks = priorityBubble.linkUrls.length > 0;
+              const linkShift = hasLinks ? 22 : 0;
+              const linkIconX = priorityBubble.x + priorityBubble.width - 80;
+              const backlinkX = priorityBubble.x + priorityBubble.width - 92 - linkShift;
+              const noteNavRightOffset =
+                (priorityBubble.hasBacklinks ? 126 : 80) + linkShift;
               const nextNoteX = priorityBubble.x + priorityBubble.width - noteNavRightOffset;
               const prevNoteX = nextNoteX - 22;
               return (
@@ -1876,7 +1881,7 @@ export default function HotspotLayer({
                     )}
                     {priorityBubble.hasBacklinks && (
                       <g
-                        transform={`translate(${priorityBubble.x + priorityBubble.width - 92} ${priorityBubble.y + priorityBubble.height - 14})`}
+                        transform={`translate(${backlinkX} ${priorityBubble.y + priorityBubble.height - 14})`}
                         pointerEvents="none"
                       >
                         {/* pill background */}
@@ -1945,33 +1950,34 @@ export default function HotspotLayer({
                         ))}
                       </text>
                     )}
-                    {priorityBubble.linkUrls.length > 0 && (
-                      <foreignObject
-                        x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
-                        y={priorityBubble.y + priorityBubble.height - 26}
-                        width={priorityBubble.linkUrls.length > 1 ? 66 : 32}
-                        height={22}
+                    {hasLinks && (
+                      <g
+                        transform={`translate(${linkIconX} ${priorityBubble.y + priorityBubble.height - 14})`}
+                        pointerEvents="none"
                       >
-                        <div
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            height: '22px',
-                            padding: '0 8px',
-                            borderRadius: '9999px',
-                            border: '1px solid #f59e0b',
-                            background: '#fff8eb',
-                            color: '#b45309',
-                            fontFamily: 'system-ui, -apple-system, sans-serif',
-                            fontSize: '10px',
-                            fontWeight: 700,
-                          }}
-                        >
-                          <ExternalLink size={12} strokeWidth={2.4} />
-                          {priorityBubble.linkUrls.length > 1 ? priorityBubble.linkUrls.length : null}
-                        </div>
-                      </foreignObject>
+                        <circle
+                          cx={0}
+                          cy={0}
+                          r={8}
+                          fill="#fff8eb"
+                          stroke="#f59e0b"
+                          strokeWidth={1.5}
+                        />
+                        <foreignObject x={-6} y={-6} width={12} height={12}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '100%',
+                              height: '100%',
+                              color: '#b45309',
+                            }}
+                          >
+                            <ExternalLink size={10} strokeWidth={2.4} />
+                          </div>
+                        </foreignObject>
+                      </g>
                     )}
                   </>
                 )}
