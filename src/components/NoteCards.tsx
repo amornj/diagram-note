@@ -34,24 +34,26 @@ export default function NoteCards({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [currentIndex, setCurrentIndex] = useState(Math.max(0, notes.length - 1));
   const [noteHeight, setNoteHeight] = useState(loadSavedHeight);
-  const [emptyDraft, setEmptyDraft] = useState('');
+  const [editorDraft, setEditorDraft] = useState('');
 
   useEffect(() => {
     if (notes.length === 0) {
       setCurrentIndex(0);
-      setEmptyDraft('');
       return;
     }
     if (currentIndex >= notes.length) {
       setCurrentIndex(notes.length - 1);
     }
-    setEmptyDraft('');
   }, [notes, notes.length, currentIndex]);
 
   const currentNote = notes[currentIndex];
-  const currentContent = notes.length > 0 ? currentNote?.content ?? '' : emptyDraft;
+  const currentContent = notes.length > 0 ? currentNote?.content ?? '' : editorDraft;
   const currentParsed = splitNoteContent(currentContent);
   const clickableUrls = currentParsed.urls;
+
+  useEffect(() => {
+    setEditorDraft(currentParsed.body);
+  }, [currentIndex, currentContent]);
 
   const handlePrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
   const handleNext = () => setCurrentIndex((i) => Math.min(notes.length - 1, i + 1));
@@ -81,11 +83,11 @@ export default function NoteCards({
   };
 
   const handleUpdateContent = (value: string) => {
+    setEditorDraft(value);
     const nextParsed = splitNoteContent(value);
     if (notes.length === 0) {
       const mergedUrls = Array.from(new Set(nextParsed.urls));
       const nextContent = composeNoteContent(nextParsed.body, mergedUrls);
-      setEmptyDraft(nextContent);
       onChange([{ name: '', content: nextContent, isPriority: true }]);
       setCurrentIndex(0);
       return;
@@ -110,7 +112,7 @@ export default function NoteCards({
 
   const updateCurrentNoteContent = (nextContent: string) => {
     if (notes.length === 0) {
-      setEmptyDraft(nextContent);
+      setEditorDraft(splitNoteContent(nextContent).body);
       onChange([{ name: '', content: nextContent, isPriority: true }]);
       setCurrentIndex(0);
       return;
@@ -224,7 +226,7 @@ export default function NoteCards({
           <div className="relative">
             <textarea
               ref={textareaRef}
-              value={currentParsed.body}
+              value={editorDraft}
               onChange={(event) => handleUpdateContent(event.target.value)}
               onMouseUp={persistHeight}
               onTouchEnd={persistHeight}
@@ -248,7 +250,7 @@ export default function NoteCards({
           <div className="relative">
             <textarea
               ref={textareaRef}
-              value={currentParsed.body}
+              value={editorDraft}
               onChange={(event) => handleUpdateContent(event.target.value)}
               onMouseUp={persistHeight}
               onTouchEnd={persistHeight}
