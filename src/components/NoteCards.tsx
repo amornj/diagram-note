@@ -1,7 +1,12 @@
 import { ChevronLeft, ChevronRight, ExternalLink, Link2, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { NoteCard } from '../types';
-import { composeNoteContent, splitNoteContent } from '../lib/noteLinks';
+import {
+  composeNoteContent,
+  ensureMarkers,
+  processEditorBody,
+  splitNoteContent,
+} from '../lib/noteLinks';
 
 interface NoteCardsProps {
   notes: NoteCard[];
@@ -52,7 +57,7 @@ export default function NoteCards({
   const clickableUrls = currentParsed.urls;
 
   useEffect(() => {
-    setEditorDraft(currentParsed.body);
+    setEditorDraft(ensureMarkers(currentParsed.body, currentParsed.urls));
   }, [currentIndex, currentContent]);
 
   const handlePrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
@@ -83,17 +88,14 @@ export default function NoteCards({
   };
 
   const handleUpdateContent = (value: string) => {
-    setEditorDraft(value);
-    const nextParsed = splitNoteContent(value);
+    const { body, urls } = processEditorBody(value, editorDraft, currentParsed.urls);
+    setEditorDraft(body);
+    const nextContent = composeNoteContent(body, urls);
     if (notes.length === 0) {
-      const mergedUrls = Array.from(new Set(nextParsed.urls));
-      const nextContent = composeNoteContent(nextParsed.body, mergedUrls);
       onChange([{ name: '', content: nextContent, isPriority: true }]);
       setCurrentIndex(0);
       return;
     }
-    const mergedUrls = Array.from(new Set([...currentParsed.urls, ...nextParsed.urls]));
-    const nextContent = composeNoteContent(nextParsed.body, mergedUrls);
     const nextNotes = ensurePriorityNote(notes.map((n, i) =>
       i === currentIndex ? { ...n, content: nextContent } : n
     ));
@@ -125,22 +127,29 @@ export default function NoteCards({
     onChange(nextNotes);
   };
 
-  const handleRemoveUrl = (urlToRemove: string) => {
-    updateCurrentNoteContent(
-      composeNoteContent(
-        currentParsed.body,
-        clickableUrls.filter((url) => url !== urlToRemove)
-      )
-    );
+  const handleRemoveUrl = (removeIdx: number) => {
+    if (removeIdx < 0 || removeIdx >= clickableUrls.length) return;
+    const removeNum = removeIdx + 1;
+    const newBody = currentParsed.body.replace(/\[(\d+)\]/g, (match, raw) => {
+      const num = parseInt(raw, 10);
+      if (num === removeNum) return '';
+      if (num > removeNum) return `[${num - 1}]`;
+      return match;
+    });
+    const newUrls = clickableUrls.filter((_, i) => i !== removeIdx);
+    updateCurrentNoteContent(composeNoteContent(newBody, newUrls));
   };
 
   const renderLinkList = (withTopMargin = false) => (
     <div className={`${withTopMargin ? 'mt-2 ' : ''}space-y-2`}>
-      {clickableUrls.map((url) => (
+      {clickableUrls.map((url, index) => (
         <div
-          key={url}
+          key={`${index}-${url}`}
           className="group flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
         >
+          <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-sky-700">
+            [{index + 1}]
+          </span>
           <button
             type="button"
             onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
@@ -152,7 +161,7 @@ export default function NoteCards({
           </button>
           <button
             type="button"
-            onClick={() => handleRemoveUrl(url)}
+            onClick={() => handleRemoveUrl(index)}
             className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus:opacity-100 group-hover:opacity-100"
             title="Remove link"
           >
