@@ -31,6 +31,7 @@ export interface MapStoreState {
   activeRasterUrl: string | null;
   loading: boolean;
   initialized: boolean;
+  resetState: () => void;
   loadMaps: () => Promise<void>;
   setActiveMap: (id: string | null) => Promise<boolean>;
   setActivePage: (pageIndex: number) => Promise<void>;
@@ -107,20 +108,28 @@ function setObjectUrl(url: string | null) {
   lastObjectUrl = url;
 }
 
+function storageScopedKey(baseKey: string) {
+  return `${baseKey}:${idb.getStorageNamespace()}`;
+}
+
 function saveActiveId(id: string | null) {
   if (typeof window === 'undefined') return;
-  if (id) window.localStorage.setItem(ACTIVE_MAP_STORAGE_KEY, id);
-  else window.localStorage.removeItem(ACTIVE_MAP_STORAGE_KEY);
+  const key = storageScopedKey(ACTIVE_MAP_STORAGE_KEY);
+  if (id) window.localStorage.setItem(key, id);
+  else window.localStorage.removeItem(key);
 }
 
 function loadDefaultMapSeeded() {
   if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem(DEFAULT_MAP_SEEDED_KEY) === 'true';
+  return window.localStorage.getItem(storageScopedKey(DEFAULT_MAP_SEEDED_KEY)) === 'true';
 }
 
 function persistDefaultMapSeeded(value: boolean) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(DEFAULT_MAP_SEEDED_KEY, value ? 'true' : 'false');
+  window.localStorage.setItem(
+    storageScopedKey(DEFAULT_MAP_SEEDED_KEY),
+    value ? 'true' : 'false'
+  );
 }
 
 async function loadMapPage(
@@ -425,6 +434,19 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
   activeRasterUrl: null,
   loading: false,
   initialized: false,
+
+  resetState: () => {
+    setObjectUrl(null);
+    saveActiveId(null);
+    set({
+      maps: [],
+      activeMapId: null,
+      activeRasterUrl: null,
+      loading: false,
+      initialized: false,
+    });
+    useEditorStore.getState().setWorkspace(EMPTY_WORKSPACE);
+  },
 
   loadMaps: async () => {
     // Guard against concurrent calls (React StrictMode fires effects twice)

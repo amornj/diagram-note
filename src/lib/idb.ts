@@ -1,6 +1,6 @@
 import type { DiagramMap } from '../types';
 
-const DB_NAME = 'diagram-note';
+const DB_NAME_PREFIX = 'diagram-note';
 const DB_VERSION = 1;
 
 const STORE_MAPS = 'maps';
@@ -8,11 +8,30 @@ const STORE_PDFS = 'pdfs';
 const STORE_RASTERS = 'rasters';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let currentNamespace = 'guest';
+
+function dbNameForNamespace(namespace: string) {
+  return `${DB_NAME_PREFIX}--${namespace}`;
+}
+
+export function setStorageNamespace(namespace: string) {
+  const nextNamespace = namespace.trim() || 'guest';
+  if (nextNamespace === currentNamespace) return;
+  const previousPromise = dbPromise;
+  currentNamespace = nextNamespace;
+  dbPromise = null;
+  void previousPromise?.then((db) => db.close()).catch(() => {});
+}
+
+export function getStorageNamespace() {
+  return currentNamespace;
+}
 
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
+  const name = dbNameForNamespace(currentNamespace);
   dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDB.open(name, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE_MAPS)) {

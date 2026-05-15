@@ -271,6 +271,7 @@ function useCloudSync(): SyncStatus {
 
   // On login: load cloud maps and merge (newer updatedAt wins)
   useEffect(() => {
+    let cancelled = false;
     if (!user) {
       prevUidRef.current = null;
       syncReadyRef.current = false;
@@ -285,7 +286,9 @@ function useCloudSync(): SyncStatus {
     setStatus('loading');
 
     loadCloudMaps(user.uid).then(async (cloud) => {
+      if (cancelled) return;
       if (cloud === 'error') {
+        if (cancelled) return;
         syncReadyRef.current = true;
         setSyncReady(true);
         setStatus('error');
@@ -295,6 +298,7 @@ function useCloudSync(): SyncStatus {
         const normalizedCloud = dedupByHash(normalizeDefaultMapIds(cloud));
         const previous = persistedRef.current;
         await mergeCloudMaps(normalizedCloud, previous);
+        if (cancelled) return;
         persistedRef.current = snapshotMaps(normalizedCloud);
       } else if (!cloud) {
         // First login — push local maps to cloud
@@ -302,19 +306,25 @@ function useCloudSync(): SyncStatus {
           user.uid,
           useMapStore.getState().maps
         );
+        if (cancelled) return;
         if (localMaps.length > 0) {
           const deduped = dedupByHash(localMaps);
           const ok = await saveCloudMaps(
             user.uid,
             deduped.map((map) => mapForCloud(map))
           );
+          if (cancelled) return;
           if (ok) persistedRef.current = snapshotMaps(deduped);
         }
       }
+      if (cancelled) return;
       syncReadyRef.current = true;
       setSyncReady(true);
       setStatus('synced');
     });
+    return () => {
+      cancelled = true;
+    };
   }, [user?.uid]);
 
   useEffect(() => {
@@ -1389,13 +1399,27 @@ function MapPage() {
   );
 }
 
-export default function App() {
+function AppBootstrap() {
+  const { user, loading } = useAuth();
   const initialized = useMapStore((s) => s.initialized);
   const loadMaps = useMapStore((s) => s.loadMaps);
+  const resetState = useMapStore((s) => s.resetState);
+  const expectedNamespace = user?.uid ?? 'guest';
 
   useEffect(() => {
-    loadMaps();
-  }, [loadMaps]);
+    if (loading) return;
+    idb.setStorageNamespace(expectedNamespace);
+    resetState();
+    void loadMaps();
+  }, [expectedNamespace, loading, loadMaps, resetState]);
+
+  if (loading || idb.getStorageNamespace() !== expectedNamespace) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
+        <div className="text-sm text-slate-500">Loading…</div>
+      </div>
+    );
+  }
 
   if (!initialized) {
     return (
@@ -1406,9 +1430,15 @@ export default function App() {
   }
 
   return (
+    <MapPage />
+  );
+}
+
+export default function App() {
+  return (
     <ErrorBoundary>
       <AuthProvider>
-        <MapPage />
+        <AppBootstrap />
       </AuthProvider>
     </ErrorBoundary>
   );
