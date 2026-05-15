@@ -1639,11 +1639,27 @@ export default function HotspotLayer({
               const isEditing = editingPriorityPrimitiveId === priorityBubble.primitiveId;
               const isMoveArmed = movePriorityPrimitiveId === priorityBubble.primitiveId;
               const hasLinks = priorityBubble.linkUrls.length > 0;
-              const linkShift = hasLinks ? 22 : 0;
-              const linkIconX = priorityBubble.x + priorityBubble.width - 80;
-              const backlinkX = priorityBubble.x + priorityBubble.width - 92 - linkShift;
+              const linkBadgeWidth = hasLinks
+                ? priorityBubble.linkUrls.length > 1
+                  ? 40
+                  : 16
+                : 0;
+              const backlinkBadgeWidth = priorityBubble.hasBacklinks ? 40 : 0;
+              const footerGap = hasLinks && priorityBubble.hasBacklinks ? 6 : 0;
+              const footerRightInset = 14;
+              const footerRightX = priorityBubble.x + priorityBubble.width - footerRightInset;
+              const linkIconX = hasLinks
+                ? footerRightX - linkBadgeWidth / 2
+                : footerRightX;
+              const backlinkX = priorityBubble.hasBacklinks
+                ? footerRightX - linkBadgeWidth - footerGap - backlinkBadgeWidth / 2
+                : footerRightX;
+              const footerReservedWidth =
+                (hasLinks ? linkBadgeWidth : 0) +
+                (priorityBubble.hasBacklinks ? backlinkBadgeWidth : 0) +
+                footerGap;
               const noteNavRightOffset =
-                (priorityBubble.hasBacklinks ? 126 : 80) + linkShift;
+                58 + footerReservedWidth;
               const nextNoteX = priorityBubble.x + priorityBubble.width - noteNavRightOffset;
               const prevNoteX = nextNoteX - 22;
               return (
