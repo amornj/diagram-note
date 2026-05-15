@@ -20,9 +20,14 @@ export function extractUrls(value: string): string[] {
 }
 
 export function stripUrlsFromContent(value: string): string {
-  return value
+  const hasUrls = /https?:\/\/[^\s<>()"']+/i.test(value);
+  const stripped = value
     .replace(/https?:\/\/[^\s<>()"']+/gi, '')
     .replace(/\r\n/g, '\n');
+  // When URLs are present, the trailing whitespace was the `\n\n` separator
+  // that composeNoteContent inserted — strip it so split→compose round-trips
+  // cleanly and the editor doesn't accumulate phantom newlines on each keystroke.
+  return hasUrls ? stripped.replace(/\s+$/, '') : stripped;
 }
 
 export function composeNoteContent(body: string, urls: string[]): string {
