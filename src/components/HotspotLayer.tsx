@@ -20,7 +20,12 @@ import {
   makeMemberKey,
   parseMemberKey,
 } from '../lib/workspace';
-import { composeNoteContent, splitNoteContent } from '../lib/noteLinks';
+import {
+  composeNoteContent,
+  ensureMarkers,
+  processEditorBody,
+  splitNoteContent,
+} from '../lib/noteLinks';
 import type { MapWorkspace, NoteCard, Point, Primitive } from '../types';
 import { useMapStore } from '../lib/mapStore';
 
@@ -1044,7 +1049,8 @@ export default function HotspotLayer({
       const note = primitive?.notes?.[noteIdx];
       if (!note) return;
       setEditingPriorityPrimitiveId(primitiveId);
-      setEditingPriorityDraft(splitNoteContent(note.content).body);
+      const seeded = splitNoteContent(note.content);
+      setEditingPriorityDraft(ensureMarkers(seeded.body, seeded.urls));
       setEditingNoteActualIndex(noteIdx);
     },
     [primitivesById]
@@ -1063,13 +1069,16 @@ export default function HotspotLayer({
       return;
     }
     const currentNotes = primitive.notes ?? [];
-    const currentUrls = splitNoteContent(currentNotes[noteIndex]?.content ?? '').urls;
-    const nextParsed = splitNoteContent(editingPriorityDraft);
-    const nextContent = composeNoteContent(
-      nextParsed.body,
-      Array.from(new Set([...currentUrls, ...nextParsed.urls]))
+    const storedContent = currentNotes[noteIndex]?.content ?? '';
+    const stored = splitNoteContent(storedContent);
+    const existingBody = ensureMarkers(stored.body, stored.urls);
+    const { body, urls } = processEditorBody(
+      editingPriorityDraft,
+      existingBody,
+      stored.urls
     );
-    if (currentNotes[noteIndex]?.content !== nextContent) {
+    const nextContent = composeNoteContent(body, urls);
+    if (storedContent !== nextContent) {
       const nextNotes = currentNotes.map((note, index) =>
         index === noteIndex ? { ...note, content: nextContent } : note
       );
