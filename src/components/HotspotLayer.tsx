@@ -20,7 +20,7 @@ import {
   makeMemberKey,
   parseMemberKey,
 } from '../lib/workspace';
-import { composeNoteContent, openUrlsInTabs, splitNoteContent } from '../lib/noteLinks';
+import { composeNoteContent, splitNoteContent } from '../lib/noteLinks';
 import type { MapWorkspace, NoteCard, Point, Primitive } from '../types';
 import { useMapStore } from '../lib/mapStore';
 
@@ -1952,13 +1952,7 @@ export default function HotspotLayer({
                         width={priorityBubble.linkUrls.length > 1 ? 66 : 32}
                         height={22}
                       >
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            openUrlsInTabs(priorityBubble.linkUrls);
-                          }}
+                        <div
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -1972,12 +1966,11 @@ export default function HotspotLayer({
                             fontFamily: 'system-ui, -apple-system, sans-serif',
                             fontSize: '10px',
                             fontWeight: 700,
-                            cursor: 'pointer',
                           }}
                         >
                           <ExternalLink size={12} strokeWidth={2.4} />
                           {priorityBubble.linkUrls.length > 1 ? priorityBubble.linkUrls.length : null}
-                        </button>
+                        </div>
                       </foreignObject>
                     )}
                   </>
