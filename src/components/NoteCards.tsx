@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, ExternalLink, Link2, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Link2, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { NoteCard } from '../types';
 import { composeNoteContent, openUrlsInTabs, splitNoteContent } from '../lib/noteLinks';
@@ -111,16 +111,42 @@ export default function NoteCards({
   const linkTitle =
     clickableUrls.length > 1 ? `Open ${clickableUrls.length} links` : 'Open link';
 
+  const handleRemoveLinks = () => {
+    const nextContent = composeNoteContent(currentParsed.body, []);
+    if (notes.length === 0) {
+      setEmptyDraft(nextContent);
+      onChange([{ name: '', content: nextContent, isPriority: true }]);
+      setCurrentIndex(0);
+      return;
+    }
+    const nextNotes = ensurePriorityNote(
+      notes.map((note, index) =>
+        index === currentIndex ? { ...note, content: nextContent } : note
+      )
+    );
+    onChange(nextNotes);
+  };
+
   const renderLinkAction = (withTopMargin = false) => (
-    <button
-      type="button"
-      onClick={() => openUrlsInTabs(clickableUrls)}
-      className={`${withTopMargin ? 'mt-2 ' : ''}inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100`}
-      title={linkTitle}
-    >
-      <ExternalLink size={13} strokeWidth={2.4} />
-      {clickableUrls.length > 1 && <span>{clickableUrls.length}</span>}
-    </button>
+    <div className={`${withTopMargin ? 'mt-2 ' : ''}group inline-flex items-center gap-1`}>
+      <button
+        type="button"
+        onClick={() => openUrlsInTabs(clickableUrls)}
+        className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100"
+        title={linkTitle}
+      >
+        <ExternalLink size={13} strokeWidth={2.4} />
+        {clickableUrls.length > 1 && <span>{clickableUrls.length}</span>}
+      </button>
+      <button
+        type="button"
+        onClick={handleRemoveLinks}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-500 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 focus:opacity-100 group-hover:opacity-100"
+        title={clickableUrls.length > 1 ? 'Remove links' : 'Remove link'}
+      >
+        <X size={12} strokeWidth={2.4} />
+      </button>
+    </div>
   );
 
   return (

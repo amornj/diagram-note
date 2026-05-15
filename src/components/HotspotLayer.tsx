@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ExternalLink } from 'lucide-react';
 import OpenSeadragon from 'openseadragon';
 import {
   bboxToViewerElementRect,
@@ -1945,69 +1946,39 @@ export default function HotspotLayer({
                       </text>
                     )}
                     {priorityBubble.linkUrls.length > 0 && (
-                      <g
-                        transform={`translate(${priorityBubble.x + PRIORITY_BUBBLE_PADDING_X} ${priorityBubble.y + priorityBubble.height - 24})`}
-                        style={{ cursor: 'pointer' }}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          openUrlsInTabs(priorityBubble.linkUrls);
-                        }}
+                      <foreignObject
+                        x={priorityBubble.x + PRIORITY_BUBBLE_PADDING_X}
+                        y={priorityBubble.y + priorityBubble.height - 26}
+                        width={priorityBubble.linkUrls.length > 1 ? 66 : 32}
+                        height={22}
                       >
-                        <rect
-                          x={0}
-                          y={0}
-                          rx={10}
-                          width={priorityBubble.linkUrls.length > 1 ? 62 : 28}
-                          height={18}
-                          fill="#fff8eb"
-                          stroke="#f59e0b"
-                        />
-                        <path
-                          d="M7 11V5.6C7 4.72 7.72 4 8.6 4H14"
-                          fill="none"
-                          stroke="#b45309"
-                          strokeWidth={1.6}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d="M10 14H5.6C4.72 14 4 13.28 4 12.4V8"
-                          fill="none"
-                          stroke="#b45309"
-                          strokeWidth={1.6}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d="M9 9 14 4"
-                          fill="none"
-                          stroke="#b45309"
-                          strokeWidth={1.6}
-                          strokeLinecap="round"
-                        />
-                        <path
-                          d="M11 4H14V7"
-                          fill="none"
-                          stroke="#b45309"
-                          strokeWidth={1.6}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        {priorityBubble.linkUrls.length > 1 && (
-                          <text
-                            x={46}
-                            y={12}
-                            textAnchor="middle"
-                            fill="#b45309"
-                            fontSize={10}
-                            fontWeight={700}
-                            style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
-                          >
-                            {priorityBubble.linkUrls.length}
-                          </text>
-                        )}
-                      </g>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            openUrlsInTabs(priorityBubble.linkUrls);
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            height: '22px',
+                            padding: '0 8px',
+                            borderRadius: '9999px',
+                            border: '1px solid #f59e0b',
+                            background: '#fff8eb',
+                            color: '#b45309',
+                            fontFamily: 'system-ui, -apple-system, sans-serif',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <ExternalLink size={12} strokeWidth={2.4} />
+                          {priorityBubble.linkUrls.length > 1 ? priorityBubble.linkUrls.length : null}
+                        </button>
+                      </foreignObject>
                     )}
                   </>
                 )}
