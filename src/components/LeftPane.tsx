@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Pin, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Pin, Trash2 } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import type { DiagramMap, MapWorkspace, Primitive } from '../types';
 import ImportExportBar from './ImportExportBar';
 import GoogleAuthButton from './GoogleAuthButton';
 import { EMPTY_WORKSPACE } from '../lib/workspace';
+import { extractUrls } from '../lib/noteLinks';
 
 type MapSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
 type PrimitiveSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
@@ -179,6 +180,10 @@ function BacklinkMetaIcon() {
       <path d="m9 15 6-6" />
     </svg>
   );
+}
+
+function ExternalLinkMetaIcon() {
+  return <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.9} />;
 }
 
 interface LeftPaneProps {
@@ -716,6 +721,9 @@ export default function LeftPane({
             const isSelected = p.id === effectiveSelectedPrimitiveId;
             const hasNote = (p.notes ?? []).some((note) => note.content.trim());
             const hasBacklink = (p.relatedMemberKeys?.length ?? 0) > 0;
+            const hasExternalLink = (p.notes ?? []).some(
+              (note) => extractUrls(note.content).length > 0
+            );
             return (
               <button
                 key={p.id}
@@ -748,10 +756,11 @@ export default function LeftPane({
                   {p.name}
                 </span>
                 <span className="flex shrink-0 items-center gap-1.5">
-                  {(hasNote || hasBacklink) && (
+                  {(hasNote || hasBacklink || hasExternalLink) && (
                     <span className="flex items-center gap-1 text-amber-500">
                       {hasNote && <NoteMetaIcon />}
                       {hasBacklink && <BacklinkMetaIcon />}
+                      {hasExternalLink && <ExternalLinkMetaIcon />}
                     </span>
                   )}
                   <span className="text-[10px] leading-none text-gray-400">
