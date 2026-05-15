@@ -38,6 +38,14 @@ function normalizeUrl(value: string): string | null {
   }
 }
 
+function extractUrls(value: string): string[] {
+  const matches = value.match(/https?:\/\/[^\s<>()"']+/gi) ?? [];
+  const urls = matches
+    .map((match) => normalizeUrl(match))
+    .filter((url): url is string => url !== null);
+  return Array.from(new Set(urls));
+}
+
 export default function NoteCards({
   notes,
   onChange,
@@ -62,7 +70,7 @@ export default function NoteCards({
 
   const currentNote = notes[currentIndex];
   const currentContent = notes.length > 0 ? currentNote?.content ?? '' : emptyDraft;
-  const clickableUrl = normalizeUrl(currentContent);
+  const clickableUrls = extractUrls(currentContent);
 
   const handlePrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
   const handleNext = () => setCurrentIndex((i) => Math.min(notes.length - 1, i + 1));
@@ -194,18 +202,23 @@ export default function NoteCards({
               </div>
             )}
           </div>
-          {clickableUrl && (
-            <a
-              href={clickableUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
-              title={clickableUrl}
-            >
-              <Link2 size={12} />
-              <span className="truncate">{clickableUrl}</span>
-              <ExternalLink size={12} />
-            </a>
+          {clickableUrls.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {clickableUrls.map((url) => (
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
+                  title={url}
+                >
+                  <Link2 size={12} />
+                  <span className="truncate">{url}</span>
+                  <ExternalLink size={12} />
+                </a>
+              ))}
+            </div>
           )}
         </div>
       ) : (
@@ -230,18 +243,23 @@ export default function NoteCards({
               </div>
             )}
           </div>
-          {clickableUrl && (
-            <a
-              href={clickableUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
-              title={clickableUrl}
-            >
-              <Link2 size={12} />
-              <span className="truncate">{clickableUrl}</span>
-              <ExternalLink size={12} />
-            </a>
+          {clickableUrls.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {clickableUrls.map((url) => (
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
+                  title={url}
+                >
+                  <Link2 size={12} />
+                  <span className="truncate">{url}</span>
+                  <ExternalLink size={12} />
+                </a>
+              ))}
+            </div>
           )}
         </div>
       )}
