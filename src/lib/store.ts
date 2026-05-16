@@ -142,11 +142,14 @@ function stampPrimitiveCreated<T extends Omit<Primitive, 'id'>>(primitive: T): T
   };
 }
 
-function stampPrimitiveUpdated<T extends Primitive>(primitive: T): T {
+function stampPrimitiveUpdated<T extends Primitive>(
+  primitive: T,
+  fallbackCreatedAt: number
+): T {
   const now = Date.now();
   return {
     ...primitive,
-    createdAt: primitive.createdAt ?? now,
+    createdAt: primitive.createdAt ?? fallbackCreatedAt,
     updatedAt: now,
   };
 }
@@ -307,8 +310,8 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((s) => ({
       workspace: {
         ...s.workspace,
-        primitives: s.workspace.primitives.map((p) =>
-          p.id === id ? stampPrimitiveUpdated({ ...p, ...patch }) : p
+        primitives: s.workspace.primitives.map((p, index) =>
+          p.id === id ? stampPrimitiveUpdated({ ...p, ...patch }, index) : p
         ),
       },
     })),
@@ -562,7 +565,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       workspace: {
         ...s.workspace,
         primitives: [
-          ...s.workspace.primitives.map((p) => {
+          ...s.workspace.primitives.map((p, index) => {
             if (!memberIds.has(p.id)) {
               return p;
             }
@@ -571,7 +574,7 @@ export const useEditorStore = create<EditorState>((set) => ({
               relatedMemberKeys: Array.from(
                 new Set([...(p.relatedMemberKeys ?? []), groupKey])
               ).filter((key) => key !== makeMemberKey(p.id)),
-            });
+            }, index);
           }),
           stampedPrimitive,
         ],
@@ -614,18 +617,18 @@ export const useEditorStore = create<EditorState>((set) => ({
       return {
         workspace: {
           ...s.workspace,
-          primitives: s.workspace.primitives.map((p) => {
+          primitives: s.workspace.primitives.map((p, index) => {
             if (p.id === targetId) {
               const next = Array.from(
                 new Set([...(p.relatedMemberKeys ?? []), memberKey])
               ).filter((k) => k !== targetKey);
-              return stampPrimitiveUpdated({ ...p, relatedMemberKeys: next });
+              return stampPrimitiveUpdated({ ...p, relatedMemberKeys: next }, index);
             }
             if (p.id === member.id) {
               const next = Array.from(
                 new Set([...(p.relatedMemberKeys ?? []), targetKey])
               ).filter((k) => k !== memberKey);
-              return stampPrimitiveUpdated({ ...p, relatedMemberKeys: next });
+              return stampPrimitiveUpdated({ ...p, relatedMemberKeys: next }, index);
             }
             return p;
           }),
@@ -643,21 +646,21 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((s) => ({
       workspace: {
         ...s.workspace,
-        primitives: s.workspace.primitives.map((p) =>
+        primitives: s.workspace.primitives.map((p, index) =>
           p.id === primitiveId
             ? stampPrimitiveUpdated({
                 ...p,
                 relatedMemberKeys: (p.relatedMemberKeys ?? []).filter(
                   (k) => k !== memberKey
                 ),
-              })
+              }, index)
             : parseMemberKey(memberKey)?.id === p.id
               ? stampPrimitiveUpdated({
                   ...p,
                   relatedMemberKeys: (p.relatedMemberKeys ?? []).filter(
                     (k) => k !== makeMemberKey(primitiveId)
                   ),
-                })
+                }, index)
               : p
         ),
       },

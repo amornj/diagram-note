@@ -407,11 +407,11 @@ function updatePrimitiveOnPage(
     ...meta,
     workspace: {
       ...meta.workspace,
-      primitives: meta.workspace.primitives.map((primitive) =>
+      primitives: meta.workspace.primitives.map((primitive, index) =>
         primitive.id === primitiveId
           ? {
               ...updater(primitive),
-              createdAt: primitive.createdAt ?? now,
+              createdAt: primitive.createdAt ?? index,
               updatedAt: now,
             }
           : primitive
