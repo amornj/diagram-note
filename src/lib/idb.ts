@@ -1,11 +1,12 @@
-import type { DiagramMap } from '../types';
+import type { DiagramMap, MapGroup } from '../types';
 
 const DB_NAME_PREFIX = 'diagram-note';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORE_MAPS = 'maps';
 const STORE_PDFS = 'pdfs';
 const STORE_RASTERS = 'rasters';
+const STORE_GROUPS = 'groups';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 let currentNamespace = 'guest';
@@ -42,6 +43,9 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_RASTERS)) {
         db.createObjectStore(STORE_RASTERS, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(STORE_GROUPS)) {
+        db.createObjectStore(STORE_GROUPS, { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -98,6 +102,24 @@ export async function deleteMap(id: string): Promise<void> {
       await asPromise(rasterStore.delete(key));
     }
   }
+}
+
+export async function listGroups(): Promise<MapGroup[]> {
+  const db = await openDb();
+  const store = tx(db, [STORE_GROUPS], 'readonly').objectStore(STORE_GROUPS);
+  return (await asPromise(store.getAll())) as MapGroup[];
+}
+
+export async function putGroup(group: MapGroup): Promise<void> {
+  const db = await openDb();
+  const store = tx(db, [STORE_GROUPS], 'readwrite').objectStore(STORE_GROUPS);
+  await asPromise(store.put(group));
+}
+
+export async function deleteGroup(id: string): Promise<void> {
+  const db = await openDb();
+  const store = tx(db, [STORE_GROUPS], 'readwrite').objectStore(STORE_GROUPS);
+  await asPromise(store.delete(id));
 }
 
 export async function getPdfBlob(mapId: string): Promise<Blob | null> {

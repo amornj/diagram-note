@@ -89,6 +89,15 @@ export interface DiagramMap {
   lastOpenedAt?: number;
   /** Soft-delete marker; archived maps stay recoverable until permanently deleted. */
   archivedAt?: number;
+  /** Optional user-defined group id; maps without a group fall under "Other". */
+  groupId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MapGroup {
+  id: string;
+  name: string;
   createdAt: number;
   updatedAt: number;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, Pin, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, FolderPlus, Pin, Trash2, X } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import type { DiagramMap, MapWorkspace, Primitive } from '../types';
@@ -221,10 +221,14 @@ export default function LeftPane({
     workspaceOverride !== undefined ? selectedPrimitiveIdOverride : selectedPrimitiveId;
 
   const maps = useMapStore((s) => s.maps);
+  const groups = useMapStore((s) => s.groups);
   const activeMapId = useMapStore((s) => s.activeMapId);
   const setActiveMap = useMapStore((s) => s.setActiveMap);
   const renameMap = useMapStore((s) => s.renameMap);
   const deleteMap = useMapStore((s) => s.deleteMap);
+  const createGroup = useMapStore((s) => s.createGroup);
+  const deleteGroup = useMapStore((s) => s.deleteGroup);
+  const moveMapToGroup = useMapStore((s) => s.moveMapToGroup);
 
   const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -235,6 +239,12 @@ export default function LeftPane({
     useState<PrimitiveSortMode>(loadPrimitiveSortMode);
   const [pinnedMapIds, setPinnedMapIds] = useState<Set<string>>(loadPinnedMapIds);
   const [collapsedMapMonths, setCollapsedMapMonths] = useState<Record<string, boolean>>({});
+  const [groupInputOpen, setGroupInputOpen] = useState(false);
+  const [groupInputValue, setGroupInputValue] = useState('');
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Record<string, boolean>>({});
+  const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
+  const [draggingMapId, setDraggingMapId] = useState<string | null>(null);
 
   const [mapsHeight, setMapsHeight] = useState(() => {
     if (typeof window === 'undefined') return 192;
@@ -342,14 +352,154 @@ export default function LeftPane({
     }));
   };
 
+  const OTHER_GROUP_TARGET = '__other__';
+
+  const handleGroupDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!draggingMapId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDropOnGroup = (
+    event: React.DragEvent<HTMLDivElement>,
+    targetGroupId: string | null
+  ) => {
+    event.preventDefault();
+    const mapId = event.dataTransfer.getData('text/plain') || draggingMapId;
+    setDragOverGroupId(null);
+    setDraggingMapId(null);
+    if (!mapId) return;
+    void moveMapToGroup(mapId, targetGroupId);
+  };
+
+  const renderGroupedMaps = () => {
+    const sortedGroups = [...groups].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
+    const ungroupedMaps = sortedMaps.filter(
+      (map) => !map.groupId || !groups.some((g) => g.id === map.groupId)
+    );
+    return (
+      <>
+        {sortedGroups.map((group) => {
+          const groupMaps = sortedMaps.filter((map) => map.groupId === group.id);
+          const isCollapsed = collapsedGroupIds[group.id] === true;
+          const isDropTarget = dragOverGroupId === group.id;
+          return (
+            <div
+              key={group.id}
+              onDragOver={(event) => {
+                handleGroupDragOver(event);
+                setDragOverGroupId(group.id);
+              }}
+              onDragLeave={() =>
+                setDragOverGroupId((current) =>
+                  current === group.id ? null : current
+                )
+              }
+              onDrop={(event) => handleDropOnGroup(event, group.id)}
+              className={`space-y-1 rounded-lg transition ${
+                isDropTarget ? 'bg-sky-50 ring-1 ring-sky-300' : ''
+              }`}
+            >
+              <div className="group/header flex items-center justify-between gap-1 rounded-lg px-2 py-1">
+                <button
+                  onClick={() =>
+                    setCollapsedGroupIds((prev) => ({
+                      ...prev,
+                      [group.id]: !prev[group.id],
+                    }))
+                  }
+                  className="flex flex-1 items-center justify-between gap-2 text-left"
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                    {group.name}
+                  </span>
+                  <span className="text-[10px] text-gray-400">
+                    {groupMaps.length} {isCollapsed ? '▶' : '▼'}
+                  </span>
+                </button>
+                {confirmDeleteGroupId === group.id ? (
+                  <div className="ml-1 flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        void deleteGroup(group.id);
+                        setConfirmDeleteGroupId(null);
+                      }}
+                      className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteGroupId(null)}
+                      className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteGroupId(group.id)}
+                    className="ml-1 rounded-full p-1 text-gray-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover/header:opacity-100"
+                    title="Delete group (maps stay)"
+                    aria-label={`Delete group ${group.name}`}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              {!isCollapsed && groupMaps.map((map) => renderMapRow(map))}
+            </div>
+          );
+        })}
+        <div
+          onDragOver={(event) => {
+            handleGroupDragOver(event);
+            setDragOverGroupId(OTHER_GROUP_TARGET);
+          }}
+          onDragLeave={() =>
+            setDragOverGroupId((current) =>
+              current === OTHER_GROUP_TARGET ? null : current
+            )
+          }
+          onDrop={(event) => handleDropOnGroup(event, null)}
+          className={`space-y-1 rounded-lg transition ${
+            dragOverGroupId === OTHER_GROUP_TARGET ? 'bg-sky-50 ring-1 ring-sky-300' : ''
+          }`}
+        >
+          <div className="flex items-center justify-between gap-1 rounded-lg px-2 py-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Other
+            </span>
+            <span className="text-[10px] text-gray-400">
+              {ungroupedMaps.length}
+            </span>
+          </div>
+          {ungroupedMaps.map((map) => renderMapRow(map))}
+        </div>
+      </>
+    );
+  };
+
   const renderMapRow = (map: DiagramMap) => {
     const isActive = map.id === activeMapId;
+    const isDragging = draggingMapId === map.id;
     return (
       <div
         key={map.id}
+        draggable={renamingId !== map.id}
+        onDragStart={(event) => {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', map.id);
+          setDraggingMapId(map.id);
+        }}
+        onDragEnd={() => {
+          setDraggingMapId(null);
+          setDragOverGroupId(null);
+        }}
         className={`flex items-center justify-between gap-1 rounded-lg px-2 py-1.5 transition ${
           isActive ? 'bg-sky-50 border border-sky-200' : 'hover:bg-gray-50'
-        }`}
+        } ${isDragging ? 'opacity-50' : ''}`}
       >
         {renamingId === map.id ? (
           <input
@@ -544,6 +694,21 @@ export default function LeftPane({
           </div>
           <div className="flex items-center gap-1">
             <button
+              onClick={() => {
+                setGroupInputOpen((open) => !open);
+                setGroupInputValue('');
+              }}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                groupInputOpen
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Create a map group"
+            >
+              <FolderPlus size={11} />
+              Group
+            </button>
+            <button
               onClick={() => setAndPersistSortMode('recent')}
               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
                 mapSortMode === 'recent'
@@ -587,13 +752,42 @@ export default function LeftPane({
             </button>
           </div>
         </div>
+        {groupInputOpen && (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const trimmed = groupInputValue.trim();
+              if (!trimmed) return;
+              void createGroup(trimmed);
+              setGroupInputValue('');
+              setGroupInputOpen(false);
+            }}
+            className="mt-2"
+          >
+            <input
+              autoFocus
+              value={groupInputValue}
+              onChange={(event) => setGroupInputValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setGroupInputOpen(false);
+                  setGroupInputValue('');
+                }
+              }}
+              placeholder="create group"
+              className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs outline-none focus:border-sky-300"
+            />
+          </form>
+        )}
           <div className="mt-2 space-y-1 overflow-y-auto" style={{ height: mapsHeight }}>
           {visibleMaps.length === 0 && (
             <div className="text-xs text-gray-400">
               No active maps. Restore one from Archive or load a PDF, PNG, JPEG, WEBP, or .dnote.
             </div>
           )}
-          {(mapSortMode === 'createdAsc' || mapSortMode === 'createdDesc') ? (
+          {groups.length > 0 ? (
+            renderGroupedMaps()
+          ) : (mapSortMode === 'createdAsc' || mapSortMode === 'createdDesc') ? (
             <>
               {pinnedMaps.map((map) => renderMapRow(map))}
               {monthGroupedMaps.map((group) => {

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { DiagramMap, MapWorkspace, PageMeta, Primitive } from '../types';
+import type { DiagramMap, MapGroup, MapWorkspace, PageMeta, Primitive } from '../types';
 import { EMPTY_WORKSPACE } from './workspace';
 import * as idb from './idb';
 import { detectSourceType, rasterizeSource } from './pdf';
@@ -27,12 +27,17 @@ function debugMap(message: string, details?: Record<string, unknown>) {
 
 export interface MapStoreState {
   maps: DiagramMap[];
+  groups: MapGroup[];
   activeMapId: string | null;
   activeRasterUrl: string | null;
   loading: boolean;
   initialized: boolean;
   resetState: () => void;
   loadMaps: () => Promise<void>;
+  createGroup: (name: string) => Promise<MapGroup | null>;
+  renameGroup: (id: string, name: string) => Promise<void>;
+  deleteGroup: (id: string) => Promise<void>;
+  moveMapToGroup: (mapId: string, groupId: string | null) => Promise<void>;
   setActiveMap: (id: string | null) => Promise<boolean>;
   setActivePage: (pageIndex: number) => Promise<void>;
   createMapFromPdf: (
@@ -437,6 +442,7 @@ export async function loadMapPageView(
 
 export const useMapStore = create<MapStoreState>((set, get) => ({
   maps: [],
+  groups: [],
   activeMapId: null,
   activeRasterUrl: null,
   loading: false,
@@ -447,6 +453,7 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     saveActiveId(null);
     set({
       maps: [],
+      groups: [],
       activeMapId: null,
       activeRasterUrl: null,
       loading: false,
@@ -455,11 +462,70 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     useEditorStore.getState().setWorkspace(EMPTY_WORKSPACE);
   },
 
+  createGroup: async (rawName) => {
+    const name = rawName.trim();
+    if (!name) return null;
+    const existing = get().groups.find(
+      (g) => g.name.toLowerCase() === name.toLowerCase()
+    );
+    if (existing) return existing;
+    const now = Date.now();
+    const group: MapGroup = {
+      id: `group-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await idb.putGroup(group);
+    set({ groups: [...get().groups, group] });
+    return group;
+  },
+
+  renameGroup: async (id, rawName) => {
+    const name = rawName.trim();
+    if (!name) return;
+    const existing = get().groups.find((g) => g.id === id);
+    if (!existing) return;
+    const updated: MapGroup = { ...existing, name, updatedAt: Date.now() };
+    await idb.putGroup(updated);
+    set({ groups: get().groups.map((g) => (g.id === id ? updated : g)) });
+  },
+
+  deleteGroup: async (id) => {
+    await idb.deleteGroup(id);
+    const affected = get().maps.filter((m) => m.groupId === id);
+    for (const map of affected) {
+      const next = { ...map, groupId: undefined, updatedAt: Date.now() };
+      await idb.putMap(next);
+    }
+    set({
+      groups: get().groups.filter((g) => g.id !== id),
+      maps: get().maps.map((m) =>
+        m.groupId === id ? { ...m, groupId: undefined, updatedAt: Date.now() } : m
+      ),
+    });
+  },
+
+  moveMapToGroup: async (mapId, groupId) => {
+    const map = get().maps.find((m) => m.id === mapId);
+    if (!map) return;
+    if ((map.groupId ?? null) === (groupId ?? null)) return;
+    const next: DiagramMap = {
+      ...map,
+      groupId: groupId ?? undefined,
+      updatedAt: Date.now(),
+    };
+    await idb.putMap(next);
+    set({ maps: get().maps.map((m) => (m.id === mapId ? next : m)) });
+  },
+
   loadMaps: async () => {
     // Guard against concurrent calls (React StrictMode fires effects twice)
     if (get().loading || get().initialized) return;
     set({ loading: true });
     try {
+      const groups = await idb.listGroups();
+      set({ groups });
       let maps = await idb.listMaps();
       maps = await ensureCanonicalDefaultMapId(maps);
 
