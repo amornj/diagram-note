@@ -1,5 +1,5 @@
 import { ImageIcon, Loader2, Upload, X } from 'lucide-react';
-import { useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import {
   PHOTO_MAX_BYTES,
   PHOTO_MIME_TYPES,
@@ -41,8 +41,6 @@ export default function PhotoDropzone({
   label,
 }: PhotoDropzoneProps) {
   const inputId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -110,25 +108,10 @@ export default function PhotoDropzone({
     <>
       <label
         htmlFor={disabled ? undefined : inputId}
-        onDragOver={(event) => {
-          if (disabled) return;
-          event.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(event) => {
-          if (disabled) return;
-          event.preventDefault();
-          setDragOver(false);
-          const file = event.dataTransfer?.files?.[0];
-          void handleFile(file);
-        }}
-        className={`flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-3 py-3 text-xs transition ${
+        className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-xs transition ${
           disabled
             ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
-            : dragOver
-              ? 'border-sky-400 bg-sky-50 text-sky-700'
-              : 'border-slate-300 bg-white text-slate-500 hover:border-sky-300 hover:text-slate-700'
+            : 'cursor-pointer border-slate-300 bg-white text-slate-500 hover:border-sky-300 hover:text-slate-700'
         }`}
       >
         {busy ? (
@@ -143,10 +126,9 @@ export default function PhotoDropzone({
             ? disabledHint ?? 'Sign in to add a photo.'
             : busy
               ? 'Uploading…'
-              : `Drop or click to add a photo for ${label}.`}
+              : `Click to add a photo for ${label}.`}
         </span>
         <input
-          ref={inputRef}
           id={inputId}
           type="file"
           accept={acceptString}

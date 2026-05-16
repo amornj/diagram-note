@@ -6,7 +6,6 @@ import Landing from './components/Landing';
 import PrimitiveDetailPanel from './components/PrimitiveDetailPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import HotkeyHelp from './components/HotkeyHelp';
-import DropOverlay from './components/DropOverlay';
 import {
   DEFAULT_OVERLAY_FILTERS,
   useEditorStore,
@@ -609,7 +608,6 @@ function MapPage() {
   const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
   const activeRasterUrl = useMapStore((s) => s.activeRasterUrl);
   const [showHelp, setShowHelp] = useState(false);
-  const [dropError, setDropError] = useState<string | null>(null);
   const [splitMode, setSplitMode] = useState(false);
   const [splitTarget, setSplitTarget] = useState<1 | 2 | null>(null);
   const [focusedSplitPane, setFocusedSplitPane] = useState<1 | 2>(1);
@@ -711,12 +709,6 @@ function MapPage() {
       2: { mapId: activeMap.id, mapName: activeMap.name, workspace },
     });
   }, [activeMap?.id, activeMap?.pageIndex, splitMode]);
-
-  useEffect(() => {
-    if (!dropError) return;
-    const t = window.setTimeout(() => setDropError(null), 5000);
-    return () => window.clearTimeout(t);
-  }, [dropError]);
 
   useEffect(() => {
     const timers = ([
@@ -1387,13 +1379,7 @@ function MapPage() {
           </>
         )}
 
-        <DropOverlay onError={setDropError} />
         {showHelp && <HotkeyHelp onClose={() => setShowHelp(false)} />}
-        {dropError && (
-          <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-xs font-medium text-red-700 shadow-lg">
-            {dropError}
-          </div>
-        )}
       </div>
     </SyncStatusContext.Provider>
   );
