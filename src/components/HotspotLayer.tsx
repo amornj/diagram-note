@@ -1292,7 +1292,7 @@ export default function HotspotLayer({
           const isLinkConfirmed = activeLinkConfirmIds.includes(primitive.id);
 
           const memberNumberBadge =
-            !simplifyOverlay && showGroupNumbers && groupEntry ? (
+            showGroupNumbers && groupEntry ? (
               <g pointerEvents="none">
                 <rect
                   x={boundsRect.x - 4}
@@ -1318,7 +1318,7 @@ export default function HotspotLayer({
             ) : null;
 
           const focusDot =
-            !simplifyOverlay && (activeFocusId === primitive.id || isLinkConfirmed) ? (
+            activeFocusId === primitive.id || isLinkConfirmed ? (
               <circle
                 cx={boundsRect.x + boundsRect.width - 4}
                 cy={boundsRect.y + 4}
@@ -1498,7 +1498,7 @@ export default function HotspotLayer({
                 onMouseLeave={() => setHoveredPrimitiveId(null)}
               />
               {memberNumberBadge}
-              {focusDot ?? (!simplifyOverlay && isSelected && primitive.kind === 'rectangle' ? (
+              {focusDot ?? (isSelected && primitive.kind === 'rectangle' ? (
                 <circle
                   cx={boundsRect.x + boundsRect.width - 4}
                   cy={boundsRect.y + 4}
@@ -1543,9 +1543,8 @@ export default function HotspotLayer({
       </g>
 
       {/* Highlight ring for group-member primitives */}
-      {!simplifyOverlay && (
-        <g className="pointer-events-none">
-          {selectedGroupTargets.map((entry) => {
+      <g className="pointer-events-none">
+        {selectedGroupTargets.map((entry) => {
           const rect = bboxToViewerElementRect(viewer, entry.bbox, dims);
           if (!rect) return null;
           return (
@@ -1563,14 +1562,12 @@ export default function HotspotLayer({
             />
           );
         })}
-        </g>
-      )}
+      </g>
 
-      {!simplifyOverlay && (
-        <g className="pointer-events-none">
-          {selectedPrimitive?.kind !== 'group' &&
-            selectedNameTargets.length > 1 &&
-            selectedNameTargets.map((entry) => {
+      <g className="pointer-events-none">
+        {selectedPrimitive?.kind !== 'group' &&
+          selectedNameTargets.length > 1 &&
+          selectedNameTargets.map((entry) => {
             const rect = bboxToViewerElementRect(viewer, entry.bbox, dims);
             if (!rect) return null;
             return (
@@ -1588,8 +1585,7 @@ export default function HotspotLayer({
               />
             );
           })}
-        </g>
-      )}
+      </g>
 
       {activeLinkFlash && (() => {
         const primitive = primitivesById.get(activeLinkFlash.primitiveId);
