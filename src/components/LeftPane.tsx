@@ -227,6 +227,7 @@ export default function LeftPane({
   const renameMap = useMapStore((s) => s.renameMap);
   const deleteMap = useMapStore((s) => s.deleteMap);
   const createGroup = useMapStore((s) => s.createGroup);
+  const renameGroup = useMapStore((s) => s.renameGroup);
   const deleteGroup = useMapStore((s) => s.deleteGroup);
   const moveMapToGroup = useMapStore((s) => s.moveMapToGroup);
 
@@ -243,6 +244,8 @@ export default function LeftPane({
   const [groupInputValue, setGroupInputValue] = useState('');
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Record<string, boolean>>({});
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
+  const [renameGroupDraft, setRenameGroupDraft] = useState('');
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const [draggingMapId, setDraggingMapId] = useState<string | null>(null);
 
@@ -403,22 +406,47 @@ export default function LeftPane({
               }`}
             >
               <div className="group/header flex items-center justify-between gap-1 rounded-lg px-2 py-1">
-                <button
-                  onClick={() =>
-                    setCollapsedGroupIds((prev) => ({
-                      ...prev,
-                      [group.id]: !prev[group.id],
-                    }))
-                  }
-                  className="flex flex-1 items-center justify-between gap-2 text-left"
-                >
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                    {group.name}
-                  </span>
-                  <span className="text-[10px] text-gray-400">
-                    {groupMaps.length} {isCollapsed ? '▶' : '▼'}
-                  </span>
-                </button>
+                {renamingGroupId === group.id ? (
+                  <input
+                    autoFocus
+                    value={renameGroupDraft}
+                    onChange={(event) => setRenameGroupDraft(event.target.value)}
+                    onBlur={() => {
+                      const trimmed = renameGroupDraft.trim();
+                      if (trimmed && trimmed !== group.name) {
+                        void renameGroup(group.id, trimmed);
+                      }
+                      setRenamingGroupId(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') event.currentTarget.blur();
+                      if (event.key === 'Escape') setRenamingGroupId(null);
+                    }}
+                    className="flex-1 rounded border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide outline-none focus:border-sky-300"
+                  />
+                ) : (
+                  <button
+                    onClick={() =>
+                      setCollapsedGroupIds((prev) => ({
+                        ...prev,
+                        [group.id]: !prev[group.id],
+                      }))
+                    }
+                    onDoubleClick={() => {
+                      setRenamingGroupId(group.id);
+                      setRenameGroupDraft(group.name);
+                    }}
+                    title={`${group.name} — double-click to rename`}
+                    className="flex flex-1 items-center justify-between gap-2 text-left"
+                  >
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                      {group.name}
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      {groupMaps.length} {isCollapsed ? '▶' : '▼'}
+                    </span>
+                  </button>
+                )}
                 {confirmDeleteGroupId === group.id ? (
                   <div className="ml-1 flex items-center gap-1">
                     <button
