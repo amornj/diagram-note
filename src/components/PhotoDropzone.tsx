@@ -141,7 +141,7 @@ export default function PhotoDropzone({
             ? disabledHint ?? 'Sign in to add a photo.'
             : busy
               ? 'Uploading…'
-              : `Drop or click to add a photo for ${label}.`}
+              : 'Add photo'}
         </span>
         <input
           id={inputId}
