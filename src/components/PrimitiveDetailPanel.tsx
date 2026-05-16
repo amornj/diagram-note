@@ -13,6 +13,13 @@ import {
 import type { Primitive } from '../types';
 import { ColorPicker, TagEditor } from './sharedControls';
 import NoteCards from './NoteCards';
+import PhotoDropzone from './PhotoDropzone';
+import { auth } from '../lib/firebase';
+import {
+  deletePhoto,
+  primitivePhotoPath,
+  uploadPhoto,
+} from '../lib/cloudStorage';
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
   rectangle: 'Study box',
@@ -277,6 +284,42 @@ export default function PrimitiveDetailPanel({
           </div>
         </div>
 
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Photo
+          </label>
+          <div className="mt-2">
+            <PhotoDropzone
+              label="this primitive"
+              url={primitive.photoUrl}
+              disabled={!auth?.currentUser?.uid || !activeMapId}
+              disabledHint="Sign in to add a photo."
+              onUpload={async (file) => {
+                const uid = auth?.currentUser?.uid;
+                if (!uid || !activeMapId) return;
+                const result = await uploadPhoto(
+                  primitivePhotoPath(uid, activeMapId, primitive.id),
+                  file
+                );
+                if (!result) return;
+                updatePrimitive(primitive.id, {
+                  photoUrl: result.url,
+                  photoStoragePath: result.path,
+                });
+              }}
+              onRemove={async () => {
+                if (primitive.photoStoragePath) {
+                  await deletePhoto(primitive.photoStoragePath);
+                }
+                updatePrimitive(primitive.id, {
+                  photoUrl: undefined,
+                  photoStoragePath: undefined,
+                });
+              }}
+            />
+          </div>
+        </div>
+
         <div className="space-y-2">
           {(primitive.kind === 'rectangle' ||
             primitive.kind === 'polygon' ||
@@ -328,6 +371,8 @@ export default function PrimitiveDetailPanel({
           notes={primitive.notes ?? []}
           onChange={(notes) => updatePrimitive(primitive.id, { notes })}
           placeholder="Link"
+          mapId={activeMapId}
+          primitiveId={primitive.id}
         />
 
         <div>

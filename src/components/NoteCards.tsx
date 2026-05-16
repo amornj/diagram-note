@@ -7,11 +7,24 @@ import {
   processEditorBody,
   splitNoteContent,
 } from '../lib/noteLinks';
+import PhotoDropzone from './PhotoDropzone';
+import { auth } from '../lib/firebase';
+import { deletePhoto, notePhotoPath, uploadPhoto } from '../lib/cloudStorage';
 
 interface NoteCardsProps {
   notes: NoteCard[];
   onChange: (notes: NoteCard[]) => void;
   placeholder?: string;
+  /** Required for photo uploads — when omitted, photo dropzone is hidden. */
+  mapId?: string | null;
+  primitiveId?: string;
+}
+
+function generateNoteId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `note-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 const NOTE_HEIGHT_STORAGE_KEY = 'diagram-note-note-height';
@@ -34,6 +47,8 @@ function ensurePriorityNote(notes: NoteCard[]) {
 export default function NoteCards({
   notes,
   onChange,
+  mapId,
+  primitiveId,
 }: NoteCardsProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [currentIndex, setCurrentIndex] = useState(Math.max(0, notes.length - 1));
@@ -138,6 +153,58 @@ export default function NoteCards({
     const newUrls = clickableUrls.filter((_, i) => i !== removeIdx);
     updateCurrentNoteContent(composeNoteContent(newBody, newUrls));
   };
+
+  const photosEnabled = Boolean(mapId && primitiveId);
+  const uploadNotePhoto = async (file: File) => {
+    if (!photosEnabled) return;
+    const uid = auth?.currentUser?.uid;
+    if (!uid || !mapId || !primitiveId) {
+      throw new Error('Sign in to add photos.');
+    }
+    const note = notes[currentIndex];
+    if (!note) return;
+    const noteId = note.id ?? generateNoteId();
+    const result = await uploadPhoto(
+      notePhotoPath(uid, mapId, primitiveId, noteId),
+      file
+    );
+    if (!result) {
+      throw new Error('Photo storage unavailable right now.');
+    }
+    const nextNotes = notes.map((n, i) =>
+      i === currentIndex
+        ? { ...n, id: noteId, photoUrl: result.url, photoStoragePath: result.path }
+        : n
+    );
+    onChange(nextNotes);
+  };
+
+  const removeNotePhoto = async () => {
+    if (!photosEnabled) return;
+    const note = notes[currentIndex];
+    if (!note) return;
+    if (note.photoStoragePath) {
+      await deletePhoto(note.photoStoragePath);
+    }
+    const nextNotes = notes.map((n, i) =>
+      i === currentIndex ? { ...n, photoUrl: undefined, photoStoragePath: undefined } : n
+    );
+    onChange(nextNotes);
+  };
+
+  const renderPhotoDropzone = (withTopMargin = false) =>
+    photosEnabled && notes.length > 0 ? (
+      <div className={withTopMargin ? 'mt-2' : ''}>
+        <PhotoDropzone
+          label="this note"
+          url={currentNote?.photoUrl}
+          disabled={!auth?.currentUser?.uid}
+          disabledHint="Sign in to add a photo to this note."
+          onUpload={uploadNotePhoto}
+          onRemove={removeNotePhoto}
+        />
+      </div>
+    ) : null;
 
   const renderLinkList = (withTopMargin = false) => (
     <div className={`${withTopMargin ? 'mt-2 ' : ''}space-y-2`}>
@@ -244,6 +311,7 @@ export default function NoteCards({
             className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-sky-300"
           />
           {clickableUrls.length > 0 && renderLinkList()}
+          {renderPhotoDropzone()}
         </div>
       ) : (
         <div className="mt-2">

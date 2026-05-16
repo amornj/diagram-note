@@ -11,9 +11,13 @@ export interface Point {
 }
 
 export interface NoteCard {
+  /** Stable id, assigned lazily when a photo is attached so the storage path is durable. */
+  id?: string;
   name: string;
   content: string;
   isPriority?: boolean;
+  photoUrl?: string;
+  photoStoragePath?: string;
 }
 
 export type PrimitiveKind = 'rectangle' | 'polygon' | 'customline' | 'group';
@@ -43,6 +47,8 @@ export interface Primitive {
   showMemberNumbers?: boolean;
   /** any-to-any backlinks (single namespace: 'primitive:<id>') */
   relatedMemberKeys?: string[];
+  photoUrl?: string;
+  photoStoragePath?: string;
 }
 
 export interface MapWorkspace {
