@@ -402,12 +402,19 @@ function updatePrimitiveOnPage(
   updater: (primitive: import('../types').Primitive) => import('../types').Primitive
 ): DiagramMap {
   const meta = getPageMeta(map, pageIndex);
+  const now = Date.now();
   return withPageMeta(map, pageIndex, {
     ...meta,
     workspace: {
       ...meta.workspace,
       primitives: meta.workspace.primitives.map((primitive) =>
-        primitive.id === primitiveId ? updater(primitive) : primitive
+        primitive.id === primitiveId
+          ? {
+              ...updater(primitive),
+              createdAt: primitive.createdAt ?? now,
+              updatedAt: now,
+            }
+          : primitive
       ),
     },
   });

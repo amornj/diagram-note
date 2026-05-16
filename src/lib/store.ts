@@ -133,6 +133,24 @@ function persistPanLock(value: boolean) {
   window.localStorage.setItem(PAN_LOCK_STORAGE_KEY, String(value));
 }
 
+function stampPrimitiveCreated<T extends Omit<Primitive, 'id'>>(primitive: T): T {
+  const now = Date.now();
+  return {
+    ...primitive,
+    createdAt: primitive.createdAt ?? now,
+    updatedAt: primitive.updatedAt ?? now,
+  };
+}
+
+function stampPrimitiveUpdated<T extends Primitive>(primitive: T): T {
+  const now = Date.now();
+  return {
+    ...primitive,
+    createdAt: primitive.createdAt ?? now,
+    updatedAt: now,
+  };
+}
+
 export const useEditorStore = create<EditorState>((set) => ({
   selectedPrimitiveId: null,
   hoveredPrimitiveId: null,
@@ -275,7 +293,7 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((s) => ({
       workspace: {
         ...s.workspace,
-        primitives: [...s.workspace.primitives, { ...primitive, id }],
+        primitives: [...s.workspace.primitives, { ...stampPrimitiveCreated(primitive), id }],
       },
       selectedPrimitiveId: id,
       selectedOccurrenceIndex: 0,
@@ -290,7 +308,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       workspace: {
         ...s.workspace,
         primitives: s.workspace.primitives.map((p) =>
-          p.id === id ? { ...p, ...patch } : p
+          p.id === id ? stampPrimitiveUpdated({ ...p, ...patch }) : p
         ),
       },
     })),
@@ -539,6 +557,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       showMemberNumbers,
       showOnLoad,
     };
+    const stampedPrimitive = stampPrimitiveCreated(primitive);
     set((s) => ({
       workspace: {
         ...s.workspace,
@@ -547,14 +566,14 @@ export const useEditorStore = create<EditorState>((set) => ({
             if (!memberIds.has(p.id)) {
               return p;
             }
-            return {
+            return stampPrimitiveUpdated({
               ...p,
               relatedMemberKeys: Array.from(
                 new Set([...(p.relatedMemberKeys ?? []), groupKey])
               ).filter((key) => key !== makeMemberKey(p.id)),
-            };
+            });
           }),
-          primitive,
+          stampedPrimitive,
         ],
       },
       draftGroupKeys: [],
@@ -600,13 +619,13 @@ export const useEditorStore = create<EditorState>((set) => ({
               const next = Array.from(
                 new Set([...(p.relatedMemberKeys ?? []), memberKey])
               ).filter((k) => k !== targetKey);
-              return { ...p, relatedMemberKeys: next };
+              return stampPrimitiveUpdated({ ...p, relatedMemberKeys: next });
             }
             if (p.id === member.id) {
               const next = Array.from(
                 new Set([...(p.relatedMemberKeys ?? []), targetKey])
               ).filter((k) => k !== memberKey);
-              return { ...p, relatedMemberKeys: next };
+              return stampPrimitiveUpdated({ ...p, relatedMemberKeys: next });
             }
             return p;
           }),
@@ -626,19 +645,19 @@ export const useEditorStore = create<EditorState>((set) => ({
         ...s.workspace,
         primitives: s.workspace.primitives.map((p) =>
           p.id === primitiveId
-            ? {
+            ? stampPrimitiveUpdated({
                 ...p,
                 relatedMemberKeys: (p.relatedMemberKeys ?? []).filter(
                   (k) => k !== memberKey
                 ),
-              }
+              })
             : parseMemberKey(memberKey)?.id === p.id
-              ? {
+              ? stampPrimitiveUpdated({
                   ...p,
                   relatedMemberKeys: (p.relatedMemberKeys ?? []).filter(
                     (k) => k !== makeMemberKey(primitiveId)
                   ),
-                }
+                })
               : p
         ),
       },

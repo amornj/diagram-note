@@ -23,6 +23,8 @@ export interface Primitive {
   kind: PrimitiveKind;
   name: string;
   color: string;
+  createdAt?: number;
+  updatedAt?: number;
   aliases?: string[];
   tags?: string[];
   notes?: NoteCard[];

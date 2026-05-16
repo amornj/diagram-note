@@ -263,18 +263,22 @@ export default function LeftPane({
     next.sort((a, b) => {
       const aIndex = base.findIndex((p) => p.id === a.id);
       const bIndex = base.findIndex((p) => p.id === b.id);
+      const aRecent = a.updatedAt ?? a.createdAt ?? aIndex;
+      const bRecent = b.updatedAt ?? b.createdAt ?? bIndex;
+      const aCreated = a.createdAt ?? aIndex;
+      const bCreated = b.createdAt ?? bIndex;
       switch (primitiveSortMode) {
         case 'alphaAsc':
           return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
         case 'alphaDesc':
           return b.name.localeCompare(a.name, undefined, { sensitivity: 'base' });
         case 'createdAsc':
-          return aIndex - bIndex;
+          return aCreated - bCreated;
         case 'createdDesc':
-          return bIndex - aIndex;
+          return bCreated - aCreated;
         case 'recent':
         default:
-          return bIndex - aIndex;
+          return bRecent - aRecent;
       }
     });
     return next;
