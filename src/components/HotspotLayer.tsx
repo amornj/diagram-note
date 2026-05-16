@@ -1290,6 +1290,10 @@ export default function HotspotLayer({
                 ? selectedPrimitiveId
                 : null;
           const isLinkConfirmed = activeLinkConfirmIds.includes(primitive.id);
+          const shouldShowImmediateLabel =
+            isVisible &&
+            primitive.showLabel === true &&
+            (!simplifyOverlay || isGroupMember || activeFocusId === primitive.id || isSelected);
 
           const memberNumberBadge =
             showGroupNumbers && groupEntry ? (
@@ -1385,7 +1389,7 @@ export default function HotspotLayer({
                   ))}
                 {memberNumberBadge}
                 {focusDot}
-                {!simplifyOverlay && isVisible && primitive.showLabel === true && (
+                {shouldShowImmediateLabel && (
                   <text
                     x={boundsRect.x}
                     y={boundsRect.y - 8}
@@ -1427,7 +1431,7 @@ export default function HotspotLayer({
                 />
                 {memberNumberBadge}
                 {focusDot}
-                {!simplifyOverlay && isVisible && primitive.showLabel === true && (
+                {shouldShowImmediateLabel && (
                   <text
                     x={boundsRect.x}
                     y={boundsRect.y - 8}
@@ -1448,7 +1452,7 @@ export default function HotspotLayer({
             return (
               <g key={primitive.id}>
                 {focusDot}
-                {!simplifyOverlay && isVisible && primitive.showLabel === true && (
+                {shouldShowImmediateLabel && (
                   <text
                     x={boundsRect.x + 8}
                     y={boundsRect.y - 8}
@@ -1510,11 +1514,9 @@ export default function HotspotLayer({
                 />
               ) : null)}
               {/* Always-visible label for rectangles when name set + showLabel */}
-              {!simplifyOverlay &&
-                isVisible &&
+              {shouldShowImmediateLabel &&
                 primitive.kind === 'rectangle' &&
-                primitive.name &&
-                primitive.showLabel === true && (
+                primitive.name && (
                   <g pointerEvents="none">
                     <rect
                       x={boundsRect.x}
