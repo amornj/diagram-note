@@ -12,6 +12,17 @@ type MapSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'create
 type PrimitiveSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
 
 const MAP_SORT_STORAGE_KEY = 'diagram-note-map-sort-mode';
+const MAP_GROUP_VIEW_STORAGE_KEY = 'diagram-note-map-group-view';
+
+function loadGroupViewActive(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(MAP_GROUP_VIEW_STORAGE_KEY) === 'true';
+}
+
+function persistGroupViewActive(value: boolean) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(MAP_GROUP_VIEW_STORAGE_KEY, value ? 'true' : 'false');
+}
 const PRIMITIVE_SORT_STORAGE_KEY = 'diagram-note-primitive-sort-mode';
 const PINNED_MAPS_STORAGE_KEY = 'diagram-note-pinned-maps';
 
@@ -240,7 +251,7 @@ export default function LeftPane({
     useState<PrimitiveSortMode>(loadPrimitiveSortMode);
   const [pinnedMapIds, setPinnedMapIds] = useState<Set<string>>(loadPinnedMapIds);
   const [collapsedMapMonths, setCollapsedMapMonths] = useState<Record<string, boolean>>({});
-  const [groupInputOpen, setGroupInputOpen] = useState(false);
+  const [groupViewActive, setGroupViewActive] = useState(loadGroupViewActive);
   const [groupInputValue, setGroupInputValue] = useState('');
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Record<string, boolean>>({});
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
@@ -723,15 +734,23 @@ export default function LeftPane({
           <div className="flex items-center gap-1">
             <button
               onClick={() => {
-                setGroupInputOpen((open) => !open);
-                setGroupInputValue('');
+                setGroupViewActive((active) => {
+                  const next = !active;
+                  persistGroupViewActive(next);
+                  if (!next) setGroupInputValue('');
+                  return next;
+                });
               }}
               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
-                groupInputOpen
+                groupViewActive
                   ? 'bg-slate-900 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
-              title="Create a map group"
+              title={
+                groupViewActive
+                  ? 'Hide group view (use sort instead)'
+                  : 'Show map groups'
+              }
             >
               <FolderPlus size={11} />
               Group
@@ -780,7 +799,7 @@ export default function LeftPane({
             </button>
           </div>
         </div>
-        {groupInputOpen && (
+        {groupViewActive && (
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -788,7 +807,6 @@ export default function LeftPane({
               if (!trimmed) return;
               void createGroup(trimmed);
               setGroupInputValue('');
-              setGroupInputOpen(false);
             }}
             className="mt-2"
           >
@@ -797,10 +815,7 @@ export default function LeftPane({
               value={groupInputValue}
               onChange={(event) => setGroupInputValue(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  setGroupInputOpen(false);
-                  setGroupInputValue('');
-                }
+                if (event.key === 'Escape') setGroupInputValue('');
               }}
               placeholder="create group"
               className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs outline-none focus:border-sky-300"
@@ -813,7 +828,7 @@ export default function LeftPane({
               No active maps. Restore one from Archive or load a PDF, PNG, JPEG, WEBP, or .dnote.
             </div>
           )}
-          {groups.length > 0 ? (
+          {groupViewActive && groups.length > 0 ? (
             renderGroupedMaps()
           ) : (mapSortMode === 'createdAsc' || mapSortMode === 'createdDesc') ? (
             <>
