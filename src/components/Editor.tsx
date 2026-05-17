@@ -1262,7 +1262,7 @@ export default function Editor({
             <span className="pointer-events-none px-3 py-1.5 text-[11px] text-white/70">
               {compareOnly
                 ? 'M maps · 9 lock · P pin · L backlink · S boxes · G groups · R regions · N notes cycle · \\ overlays · + zoom in · - zoom out · 0 home · drag pan'
-                : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · L backlink · 0 home · T text · M maps · | split · S boxes · G groups · R regions · N notes cycle · \\ overlays · ? help'}
+                : '1 left · 2 right · 3 prev · 4 next · 5 search · 6 study box · 7 group · 8 polyline · 9 lock · P pin · L backlink · 0 home · T text · M maps · | split · S boxes · G groups · R regions · N notes cycle · ⇧O occlude · \\ overlays · ? help'}
             </span>
             <button
               onClick={() => setHintCollapsed(true)}
