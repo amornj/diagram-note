@@ -24,10 +24,10 @@ export function stripUrlsFromContent(value: string): string {
   const stripped = value
     .replace(/https?:\/\/[^\s<>()"']+/gi, '')
     .replace(/\r\n/g, '\n');
-  // When URLs are present, the trailing whitespace was the `\n\n` separator
-  // that composeNoteContent inserted — strip it so split→compose round-trips
-  // cleanly and the editor doesn't accumulate phantom newlines on each keystroke.
-  return hasUrls ? stripped.replace(/\s+$/, '') : stripped;
+  // When URLs are present, strip the trailing newlines from the `\n\n` separator
+  // that composeNoteContent inserted — but keep trailing spaces so typing a
+  // space at end of body isn't eaten on every round-trip.
+  return hasUrls ? stripped.replace(/\n+$/, '') : stripped;
 }
 
 export function composeNoteContent(body: string, urls: string[]): string {
