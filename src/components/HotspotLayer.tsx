@@ -1646,26 +1646,77 @@ export default function HotspotLayer({
           if (occlusionRevealedIds.has(primitive.id)) return null;
           const rect = bboxToViewerElementRect(viewer, bounds, dims);
           if (!rect) return null;
+          const groupEntry = selectedGroupTargets.find((e) => e.id === primitive.id);
+          const showGroupNumbers =
+            selectedPrimitive?.kind === 'group' &&
+            selectedPrimitive.showMemberNumbers === true;
+          const activeFocusId =
+            selectedPrimitive?.kind === 'group'
+              ? selectedGroupTargets[
+                  Math.min(selectedOccurrenceIndex, selectedGroupTargets.length - 1)
+                ]?.id ?? null
+              : selectedNameTargets.length > 1
+                ? selectedPrimitiveId
+                : null;
+          const isLinkConfirmed = activeLinkConfirmIds.includes(primitive.id);
+          const markerColor = selectedPrimitive?.color ?? primitive.color;
+          const showFocusDot = activeFocusId === primitive.id || isLinkConfirmed;
           return (
-            <g
-              key={`occlusion-${primitive.id}`}
-              style={{ cursor: 'pointer' }}
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                toggleOcclusionReveal(primitive.id);
-              }}
-            >
-              <rect
-                x={rect.x}
-                y={rect.y}
-                width={rect.width}
-                height={rect.height}
-                rx={12}
-                fill="#fff8eb"
-                stroke="#f59e0b"
-                strokeWidth={1.5}
-              />
+            <g key={`occlusion-${primitive.id}`}>
+              <g
+                style={{ cursor: 'pointer' }}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  toggleOcclusionReveal(primitive.id);
+                }}
+              >
+                <rect
+                  x={rect.x}
+                  y={rect.y}
+                  width={rect.width}
+                  height={rect.height}
+                  rx={12}
+                  fill="#fff8eb"
+                  stroke="#f59e0b"
+                  strokeWidth={1.5}
+                />
+              </g>
+              {showGroupNumbers && groupEntry && (
+                <g pointerEvents="none">
+                  <rect
+                    x={rect.x - 4}
+                    y={rect.y - 8}
+                    width={18}
+                    height={18}
+                    rx={9}
+                    fill="#ffffff"
+                    stroke={markerColor}
+                    strokeWidth={2}
+                  />
+                  <text
+                    x={rect.x + 5}
+                    y={rect.y + 5}
+                    fill={markerColor}
+                    fontSize={11}
+                    fontWeight={700}
+                    textAnchor="middle"
+                  >
+                    {groupEntry.order}
+                  </text>
+                </g>
+              )}
+              {showFocusDot && (
+                <circle
+                  cx={rect.x + rect.width - 4}
+                  cy={rect.y + 4}
+                  r={6}
+                  fill={isLinkConfirmed ? '#16a34a' : '#dc2626'}
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                  pointerEvents="none"
+                />
+              )}
             </g>
           );
         })}
