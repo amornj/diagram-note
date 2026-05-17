@@ -82,10 +82,13 @@ function persistPrimitiveSortMode(mode: PrimitiveSortMode) {
 
 function sortMaps(maps: DiagramMap[], mode: MapSortMode, activeMapId: string | null, pinnedIds: Set<string>) {
   const next = [...maps];
+  const respectPin = mode !== 'createdAsc' && mode !== 'createdDesc';
   next.sort((a, b) => {
-    const aPinned = pinnedIds.has(a.id);
-    const bPinned = pinnedIds.has(b.id);
-    if (aPinned !== bPinned) return aPinned ? -1 : 1;
+    if (respectPin) {
+      const aPinned = pinnedIds.has(a.id);
+      const bPinned = pinnedIds.has(b.id);
+      if (aPinned !== bPinned) return aPinned ? -1 : 1;
+    }
     switch (mode) {
       case 'alphaAsc':
         return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
@@ -315,10 +318,6 @@ export default function LeftPane({
   const sortedMaps = useMemo(
     () => sortMaps(visibleMaps, mapSortMode, activeMapId, pinnedMapIds),
     [visibleMaps, mapSortMode, activeMapId, pinnedMapIds]
-  );
-  const pinnedMaps = useMemo(
-    () => sortedMaps.filter((map) => pinnedMapIds.has(map.id)),
-    [sortedMaps, pinnedMapIds]
   );
   const monthGroupedMaps = useMemo(() => {
     const groups: Array<{ label: string; maps: DiagramMap[] }> = [];
@@ -832,7 +831,6 @@ export default function LeftPane({
             renderGroupedMaps()
           ) : (mapSortMode === 'createdAsc' || mapSortMode === 'createdDesc') ? (
             <>
-              {pinnedMaps.map((map) => renderMapRow(map))}
               {monthGroupedMaps.map((group) => {
                 const isCollapsed = collapsedMapMonths[group.label] === true;
                 return (
