@@ -1666,18 +1666,6 @@ export default function HotspotLayer({
                 stroke="#f59e0b"
                 strokeWidth={1.5}
               />
-              <text
-                x={rect.x + rect.width / 2}
-                y={rect.y + rect.height / 2 + 6}
-                fill="#b45309"
-                fontSize={18}
-                fontWeight={700}
-                textAnchor="middle"
-                pointerEvents="none"
-                style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
-              >
-                ...
-              </text>
             </g>
           );
         })}
