@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Columns2,
   Eye,
-  EyeOff,
   Home,
   Link2,
   Lock,
@@ -1076,7 +1075,7 @@ export default function Editor({
                   onClick={toggleOcclusionMode}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
                     occlusionMode
-                      ? 'bg-amber-500 text-white hover:bg-amber-600'
+                      ? 'bg-sky-500 text-white hover:bg-sky-600'
                       : 'bg-white/90 text-gray-700 hover:bg-white'
                   }`}
                   title={
@@ -1085,7 +1084,21 @@ export default function Editor({
                       : 'Hide study boxes for retrieval practice (Shift+O)'
                   }
                 >
-                  <EyeOff size={15} />
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <line x1="3" y1="13" x2="13" y2="3" />
+                    <line x1="3" y1="21" x2="21" y2="3" />
+                    <line x1="11" y1="21" x2="21" y2="11" />
+                  </svg>
                 </button>
               )}
               {!compareOnly && (
