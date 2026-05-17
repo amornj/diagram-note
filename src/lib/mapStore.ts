@@ -38,6 +38,7 @@ export interface MapStoreState {
   renameGroup: (id: string, name: string) => Promise<void>;
   deleteGroup: (id: string) => Promise<void>;
   moveMapToGroup: (mapId: string, groupId: string | null) => Promise<void>;
+  mergeCloudGroups: (cloudGroups: MapGroup[]) => Promise<void>;
   setActiveMap: (id: string | null) => Promise<boolean>;
   setActivePage: (pageIndex: number) => Promise<void>;
   createMapFromPdf: (
@@ -504,6 +505,26 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         m.groupId === id ? { ...m, groupId: undefined, updatedAt: Date.now() } : m
       ),
     });
+  },
+
+  mergeCloudGroups: async (cloudGroups) => {
+    const localById = new Map(get().groups.map((g) => [g.id, g]));
+    const cloudById = new Map(cloudGroups.map((g) => [g.id, g]));
+    const merged: MapGroup[] = [];
+    for (const cloud of cloudGroups) {
+      const local = localById.get(cloud.id);
+      const winner =
+        !local || cloud.updatedAt >= local.updatedAt ? cloud : local;
+      merged.push(winner);
+      if (!local || local.updatedAt < cloud.updatedAt) {
+        await idb.putGroup(cloud);
+      }
+    }
+    const removedLocally = get().groups.filter((g) => !cloudById.has(g.id));
+    for (const stale of removedLocally) {
+      await idb.deleteGroup(stale.id);
+    }
+    set({ groups: merged });
   },
 
   moveMapToGroup: async (mapId, groupId) => {

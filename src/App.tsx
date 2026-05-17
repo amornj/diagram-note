@@ -17,15 +17,19 @@ import { EMPTY_WORKSPACE } from './lib/workspace';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
 import {
+  deleteCloudGroup,
   deleteCloudMap,
+  loadCloudGroups,
   loadCloudMaps,
+  saveCloudGroup,
   saveCloudMap,
   saveCloudMaps,
+  subscribeCloudGroups,
   subscribeCloudMaps,
 } from './lib/cloudSync';
 import { uploadMapSource } from './lib/cloudStorage';
 import * as idb from './lib/idb';
-import type { DiagramMap, MapWorkspace } from './types';
+import type { DiagramMap, MapGroup, MapWorkspace } from './types';
 
 /** Keep only one map per pdfHash — prefer isDefault, then most-recently updated. */
 function dedupByHash(maps: DiagramMap[]): DiagramMap[] {
@@ -261,10 +265,12 @@ async function mergeCloudMaps(
 
 function useCloudSync(): SyncStatus {
   const maps = useMapStore((s) => s.maps);
+  const groups = useMapStore((s) => s.groups);
   const { user } = useAuth();
   const syncReadyRef = useRef(false);
   const prevUidRef = useRef<string | null>(null);
   const persistedRef = useRef<Map<string, string>>(new Map());
+  const persistedGroupsRef = useRef<Map<string, string>>(new Map());
   const [status, setStatus] = useState<SyncStatus>('idle');
   const [syncReady, setSyncReady] = useState(false);
 
@@ -275,6 +281,7 @@ function useCloudSync(): SyncStatus {
       prevUidRef.current = null;
       syncReadyRef.current = false;
       persistedRef.current = new Map();
+      persistedGroupsRef.current = new Map();
       setSyncReady(false);
       setStatus('idle');
       return;
@@ -382,7 +389,82 @@ function useCloudSync(): SyncStatus {
     return () => clearTimeout(timer);
   }, [user, maps]);
 
+  // Groups: initial pull on login + push local-only groups if cloud is empty.
+  useEffect(() => {
+    if (!user || !syncReady) return;
+    let cancelled = false;
+    void (async () => {
+      const cloud = await loadCloudGroups(user.uid);
+      if (cancelled) return;
+      if (cloud === 'error') return;
+      if (cloud && cloud.length > 0) {
+        await useMapStore.getState().mergeCloudGroups(cloud);
+        if (cancelled) return;
+        persistedGroupsRef.current = snapshotGroups(cloud);
+      } else if (!cloud) {
+        const localGroups = useMapStore.getState().groups;
+        if (localGroups.length > 0) {
+          for (const group of localGroups) {
+            const saved = await saveCloudGroup(user.uid, group);
+            if (cancelled) return;
+            if (!saved) return;
+          }
+          persistedGroupsRef.current = snapshotGroups(localGroups);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, syncReady]);
+
+  // Groups: live subscription so other devices see changes in real time.
+  useEffect(() => {
+    if (!user || !syncReady) return;
+    const unsubscribe = subscribeCloudGroups(user.uid, {
+      onData: (cloud) => {
+        const next = cloud ?? [];
+        void useMapStore.getState().mergeCloudGroups(next).then(() => {
+          persistedGroupsRef.current = snapshotGroups(next);
+        });
+      },
+      onError: (error) => {
+        console.error('[cloud] subscribe groups failed:', error);
+      },
+    });
+    return unsubscribe;
+  }, [user?.uid, syncReady]);
+
+  // Groups: debounce-save local changes (create/rename/delete) to cloud.
+  useEffect(() => {
+    if (!user || !syncReadyRef.current) return;
+    const uid = user.uid;
+    const timer = setTimeout(async () => {
+      const localGroups = useMapStore.getState().groups;
+      const previous = persistedGroupsRef.current;
+      const next = snapshotGroups(localGroups);
+      const changed = localGroups.filter((g) => previous.get(g.id) !== next.get(g.id));
+      const removed = [...previous.keys()].filter((id) => !next.has(id));
+      if (changed.length === 0 && removed.length === 0) return;
+      let ok = true;
+      for (const group of changed) {
+        const saved = await saveCloudGroup(uid, group);
+        ok = ok && saved;
+      }
+      for (const id of removed) {
+        const deleted = await deleteCloudGroup(uid, id);
+        ok = ok && deleted;
+      }
+      if (ok) persistedGroupsRef.current = next;
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [user, groups]);
+
   return status;
+}
+
+function snapshotGroups(groups: MapGroup[]) {
+  return new Map(groups.map((g) => [g.id, JSON.stringify(g)]));
 }
 
 function workspaceForPage(map: DiagramMap, pageIndex: number): MapWorkspace {

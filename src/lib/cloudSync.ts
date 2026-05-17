@@ -8,7 +8,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { DiagramMap } from '../types';
+import type { DiagramMap, MapGroup } from '../types';
 
 function stripUndefinedDeep<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -94,6 +94,71 @@ export async function deleteCloudMap(
     console.error('[cloud] delete map failed:', err);
     return false;
   }
+}
+
+function groupsCollection(uid: string) {
+  return collection(db!, 'users', uid, 'mapGroups');
+}
+
+function groupDoc(uid: string, groupId: string) {
+  return doc(db!, 'users', uid, 'mapGroups', groupId);
+}
+
+export async function loadCloudGroups(
+  uid: string
+): Promise<MapGroup[] | null | 'error'> {
+  if (!db) return null;
+  try {
+    const snap = await getDocs(groupsCollection(uid));
+    if (snap.empty) return null;
+    return snap.docs.map((entry) => entry.data() as MapGroup);
+  } catch (err) {
+    console.error('[cloud] load groups failed:', err);
+    return 'error';
+  }
+}
+
+export async function saveCloudGroup(uid: string, group: MapGroup): Promise<boolean> {
+  if (!db) return false;
+  try {
+    await setDoc(groupDoc(uid, group.id), stripUndefinedDeep(group));
+    return true;
+  } catch (err) {
+    console.error('[cloud] save group failed:', err);
+    return false;
+  }
+}
+
+export async function deleteCloudGroup(uid: string, groupId: string): Promise<boolean> {
+  if (!db) return false;
+  try {
+    await deleteDoc(groupDoc(uid, groupId));
+    return true;
+  } catch (err) {
+    console.error('[cloud] delete group failed:', err);
+    return false;
+  }
+}
+
+export function subscribeCloudGroups(
+  uid: string,
+  callbacks: {
+    onData: (groups: MapGroup[] | null) => void;
+    onError: (error: unknown) => void;
+  }
+) {
+  if (!db) return () => {};
+  return onSnapshot(
+    groupsCollection(uid),
+    (snap) => {
+      if (snap.empty) {
+        callbacks.onData(null);
+        return;
+      }
+      callbacks.onData(snap.docs.map((entry) => entry.data() as MapGroup));
+    },
+    (error) => callbacks.onError(error)
+  );
 }
 
 export function subscribeCloudMaps(
