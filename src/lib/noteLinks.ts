@@ -20,14 +20,20 @@ export function extractUrls(value: string): string[] {
 }
 
 export function stripUrlsFromContent(value: string): string {
-  const hasUrls = /https?:\/\/[^\s<>()"']+/i.test(value);
-  const stripped = value
-    .replace(/https?:\/\/[^\s<>()"']+/gi, '')
-    .replace(/\r\n/g, '\n');
-  // When URLs are present, strip the trailing newlines from the `\n\n` separator
-  // that composeNoteContent inserted — but keep trailing spaces so typing a
-  // space at end of body isn't eaten on every round-trip.
-  return hasUrls ? stripped.replace(/\n+$/, '') : stripped;
+  const normalized = value.replace(/\r\n/g, '\n');
+  // Stored format from composeNoteContent: `body\n\nurl1\nurl2\n...`. Strip
+  // exactly that trailing block so any whitespace the user actually typed in
+  // the body (trailing spaces or newlines) survives the round-trip.
+  const sepMatch = normalized.match(/\n\n(?:https?:\/\/[^\s<>()"']+\n?)+$/);
+  if (sepMatch) {
+    return normalized.slice(0, sepMatch.index);
+  }
+  // Content is just URLs with no body.
+  if (/^(?:https?:\/\/[^\s<>()"']+\n?)+$/.test(normalized)) {
+    return '';
+  }
+  // Legacy fallback: URLs inline in body without the standard separator.
+  return normalized.replace(/https?:\/\/[^\s<>()"']+/gi, '');
 }
 
 export function composeNoteContent(body: string, urls: string[]): string {
