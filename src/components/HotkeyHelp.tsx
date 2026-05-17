@@ -18,6 +18,7 @@ const ROWS: { keys: string; label: string }[] = [
   { keys: '+ / − / wheel', label: 'Zoom' },
   { keys: 'Space + drag', label: 'Pan' },
   { keys: 'N', label: 'Priority notes: show, collapse, hide' },
+  { keys: 'Shift + O', label: 'Toggle occlusion mode (hide study boxes)' },
   { keys: '/', label: 'Focus search' },
   { keys: '|', label: 'Split compare' },
   { keys: '?', label: 'This help' },

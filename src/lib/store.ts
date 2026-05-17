@@ -63,6 +63,8 @@ export interface EditorState {
   overlayNeighborTargetId: string | null;
   overlayNeighborTargetPageIndex: number | null;
   groupCollectTargetId: string | null;
+  occlusionMode: boolean;
+  occlusionRevealedIds: Set<string>;
 
   setWorkspace: (workspace: MapWorkspace, resetUi?: boolean) => void;
   setSelectedPrimitiveId: (id: string | null) => void;
@@ -108,10 +110,25 @@ export interface EditorState {
   removeNeighborMember: (primitiveId: string, memberKey: string) => void;
   cancelNeighborPick: () => void;
   clearPendingNameFocus: () => void;
+  toggleOcclusionMode: () => void;
+  setOcclusionMode: (active: boolean) => void;
+  toggleOcclusionReveal: (primitiveId: string) => void;
+  resetOcclusionReveals: () => void;
 }
 
 const ZOOM_LOCK_STORAGE_KEY = 'diagram-note-zoom-lock';
 const PAN_LOCK_STORAGE_KEY = 'diagram-note-pan-lock';
+const OCCLUSION_MODE_STORAGE_KEY = 'diagram-note-occlusion-mode';
+
+function loadOcclusionMode() {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(OCCLUSION_MODE_STORAGE_KEY) === 'true';
+}
+
+function persistOcclusionMode(value: boolean) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(OCCLUSION_MODE_STORAGE_KEY, String(value));
+}
 
 function loadZoomLock() {
   if (typeof window === 'undefined') return false;
@@ -175,6 +192,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   overlayNeighborTargetId: null,
   overlayNeighborTargetPageIndex: null,
   groupCollectTargetId: null,
+  occlusionMode: loadOcclusionMode(),
+  occlusionRevealedIds: new Set<string>(),
 
   setWorkspace: (workspace, resetUi = true) =>
     set((s) => ({
@@ -675,4 +694,35 @@ export const useEditorStore = create<EditorState>((set) => ({
     }),
 
   clearPendingNameFocus: () => set({ pendingNameFocusId: null }),
+
+  toggleOcclusionMode: () =>
+    set((s) => {
+      const next = !s.occlusionMode;
+      persistOcclusionMode(next);
+      return {
+        occlusionMode: next,
+        occlusionRevealedIds: new Set<string>(),
+      };
+    }),
+
+  setOcclusionMode: (active) =>
+    set((s) => {
+      if (s.occlusionMode === active) return {} as Partial<EditorState>;
+      persistOcclusionMode(active);
+      return {
+        occlusionMode: active,
+        occlusionRevealedIds: new Set<string>(),
+      };
+    }),
+
+  toggleOcclusionReveal: (primitiveId) =>
+    set((s) => {
+      const next = new Set(s.occlusionRevealedIds);
+      if (next.has(primitiveId)) next.delete(primitiveId);
+      else next.add(primitiveId);
+      return { occlusionRevealedIds: next };
+    }),
+
+  resetOcclusionReveals: () =>
+    set({ occlusionRevealedIds: new Set<string>() }),
 }));

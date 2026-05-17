@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Columns2,
   Eye,
+  EyeOff,
   Home,
   Link2,
   Lock,
@@ -168,6 +169,9 @@ export default function Editor({
   const toggleShowAllOverlayFilters = useEditorStore(
     (s) => s.toggleShowAllOverlayFilters
   );
+  const occlusionMode = useEditorStore((s) => s.occlusionMode);
+  const toggleOcclusionMode = useEditorStore((s) => s.toggleOcclusionMode);
+  const resetOcclusionReveals = useEditorStore((s) => s.resetOcclusionReveals);
   const toggleOverlayFilter = useEditorStore((s) => s.toggleOverlayFilter);
   const setAllPriorityNoteCollapsed = useEditorStore(
     (s) => s.setAllPriorityNoteCollapsed
@@ -270,7 +274,8 @@ export default function Editor({
     setShowQuickSearch(false);
     setShowMapPicker(false);
     setFloatingTool(null);
-  }, [activeMapId]);
+    resetOcclusionReveals();
+  }, [activeMapId, resetOcclusionReveals]);
 
   useEffect(() => {
     if (!viewer || !zoomTarget || compareOnly) return;
@@ -636,6 +641,12 @@ export default function Editor({
 
       if (editing) return;
 
+      if (event.shiftKey && (event.key === 'o' || event.key === 'O')) {
+        event.preventDefault();
+        toggleOcclusionMode();
+        return;
+      }
+
       const panSpeed = 0.08;
       const singleAllVisible = Object.values(
         useEditorStore.getState().visibleOverlayFilters
@@ -834,6 +845,7 @@ export default function Editor({
     onToggleComparePanLock,
     onToggleCompareZoomLock,
     activeMap,
+    toggleOcclusionMode,
   ]);
 
   return (
@@ -1057,6 +1069,23 @@ export default function Editor({
                   title="Polyline (8)"
                 >
                   <PenTool size={15} />
+                </button>
+              )}
+              {!compareOnly && (
+                <button
+                  onClick={toggleOcclusionMode}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                    occlusionMode
+                      ? 'bg-amber-500 text-white hover:bg-amber-600'
+                      : 'bg-white/90 text-gray-700 hover:bg-white'
+                  }`}
+                  title={
+                    occlusionMode
+                      ? 'Exit occlusion (Shift+O)'
+                      : 'Hide study boxes for retrieval practice (Shift+O)'
+                  }
+                >
+                  <EyeOff size={15} />
                 </button>
               )}
               {!compareOnly && (

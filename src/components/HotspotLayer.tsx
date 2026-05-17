@@ -230,6 +230,9 @@ export default function HotspotLayer({
   const effectivePanLocked = compareOnly ? comparePanLocked : panLocked;
   const zoomTarget = useEditorStore((s) => s.zoomTarget);
   const spacePanActive = useEditorStore((s) => s.spacePanActive);
+  const occlusionMode = useEditorStore((s) => s.occlusionMode);
+  const occlusionRevealedIds = useEditorStore((s) => s.occlusionRevealedIds);
+  const toggleOcclusionReveal = useEditorStore((s) => s.toggleOcclusionReveal);
   const addDraftGroupMember = useEditorStore((s) => s.addDraftGroupMember);
   const addGroupMember = useEditorStore((s) => s.addGroupMember);
   const addNeighborMember = useEditorStore((s) => s.addNeighborMember);
@@ -705,6 +708,10 @@ export default function HotspotLayer({
   const activatePrimitive = useCallback(
     (primitive: Primitive) => {
       if (!isMapSelectablePrimitive(primitive)) return;
+      if (occlusionMode && primitive.kind === 'rectangle') {
+        toggleOcclusionReveal(primitive.id);
+        return;
+      }
       if (compareOnly && compareBacklinkPickActive) {
         onPickCompareBacklinkTarget?.(primitive.id);
         return;
@@ -765,6 +772,8 @@ export default function HotspotLayer({
       setActivePage,
       setSelectedPrimitive,
       setEditorMode,
+      occlusionMode,
+      toggleOcclusionReveal,
     ]
   );
 
@@ -1630,6 +1639,48 @@ export default function HotspotLayer({
           </g>
         );
       })()}
+
+      {occlusionMode &&
+        primitiveShapes.map(({ primitive, bounds }) => {
+          if (primitive.kind !== 'rectangle') return null;
+          if (occlusionRevealedIds.has(primitive.id)) return null;
+          const rect = bboxToViewerElementRect(viewer, bounds, dims);
+          if (!rect) return null;
+          return (
+            <g
+              key={`occlusion-${primitive.id}`}
+              style={{ cursor: 'pointer' }}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleOcclusionReveal(primitive.id);
+              }}
+            >
+              <rect
+                x={rect.x}
+                y={rect.y}
+                width={rect.width}
+                height={rect.height}
+                rx={12}
+                fill="#fff8eb"
+                stroke="#f59e0b"
+                strokeWidth={1.5}
+              />
+              <text
+                x={rect.x + rect.width / 2}
+                y={rect.y + rect.height / 2 + 6}
+                fill="#b45309"
+                fontSize={18}
+                fontWeight={700}
+                textAnchor="middle"
+                pointerEvents="none"
+                style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+              >
+                ...
+              </text>
+            </g>
+          );
+        })}
 
       {priorityBubbles.map((priorityBubble) => (
           <g key={`priority-bubble-${priorityBubble.primitiveId}`}>
