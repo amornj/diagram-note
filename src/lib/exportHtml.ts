@@ -174,9 +174,8 @@ const VIEWER_JS = String.raw`
     tx: 0, ty: 0, scale: 1,
     zoomLocked: false,
     panLocked: false,
-    occlusionMode: false,
     showAllOverlays: false,
-    occlusionRevealed: new Set(),
+    occluded: new Set(),   // rectangle IDs currently rendered as solid blue blocks
     notesVisible: false,   // master toggle — speech bubbles only render when true
     selectedNoteId: null,
     noteOffset: {},        // primitiveId -> {dx, dy} screen offset for note bubble
@@ -271,7 +270,7 @@ const VIEWER_JS = String.raw`
   viewport.addEventListener('pointerdown', (event) => {
     if (event.target.closest('.note-card, .priority-bubble, #toolbar')) return;
     if (state.panLocked) return;
-    if (event.target.closest('.hit') && !state.occlusionMode) {
+    if (event.target.closest('.hit')) {
       // Allow primitives to handle their own clicks; pan only on background.
       return;
     }
@@ -367,9 +366,7 @@ const VIEWER_JS = String.raw`
       const visible = shouldShowPrimitive(primitive);
       const color = primitive.color || '#fb7185';
       const isOccludedBox =
-        state.occlusionMode &&
-        primitive.kind === 'rectangle' &&
-        !state.occlusionRevealed.has(primitive.id);
+        primitive.kind === 'rectangle' && state.occluded.has(primitive.id);
       const isStudyBox = primitive.kind === 'rectangle';
 
       if (primitive.kind === 'customline' && primitive.points && primitive.points.length >= 2) {
@@ -493,9 +490,10 @@ const VIEWER_JS = String.raw`
     event.stopPropagation();
     const primitive = byId.get(id);
     if (!primitive) return;
-    if (state.occlusionMode && primitive.kind === 'rectangle') {
-      if (state.occlusionRevealed.has(id)) state.occlusionRevealed.delete(id);
-      else state.occlusionRevealed.add(id);
+    if (primitive.kind === 'rectangle') {
+      if (state.occluded.has(id)) state.occluded.delete(id);
+      else state.occluded.add(id);
+      refreshToolbar();
       renderOverlay();
       return;
     }
@@ -733,10 +731,27 @@ const VIEWER_JS = String.raw`
     btns.forEach((b) => b.classList.remove('active', 'lock-on', 'pin-on'));
     if (state.zoomLocked) toolbar.querySelector('[data-act="zoom-lock"]').classList.add('lock-on');
     if (state.panLocked) toolbar.querySelector('[data-act="pan-lock"]').classList.add('pin-on');
-    if (state.occlusionMode) toolbar.querySelector('[data-act="occlusion"]').classList.add('active');
+    if (state.occluded.size > 0) toolbar.querySelector('[data-act="occlusion"]').classList.add('active');
     if (state.showAllOverlays) toolbar.querySelector('[data-act="overlays"]').classList.add('active');
     if (state.notesVisible) toolbar.querySelector('[data-act="notes"]').classList.add('active');
     viewport.classList.toggle('pan-locked', state.panLocked);
+  }
+
+  function rectanglePrimitives() {
+    return primitives.filter((p) => p.kind === 'rectangle');
+  }
+
+  function toggleOcclusionAll() {
+    const rects = rectanglePrimitives();
+    if (rects.length === 0) return;
+    const allOccluded = rects.every((p) => state.occluded.has(p.id));
+    if (allOccluded) {
+      state.occluded.clear();
+    } else {
+      for (const p of rects) state.occluded.add(p.id);
+    }
+    refreshToolbar();
+    renderOverlay();
   }
 
   function viewportCenter() {
@@ -763,10 +778,7 @@ const VIEWER_JS = String.raw`
     } else if (act === 'home') {
       fit();
     } else if (act === 'occlusion') {
-      state.occlusionMode = !state.occlusionMode;
-      if (!state.occlusionMode) state.occlusionRevealed.clear();
-      refreshToolbar();
-      renderOverlay();
+      toggleOcclusionAll();
     } else if (act === 'overlays') {
       state.showAllOverlays = !state.showAllOverlays;
       refreshToolbar();
@@ -827,10 +839,7 @@ const VIEWER_JS = String.raw`
       case 'O':
       case 'o':
         if (event.shiftKey) {
-          state.occlusionMode = !state.occlusionMode;
-          if (!state.occlusionMode) state.occlusionRevealed.clear();
-          refreshToolbar();
-          renderOverlay();
+          toggleOcclusionAll();
           event.preventDefault();
         }
         break;
