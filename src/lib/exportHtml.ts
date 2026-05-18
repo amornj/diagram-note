@@ -128,11 +128,11 @@ html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
 .note-card .note-body { white-space: pre-wrap; word-wrap: break-word; max-height: 320px; overflow-y: auto; }
 .note-card .note-name { font-size: 11px; color: #92400e; font-weight: 600; margin-bottom: 4px; }
 
-.priority-bubble { position: absolute; pointer-events: auto; min-width: 160px; max-width: 280px; background: #fffbeb; border: 2px solid currentColor; border-radius: 10px; padding: 6px 10px; font-size: 12px; line-height: 1.35; color: #78350f; box-shadow: 0 6px 18px rgba(0,0,0,0.15); cursor: grab; white-space: pre-wrap; word-wrap: break-word; }
+.priority-bubble { position: absolute; pointer-events: auto; min-width: 180px; max-width: 320px; background: #fffbeb; border: 2px solid currentColor; border-radius: 10px; padding: 8px 12px; font-size: 12px; line-height: 1.4; color: #78350f; box-shadow: 0 6px 18px rgba(0,0,0,0.15); cursor: grab; }
 .priority-bubble.dragging { cursor: grabbing; }
 .priority-bubble .pri-toggle { position: absolute; top: -8px; right: -8px; width: 18px; height: 18px; border-radius: 999px; background: #f59e0b; color: #fff; border: 2px solid #fff; font-size: 10px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto; }
-.priority-bubble .pri-content { display: block; }
-.priority-bubble .pri-name { font-size: 10px; color: #92400e; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.03em; }
+.priority-bubble .pri-content { display: block; max-height: 240px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
+.priority-bubble .pri-name { font-size: 10px; color: #92400e; font-weight: 700; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
 .priority-bubble.collapsed { min-width: 0; max-width: none; width: 34px; height: 30px; padding: 0; background: transparent; border: none; box-shadow: none; cursor: pointer; }
 .priority-bubble.collapsed .pri-content,
 .priority-bubble.collapsed .pri-toggle { display: none; }
@@ -225,6 +225,13 @@ const VIEWER_JS = String.raw`
 
   function getPriorityNote(primitive) {
     return (primitive.notes || []).find((n) => n.isPriority && n.content && n.content.trim()) || null;
+  }
+
+  // Default: every priority bubble starts collapsed (as a speech-bubble icon).
+  for (const p of primitives) {
+    if (p.showPriorityNote === true && getPriorityNote(p)) {
+      state.priorityCollapsed[p.id] = true;
+    }
   }
 
   // ---------- view transform ----------
@@ -516,8 +523,8 @@ const VIEWER_JS = String.raw`
     const dx = offset ? offset.dx : 0;
     const dy = offset ? offset.dy : 0;
     el.style.left = (screenX + dx) + 'px';
-    el.style.top = (screenY + dy - 60) + 'px';
-    el.style.transform = 'translate(-50%, 0)';
+    el.style.top = (screenY + dy - 6) + 'px';
+    el.style.transform = 'translate(-50%, -100%)';
 
     // Speech-bubble icon shown only when collapsed; clicking it expands.
     const icon = document.createElement('div');
