@@ -1,11 +1,12 @@
-import { ArchiveRestore, Download, FilePlus2, Menu, Package, RotateCcw, Upload, X } from 'lucide-react';
+import { ArchiveRestore, Download, FileCode, FilePlus2, Menu, Package, RotateCcw, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { zipSync } from 'fflate';
-import { useMapStore } from '../lib/mapStore';
+import { useMapStore, loadMapPageView } from '../lib/mapStore';
 import { FIXED_RENDER_SCALE } from '../lib/mapStore';
 import { useEditorStore } from '../lib/store';
 import { downloadBlob, exportDnote, importDnote } from '../lib/bundle';
 import { buildMapOverlayPdf } from '../lib/exportPdf';
+import { buildMapExportHtml } from '../lib/exportHtml';
 import * as idb from '../lib/idb';
 import type { MapWorkspace } from '../types';
 import { EMPTY_WORKSPACE } from '../lib/workspace';
@@ -225,6 +226,27 @@ export default function ImportExportBar() {
     setBusy(null);
   };
 
+  const handleExportHtml = async () => {
+    if (!activeMap) return;
+    setBusy('Building viewer HTML…');
+    setError(null);
+    try {
+      const view = await loadMapPageView(activeMap.id, activeMap.pageIndex);
+      if (!view) throw new Error('Map raster not available');
+      const result = await buildMapExportHtml({
+        map: { ...activeMap, workspace },
+        workspace,
+        rasterBlob: view.rasterBlob,
+        dims: view.dims,
+      });
+      downloadBlob(result.blob, result.filename);
+      setMenuOpen(false);
+    } catch (err) {
+      setError((err as Error).message ?? 'Failed to export HTML');
+    }
+    setBusy(null);
+  };
+
   const handleDeleteAllOverlays = async () => {
     if (!activeMap || deleteAllInput !== 'Delete all') return;
     setBusy('Deleting all overlays…');
@@ -357,6 +379,15 @@ export default function ImportExportBar() {
           >
             <Download size={14} />
             Export PDF (overlays)
+          </button>
+          <button
+            onClick={() => void handleExportHtml()}
+            disabled={!activeMap || busy !== null}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            role="menuitem"
+          >
+            <FileCode size={14} />
+            Export HTML (viewer)
           </button>
           <button
             onClick={handleExportJson}
