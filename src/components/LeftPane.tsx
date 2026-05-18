@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, FolderPlus, Pin, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  FolderPlus,
+  Pin,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import type { DiagramMap, MapWorkspace, Primitive } from '../types';
@@ -262,6 +271,11 @@ export default function LeftPane({
   const [renameGroupDraft, setRenameGroupDraft] = useState('');
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const [draggingMapId, setDraggingMapId] = useState<string | null>(null);
+  const [mapSearchOpen, setMapSearchOpen] = useState(false);
+  const [mapSearchQuery, setMapSearchQuery] = useState('');
+  const mapsListRef = useRef<HTMLDivElement | null>(null);
+  const dragScrollFrameRef = useRef<number | null>(null);
+  const dragScrollVelocityRef = useRef(0);
 
   const [mapsHeight, setMapsHeight] = useState(() => {
     if (typeof window === 'undefined') return 192;
@@ -315,9 +329,14 @@ export default function LeftPane({
     () => maps.filter((map) => map.archivedAt === undefined),
     [maps]
   );
+  const searchedMaps = useMemo(() => {
+    const query = mapSearchQuery.trim().toLowerCase();
+    if (!query) return visibleMaps;
+    return visibleMaps.filter((map) => map.name.toLowerCase().includes(query));
+  }, [visibleMaps, mapSearchQuery]);
   const sortedMaps = useMemo(
-    () => sortMaps(visibleMaps, mapSortMode, activeMapId, pinnedMapIds),
-    [visibleMaps, mapSortMode, activeMapId, pinnedMapIds]
+    () => sortMaps(searchedMaps, mapSortMode, activeMapId, pinnedMapIds),
+    [searchedMaps, mapSortMode, activeMapId, pinnedMapIds]
   );
   const monthGroupedMaps = useMemo(() => {
     const groups: Array<{ label: string; maps: DiagramMap[] }> = [];
@@ -365,7 +384,51 @@ export default function LeftPane({
     }));
   };
 
+  const collapseAllGroups = () => {
+    setCollapsedGroupIds(Object.fromEntries(groups.map((group) => [group.id, true])));
+  };
+
+  useEffect(() => {
+    if (!groupViewActive) return;
+    setCollapsedGroupIds((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const group of groups) {
+        if (next[group.id] !== true) {
+          next[group.id] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [groupViewActive, groups]);
+
   const OTHER_GROUP_TARGET = '__other__';
+
+  const stopDragAutoScroll = () => {
+    if (dragScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragScrollFrameRef.current);
+      dragScrollFrameRef.current = null;
+    }
+    dragScrollVelocityRef.current = 0;
+  };
+
+  const startDragAutoScroll = (velocity: number) => {
+    dragScrollVelocityRef.current = velocity;
+    if (dragScrollFrameRef.current !== null) return;
+    const tick = () => {
+      const container = mapsListRef.current;
+      if (!container || dragScrollVelocityRef.current === 0) {
+        dragScrollFrameRef.current = null;
+        return;
+      }
+      container.scrollTop += dragScrollVelocityRef.current;
+      dragScrollFrameRef.current = window.requestAnimationFrame(tick);
+    };
+    dragScrollFrameRef.current = window.requestAnimationFrame(tick);
+  };
+
+  useEffect(() => stopDragAutoScroll, []);
 
   const handleGroupDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     if (!draggingMapId) return;
@@ -379,6 +442,7 @@ export default function LeftPane({
   ) => {
     event.preventDefault();
     const mapId = event.dataTransfer.getData('text/plain') || draggingMapId;
+    stopDragAutoScroll();
     setDragOverGroupId(null);
     setDraggingMapId(null);
     if (!mapId) return;
@@ -532,6 +596,7 @@ export default function LeftPane({
           setDraggingMapId(map.id);
         }}
         onDragEnd={() => {
+          stopDragAutoScroll();
           setDraggingMapId(null);
           setDragOverGroupId(null);
         }}
@@ -733,10 +798,29 @@ export default function LeftPane({
           <div className="flex items-center gap-1">
             <button
               onClick={() => {
+                setMapSearchOpen((open) => {
+                  const next = !open;
+                  if (!next) setMapSearchQuery('');
+                  return next;
+                });
+              }}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                mapSearchOpen
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Search maps by name"
+              aria-label="Search maps by name"
+            >
+              <Search size={11} />
+            </button>
+            <button
+              onClick={() => {
                 setGroupViewActive((active) => {
                   const next = !active;
                   persistGroupViewActive(next);
-                  if (!next) setGroupInputValue('');
+                  if (next) collapseAllGroups();
+                  else setGroupInputValue('');
                   return next;
                 });
               }}
@@ -798,6 +882,36 @@ export default function LeftPane({
             </button>
           </div>
         </div>
+        {mapSearchOpen && (
+          <div className="mt-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              <input
+                autoFocus
+                value={mapSearchQuery}
+                onChange={(event) => setMapSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setMapSearchQuery('');
+                    setMapSearchOpen(false);
+                  }
+                }}
+                placeholder="search map name"
+                className="w-full rounded border border-gray-200 bg-white py-1 pl-7 pr-7 text-xs outline-none focus:border-sky-300"
+              />
+              {mapSearchQuery && (
+                <button
+                  onClick={() => setMapSearchQuery('')}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                  title="Clear map search"
+                  aria-label="Clear map search"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         {groupViewActive && (
           <form
             onSubmit={(event) => {
@@ -821,11 +935,45 @@ export default function LeftPane({
             />
           </form>
         )}
-          <div className="mt-2 space-y-1 overflow-y-auto" style={{ height: mapsHeight }}>
+          <div
+            ref={mapsListRef}
+            className="mt-2 space-y-1 overflow-y-auto"
+            style={{ height: mapsHeight }}
+            onDragOver={(event) => {
+              if (!draggingMapId) return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              const topDistance = event.clientY - rect.top;
+              const bottomDistance = rect.bottom - event.clientY;
+              const threshold = Math.min(56, rect.height / 4);
+              if (topDistance < threshold) {
+                const speed = Math.max(4, Math.round((threshold - topDistance) / 3));
+                startDragAutoScroll(-speed);
+              } else if (bottomDistance < threshold) {
+                const speed = Math.max(4, Math.round((threshold - bottomDistance) / 3));
+                startDragAutoScroll(speed);
+              } else {
+                stopDragAutoScroll();
+              }
+            }}
+            onDragLeave={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (
+                nextTarget instanceof Node &&
+                event.currentTarget.contains(nextTarget)
+              ) {
+                return;
+              }
+              stopDragAutoScroll();
+            }}
+            onDrop={() => stopDragAutoScroll()}
+          >
           {visibleMaps.length === 0 && (
             <div className="text-xs text-gray-400">
               No active maps. Restore one from Archive or load a PDF, PNG, JPEG, WEBP, or .dnote.
             </div>
+          )}
+          {visibleMaps.length > 0 && sortedMaps.length === 0 && (
+            <div className="text-xs text-gray-400">No maps match this search.</div>
           )}
           {groupViewActive && groups.length > 0 ? (
             renderGroupedMaps()
