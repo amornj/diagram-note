@@ -83,9 +83,12 @@ function renderHtml(title: string, imageDataUrl: string, payload: unknown): stri
   <button data-act="overlays" title="Show all overlays (\\)" aria-label="Show overlays">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
   </button>
+  <button data-act="notes" title="Show notes (N)" aria-label="Show notes">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
+  </button>
 </div>
 <div id="hint">
-  ＋/− zoom · 9 lock zoom · P pin · 0 home · ⇧O occlude · \\ overlays · drag to pan · click box for note
+  ＋/− zoom · 9 lock zoom · P pin · 0 home · ⇧O occlude · \\ overlays · N notes · drag to pan
 </div>
 <div id="title-tag">${escapeHtml(title)} · view only</div>
 <script>window.__VIEWER_DATA__ = ${safeJson(payload)};</script>
@@ -174,6 +177,7 @@ const VIEWER_JS = String.raw`
     occlusionMode: false,
     showAllOverlays: false,
     occlusionRevealed: new Set(),
+    notesVisible: false,   // master toggle — speech bubbles only render when true
     selectedNoteId: null,
     noteOffset: {},        // primitiveId -> {dx, dy} screen offset for note bubble
     priorityOffset: {},    // primitiveId -> {dx, dy} screen offset for priority bubble
@@ -495,7 +499,7 @@ const VIEWER_JS = String.raw`
       renderOverlay();
       return;
     }
-    if (!getPriorityNote(primitive)) {
+    if (!state.notesVisible || !getPriorityNote(primitive)) {
       state.selectedNoteId = null;
       renderNotes();
       return;
@@ -677,20 +681,19 @@ const VIEWER_JS = String.raw`
 
   function renderNotes() {
     notesLayer.innerHTML = '';
+    if (!state.notesVisible) return;
     // Priority bubbles for every primitive flagged showPriorityNote.
-    if (state.showAllOverlays || true) {
-      for (const primitive of primitives) {
-        if (primitive.showPriorityNote !== true) continue;
-        const note = getPriorityNote(primitive);
-        if (!note) continue;
-        const bounds = getBounds(primitive);
-        if (!bounds) continue;
-        const cx = (bounds.x + bounds.w / 2) * dims.width;
-        const cy = bounds.y * dims.height;
-        const screen = imageToScreen(cx, cy);
-        const el = buildPriorityBubbleEl(primitive, screen.x, screen.y, state.priorityOffset[primitive.id]);
-        if (el) notesLayer.appendChild(el);
-      }
+    for (const primitive of primitives) {
+      if (primitive.showPriorityNote !== true) continue;
+      const note = getPriorityNote(primitive);
+      if (!note) continue;
+      const bounds = getBounds(primitive);
+      if (!bounds) continue;
+      const cx = (bounds.x + bounds.w / 2) * dims.width;
+      const cy = bounds.y * dims.height;
+      const screen = imageToScreen(cx, cy);
+      const el = buildPriorityBubbleEl(primitive, screen.x, screen.y, state.priorityOffset[primitive.id]);
+      if (el) notesLayer.appendChild(el);
     }
     // Selected note card.
     if (state.selectedNoteId) {
@@ -708,6 +711,22 @@ const VIEWER_JS = String.raw`
     }
   }
 
+  function toggleNotesVisible() {
+    state.notesVisible = !state.notesVisible;
+    if (state.notesVisible) {
+      // Reset every priority bubble to its collapsed speech-bubble state.
+      for (const p of primitives) {
+        if (p.showPriorityNote === true && getPriorityNote(p)) {
+          state.priorityCollapsed[p.id] = true;
+        }
+      }
+    } else {
+      state.selectedNoteId = null;
+    }
+    refreshToolbar();
+    renderNotes();
+  }
+
   // ---------- toolbar ----------
   function refreshToolbar() {
     const btns = toolbar.querySelectorAll('button');
@@ -716,6 +735,7 @@ const VIEWER_JS = String.raw`
     if (state.panLocked) toolbar.querySelector('[data-act="pan-lock"]').classList.add('pin-on');
     if (state.occlusionMode) toolbar.querySelector('[data-act="occlusion"]').classList.add('active');
     if (state.showAllOverlays) toolbar.querySelector('[data-act="overlays"]').classList.add('active');
+    if (state.notesVisible) toolbar.querySelector('[data-act="notes"]').classList.add('active');
     viewport.classList.toggle('pan-locked', state.panLocked);
   }
 
@@ -752,6 +772,8 @@ const VIEWER_JS = String.raw`
       refreshToolbar();
       renderOverlay();
       renderNotes();
+    } else if (act === 'notes') {
+      toggleNotesVisible();
     }
   });
 
@@ -795,6 +817,11 @@ const VIEWER_JS = String.raw`
         refreshToolbar();
         renderOverlay();
         renderNotes();
+        event.preventDefault();
+        break;
+      case 'n':
+      case 'N':
+        toggleNotesVisible();
         event.preventDefault();
         break;
       case 'O':
