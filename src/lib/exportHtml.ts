@@ -131,11 +131,16 @@ html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
 .priority-bubble { position: absolute; pointer-events: auto; min-width: 160px; max-width: 280px; background: #fffbeb; border: 2px solid currentColor; border-radius: 10px; padding: 6px 10px; font-size: 12px; line-height: 1.35; color: #78350f; box-shadow: 0 6px 18px rgba(0,0,0,0.15); cursor: grab; white-space: pre-wrap; word-wrap: break-word; }
 .priority-bubble.dragging { cursor: grabbing; }
 .priority-bubble .pri-toggle { position: absolute; top: -8px; right: -8px; width: 18px; height: 18px; border-radius: 999px; background: #f59e0b; color: #fff; border: 2px solid #fff; font-size: 10px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto; }
-.priority-bubble.collapsed { min-width: 0; padding: 0; width: 28px; height: 22px; border-radius: 12px; background: #fbbf24; border-color: #b45309; color: transparent; }
-.priority-bubble.collapsed::before { content: '!'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #78350f; font-weight: 800; font-size: 13px; }
 .priority-bubble .pri-content { display: block; }
-.priority-bubble.collapsed .pri-content { display: none; }
 .priority-bubble .pri-name { font-size: 10px; color: #92400e; font-weight: 700; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.03em; }
+.priority-bubble.collapsed { min-width: 0; max-width: none; width: 34px; height: 30px; padding: 0; background: transparent; border: none; box-shadow: none; cursor: pointer; }
+.priority-bubble.collapsed .pri-content,
+.priority-bubble.collapsed .pri-toggle { display: none; }
+.pri-collapsed-icon { display: none; width: 100%; height: 100%; align-items: center; justify-content: center; color: inherit; }
+.priority-bubble.collapsed .pri-collapsed-icon { display: flex; }
+.pri-collapsed-icon svg { width: 30px; height: 30px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25)); }
+.pri-collapsed-icon svg .speech-fill { fill: #fffbeb; }
+.pri-collapsed-icon svg .speech-stroke { fill: currentColor; }
 `;
 
 // The viewer JS — read once into a string at build time.
@@ -170,10 +175,9 @@ const VIEWER_JS = String.raw`
     showAllOverlays: false,
     occlusionRevealed: new Set(),
     selectedNoteId: null,
-    activeNoteIdx: {},     // primitiveId -> current note index in the card
     noteOffset: {},        // primitiveId -> {dx, dy} screen offset for note bubble
     priorityOffset: {},    // primitiveId -> {dx, dy} screen offset for priority bubble
-    priorityCollapsed: {}, // primitiveId -> bool (collapse to !)
+    priorityCollapsed: {}, // primitiveId -> bool (collapse to speech-bubble icon)
   };
 
   // ---------- helpers ----------
@@ -219,17 +223,8 @@ const VIEWER_JS = String.raw`
     return null;
   }
 
-  function getNotesWithContent(primitive) {
-    return (primitive.notes || []).filter((n) => n.content && n.content.trim());
-  }
-
   function getPriorityNote(primitive) {
     return (primitive.notes || []).find((n) => n.isPriority && n.content && n.content.trim()) || null;
-  }
-
-  function getPriorityViewIdx(notesWithContent) {
-    const idx = notesWithContent.findIndex((n) => n.isPriority);
-    return idx >= 0 ? idx : 0;
   }
 
   // ---------- view transform ----------
@@ -493,13 +488,12 @@ const VIEWER_JS = String.raw`
       renderOverlay();
       return;
     }
-    if (getNotesWithContent(primitive).length === 0) {
+    if (!getPriorityNote(primitive)) {
       state.selectedNoteId = null;
       renderNotes();
       return;
     }
     state.selectedNoteId = id;
-    state.activeNoteIdx[id] = state.activeNoteIdx[id] || 0;
     renderNotes();
   });
 
@@ -517,21 +511,40 @@ const VIEWER_JS = String.raw`
     const el = document.createElement('div');
     el.className = 'priority-bubble';
     el.style.color = primitive.color || '#b45309';
-    if (state.priorityCollapsed[primitive.id]) el.classList.add('collapsed');
+    const collapsed = state.priorityCollapsed[primitive.id] === true;
+    if (collapsed) el.classList.add('collapsed');
     const dx = offset ? offset.dx : 0;
     const dy = offset ? offset.dy : 0;
     el.style.left = (screenX + dx) + 'px';
     el.style.top = (screenY + dy - 60) + 'px';
     el.style.transform = 'translate(-50%, 0)';
 
+    // Speech-bubble icon shown only when collapsed; clicking it expands.
+    const icon = document.createElement('div');
+    icon.className = 'pri-collapsed-icon';
+    icon.title = 'Show priority note';
+    icon.innerHTML =
+      '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<path class="speech-stroke" d="M4 3h16a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-7l-5 4.2A1 1 0 0 1 6.4 22V18H4a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z"/>' +
+      '<path class="speech-fill" d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7.6L8.2 19V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>' +
+      '</svg>';
+    icon.addEventListener('pointerdown', (e) => e.stopPropagation());
+    icon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.priorityCollapsed[primitive.id] = false;
+      renderNotes();
+    });
+    el.appendChild(icon);
+
+    // Collapse "−" button shown only when expanded.
     const toggle = document.createElement('button');
     toggle.className = 'pri-toggle';
-    toggle.title = 'Collapse / expand';
-    toggle.textContent = state.priorityCollapsed[primitive.id] ? '+' : '−';
+    toggle.title = 'Collapse';
+    toggle.textContent = '−';
     toggle.addEventListener('pointerdown', (e) => e.stopPropagation());
     toggle.addEventListener('click', (e) => {
       e.stopPropagation();
-      state.priorityCollapsed[primitive.id] = !state.priorityCollapsed[primitive.id];
+      state.priorityCollapsed[primitive.id] = true;
       renderNotes();
     });
     el.appendChild(toggle);
@@ -549,10 +562,10 @@ const VIEWER_JS = String.raw`
     content.appendChild(body);
     el.appendChild(content);
 
-    // Drag bubble (screen-space).
+    // Drag bubble (screen-space). Skip drag-start on the toggle / icon buttons.
     let dragSt = null;
     el.addEventListener('pointerdown', (e) => {
-      if (e.target === toggle) return;
+      if (e.target === toggle || (icon.contains(e.target))) return;
       dragSt = { id: e.pointerId, x: e.clientX, y: e.clientY, baseDx: dx, baseDy: dy };
       el.classList.add('dragging');
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
@@ -586,12 +599,8 @@ const VIEWER_JS = String.raw`
   }
 
   function buildNoteCardEl(primitive, screenX, screenY, offset) {
-    const notes = getNotesWithContent(primitive);
-    if (!notes.length) return null;
-    const initialIdx = state.activeNoteIdx[primitive.id];
-    let idx = typeof initialIdx === 'number' ? initialIdx : getPriorityViewIdx(notes);
-    if (idx >= notes.length) idx = 0;
-    state.activeNoteIdx[primitive.id] = idx;
+    const current = getPriorityNote(primitive);
+    if (!current) return null;
 
     const el = document.createElement('div');
     el.className = 'note-card';
@@ -619,25 +628,6 @@ const VIEWER_JS = String.raw`
     header.appendChild(close);
     el.appendChild(header);
 
-    if (notes.length > 1) {
-      const tabs = document.createElement('div');
-      tabs.className = 'note-tabs';
-      notes.forEach((_, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'note-tab' + (i === idx ? ' active' : '');
-        btn.textContent = String(i + 1);
-        btn.addEventListener('pointerdown', (e) => e.stopPropagation());
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          state.activeNoteIdx[primitive.id] = i;
-          renderNotes();
-        });
-        tabs.appendChild(btn);
-      });
-      el.appendChild(tabs);
-    }
-
-    const current = notes[idx];
     if (current.name && current.name !== primitive.name) {
       const sub = document.createElement('div');
       sub.className = 'note-name';
