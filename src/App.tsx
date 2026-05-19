@@ -947,6 +947,39 @@ function MapPage() {
     }));
   };
 
+  const openMapInSplit = (mapId: string) => {
+    if (!activeMap || mapId === activeMap.id) return;
+    const target = useMapStore.getState().maps.find((entry) => entry.id === mapId);
+    if (!target) return;
+    if (splitMode) {
+      assignSplitMapToPane(2, mapId);
+      return;
+    }
+    useEditorStore.getState().setSelectedPrimitiveId(null);
+    setSplitRatio(0.5);
+    setFocusedSplitPane(2);
+    setSplitTarget(null);
+    setSplitBacklinkPick(null);
+    setCompareOverlayFilters({
+      1: { ...DEFAULT_OVERLAY_FILTERS },
+      2: { ...DEFAULT_OVERLAY_FILTERS },
+    });
+    setCompareViewportLocks({
+      1: { zoomLocked: false, panLocked: false },
+      2: { zoomLocked: false, panLocked: false },
+    });
+    setCompareSelectedPrimitiveId({ 1: null, 2: null });
+    setSplitMaps({
+      1: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
+      2: { mapId: target.id, pageIndex: target.pageIndex },
+    });
+    setComparePaneData({
+      1: { mapId: activeMap.id, mapName: activeMap.name, workspace },
+      2: { mapId: target.id, mapName: target.name, workspace: null },
+    });
+    setSplitMode(true);
+  };
+
   const handleCompareLoaded1 = useCallback((state: {
     mapId: string | null;
     mapName: string;
@@ -1394,6 +1427,7 @@ function MapPage() {
               splitTarget={splitTarget}
               onSetSplitTarget={setSplitTarget}
               onAssignMapToSplitPane={assignSplitMapToPane}
+              onOpenMapInSplit={openMapInSplit}
               workspaceOverride={splitMode ? comparePaneData[focusedSplitPane].workspace : undefined}
               selectedPrimitiveIdOverride={splitMode ? compareSelectedPrimitiveId[focusedSplitPane] : undefined}
               onSelectPrimitiveOverride={

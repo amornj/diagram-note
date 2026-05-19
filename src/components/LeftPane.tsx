@@ -215,6 +215,7 @@ interface LeftPaneProps {
   splitTarget?: 1 | 2 | null;
   onSetSplitTarget?: (pane: 1 | 2 | null) => void;
   onAssignMapToSplitPane?: (pane: 1 | 2, mapId: string) => void;
+  onOpenMapInSplit?: (mapId: string) => void;
   workspaceOverride?: MapWorkspace | null;
   selectedPrimitiveIdOverride?: string | null;
   onSelectPrimitiveOverride?: (primitiveId: string) => void;
@@ -227,6 +228,7 @@ export default function LeftPane({
   splitTarget = null,
   onSetSplitTarget,
   onAssignMapToSplitPane,
+  onOpenMapInSplit,
   workspaceOverride,
   selectedPrimitiveIdOverride = null,
   onSelectPrimitiveOverride,
@@ -628,7 +630,11 @@ export default function LeftPane({
           />
         ) : (
           <button
-            onClick={() => {
+            onClick={(event) => {
+              if (event.shiftKey && onOpenMapInSplit && map.id !== activeMapId) {
+                onOpenMapInSplit(map.id);
+                return;
+              }
               if (splitMode) {
                 if (splitTarget !== null) {
                   onAssignMapToSplitPane?.(splitTarget, map.id);
@@ -643,7 +649,7 @@ export default function LeftPane({
               setRenameDraft(map.name);
             }}
             className="flex-1 truncate text-left text-sm font-medium text-gray-800"
-            title={`${map.name} — double-click to rename`}
+            title={`${map.name} — shift-click to open in split · double-click to rename`}
           >
             {map.name}
           </button>
