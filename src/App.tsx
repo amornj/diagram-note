@@ -947,12 +947,21 @@ function MapPage() {
     }));
   };
 
-  const openMapInSplit = (mapId: string) => {
-    if (!activeMap || mapId === activeMap.id) return;
+  const openMapInSplit = (
+    mapId: string,
+    options?: { pageIndex?: number; primitiveId?: string | null }
+  ) => {
+    if (!activeMap) return;
     const target = useMapStore.getState().maps.find((entry) => entry.id === mapId);
     if (!target) return;
+    const pageIndex = options?.pageIndex ?? target.pageIndex;
+    const primitiveId = options?.primitiveId ?? null;
     if (splitMode) {
-      assignSplitMapToPane(2, mapId);
+      setFocusedSplitPane(2);
+      setSplitTarget(null);
+      setSplitBacklinkPick(null);
+      setSplitMaps((current) => ({ ...current, 2: { mapId, pageIndex } }));
+      setCompareSelectedPrimitiveId((current) => ({ ...current, 2: primitiveId }));
       return;
     }
     useEditorStore.getState().setSelectedPrimitiveId(null);
@@ -968,17 +977,39 @@ function MapPage() {
       1: { zoomLocked: false, panLocked: false },
       2: { zoomLocked: false, panLocked: false },
     });
-    setCompareSelectedPrimitiveId({ 1: null, 2: null });
+    setCompareSelectedPrimitiveId({ 1: null, 2: primitiveId });
     setSplitMaps({
       1: { mapId: activeMap.id, pageIndex: activeMap.pageIndex },
-      2: { mapId: target.id, pageIndex: target.pageIndex },
+      2: { mapId: target.id, pageIndex },
     });
     setComparePaneData({
       1: { mapId: activeMap.id, mapName: activeMap.name, workspace },
-      2: { mapId: target.id, mapName: target.name, workspace: null },
+      2: {
+        mapId: target.id,
+        mapName: target.name,
+        workspace: target.id === activeMap.id ? workspace : null,
+      },
     });
     setSplitMode(true);
   };
+
+  useEffect(() => {
+    const handleOpenInSplit = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        mapId: string;
+        pageIndex?: number;
+        primitiveId?: string | null;
+      }>).detail;
+      if (!detail || !detail.mapId) return;
+      openMapInSplit(detail.mapId, {
+        pageIndex: detail.pageIndex,
+        primitiveId: detail.primitiveId ?? null,
+      });
+    };
+    window.addEventListener('map-open-in-split', handleOpenInSplit);
+    return () => window.removeEventListener('map-open-in-split', handleOpenInSplit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMap, splitMode, workspace]);
 
   const handleCompareLoaded1 = useCallback((state: {
     mapId: string | null;

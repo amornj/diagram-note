@@ -165,6 +165,15 @@ export default function SearchBox({
     return Array.from(grouped.values()).slice(0, 20);
   }, [deferredQuery, activeTypeFilters, activeContentFilters, maps, activeMapId]);
 
+  const dispatchOpenInSplit = (detail: {
+    mapId: string;
+    pageIndex?: number;
+    primitiveId?: string | null;
+  }) => {
+    window.dispatchEvent(new CustomEvent('map-open-in-split', { detail }));
+    onRequestClose?.();
+  };
+
   const handleSelect = async (group: SearchResultGroup) => {
     const sameMapAndPage =
       activeMapId === group.mapId &&
@@ -340,7 +349,14 @@ export default function SearchBox({
           {mapResults.map((map) => (
             <button
               key={map.id}
-              onClick={() => void handleMapSelect(map.id)}
+              onClick={(event) => {
+                if (event.shiftKey) {
+                  dispatchOpenInSplit({ mapId: map.id, pageIndex: map.pageIndex });
+                  return;
+                }
+                void handleMapSelect(map.id);
+              }}
+              title="Shift-click to open in split"
               className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
             >
               <div className="flex items-center gap-2">
@@ -366,7 +382,21 @@ export default function SearchBox({
           {results.map((group) => (
             <button
               key={group.key}
-              onClick={() => void handleSelect(group)}
+              onClick={(event) => {
+                if (event.shiftKey) {
+                  const match = group.matches[0];
+                  if (match) {
+                    dispatchOpenInSplit({
+                      mapId: match.mapId,
+                      pageIndex: match.pageIndex,
+                      primitiveId: match.primitive.id,
+                    });
+                  }
+                  return;
+                }
+                void handleSelect(group);
+              }}
+              title="Shift-click to open in split"
               className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
             >
               <div className="flex items-center gap-2">
