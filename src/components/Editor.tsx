@@ -67,7 +67,7 @@ interface EditorProps {
   onToggleCompareZoomLock?: () => void;
   comparePanLocked?: boolean;
   onToggleComparePanLock?: () => void;
-  compareFocusTarget?: { bbox: BBox; nonce: number } | null;
+  compareFocusTarget?: { bbox: BBox } | null;
   onActivatePane?: () => void;
   isFocusedPane?: boolean;
   selectedPrimitiveIdOverride?: string | null;

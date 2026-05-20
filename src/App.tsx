@@ -521,7 +521,7 @@ function ComparePane({
   onTogglePanLock: () => void;
   mapOptions: Array<{ id: string; name: string }>;
   onSelectMap: (mapId: string) => void;
-  focusTarget: { bbox: import('./types').BBox; nonce: number } | null;
+  focusTarget: { bbox: import('./types').BBox } | null;
   selectedPrimitiveId: string | null;
   onSelectPrimitive: (primitiveId: string) => void;
   onClearSelection: () => void;
@@ -786,7 +786,6 @@ function MapPage() {
     1: string[];
     2: string[];
   }>({ 1: [], 2: [] });
-  const [compareFocusNonce, setCompareFocusNonce] = useState(0);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -882,27 +881,27 @@ function MapPage() {
     return paneWorkspace.primitives.find((primitive) => primitive.id === primitiveId) ?? null;
   }, [splitMode, compareSelectedPrimitiveId, focusedSplitPane, comparePaneData]);
 
-  const compareFocusTargets = useMemo(() => {
-    const result: {
-      1: { bbox: import('./types').BBox; nonce: number } | null;
-      2: { bbox: import('./types').BBox; nonce: number } | null;
-    } = { 1: null, 2: null };
-    ([
-      1,
-      2,
-    ] as const).forEach((pane) => {
-      const workspaceForPane = comparePaneData[pane].workspace;
-      const primitiveId = compareSelectedPrimitiveId[pane];
-      if (!workspaceForPane || !primitiveId) return;
-      const primitivesById = new Map(workspaceForPane.primitives.map((primitive) => [primitive.id, primitive]));
-      const primitive = primitivesById.get(primitiveId);
-      if (!primitive) return;
-      const bbox = getPrimitiveBounds(primitive, primitivesById);
-      if (!bbox) return;
-      result[pane] = { bbox, nonce: compareFocusNonce };
-    });
-    return result;
-  }, [comparePaneData, compareSelectedPrimitiveId, compareFocusNonce]);
+  const compareFocusTarget1 = useMemo(() => {
+    const workspaceForPane = comparePaneData[1].workspace;
+    const primitiveId = compareSelectedPrimitiveId[1];
+    if (!workspaceForPane || !primitiveId) return null;
+    const primitivesById = new Map(workspaceForPane.primitives.map((primitive) => [primitive.id, primitive]));
+    const primitive = primitivesById.get(primitiveId);
+    if (!primitive) return null;
+    const bbox = getPrimitiveBounds(primitive, primitivesById);
+    return bbox ? { bbox } : null;
+  }, [comparePaneData[1], compareSelectedPrimitiveId[1]]);
+
+  const compareFocusTarget2 = useMemo(() => {
+    const workspaceForPane = comparePaneData[2].workspace;
+    const primitiveId = compareSelectedPrimitiveId[2];
+    if (!workspaceForPane || !primitiveId) return null;
+    const primitivesById = new Map(workspaceForPane.primitives.map((primitive) => [primitive.id, primitive]));
+    const primitive = primitivesById.get(primitiveId);
+    if (!primitive) return null;
+    const bbox = getPrimitiveBounds(primitive, primitivesById);
+    return bbox ? { bbox } : null;
+  }, [comparePaneData[2], compareSelectedPrimitiveId[2]]);
 
   const mapOptions = useMemo(
     () =>
@@ -1104,7 +1103,6 @@ function MapPage() {
       const allConfirmed = new Set([...current[1], ...current[2]]);
       return allConfirmed.has(primitiveId) ? current : { 1: [], 2: [] };
     });
-    setCompareFocusNonce((value) => value + 1);
   }, []);
 
   const startSplitBacklinkPick = useCallback((pane: 1 | 2) => {
@@ -1259,7 +1257,6 @@ function MapPage() {
         1: sourcePrimitiveId,
         2: targetPrimitiveId,
       });
-      setCompareFocusNonce((value) => value + 1);
     },
     [maps, activeMap, workspace]
   );
@@ -1302,7 +1299,6 @@ function MapPage() {
           ...current,
           [targetPane]: targetPrimitiveId,
         }));
-        setCompareFocusNonce((value) => value + 1);
         useEditorStore.setState({ rightPaneOpen: true });
         return;
       }
@@ -1494,7 +1490,7 @@ function MapPage() {
                 onTogglePanLock={handleToggleComparePanLock1}
                 mapOptions={mapOptions}
                 onSelectMap={handleSelectCompareMap1}
-                focusTarget={compareFocusTargets[1]}
+                focusTarget={compareFocusTarget1}
                 onPageChange={handleComparePageChange1}
                 selectedPrimitiveId={compareSelectedPrimitiveId[1]}
                 onSelectPrimitive={(primitiveId) => selectSplitPrimitive(1, primitiveId)}
@@ -1554,7 +1550,7 @@ function MapPage() {
                 onTogglePanLock={handleToggleComparePanLock2}
                 mapOptions={mapOptions}
                 onSelectMap={handleSelectCompareMap2}
-                focusTarget={compareFocusTargets[2]}
+                focusTarget={compareFocusTarget2}
                 onPageChange={handleComparePageChange2}
                 selectedPrimitiveId={compareSelectedPrimitiveId[2]}
                 onSelectPrimitive={(primitiveId) => selectSplitPrimitive(2, primitiveId)}
