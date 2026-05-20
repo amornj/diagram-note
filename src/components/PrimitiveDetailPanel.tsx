@@ -1,5 +1,5 @@
 import { PanelRightClose, Plus, Trash2, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import {
@@ -93,20 +93,26 @@ export default function PrimitiveDetailPanel({
   const setActiveMap = useMapStore((s) => s.setActiveMap);
   const setActivePage = useMapStore((s) => s.setActivePage);
   const removePrimitiveBacklink = useMapStore((s) => s.removePrimitiveBacklink);
-  const patchPrimitive = (id: string, patch: Partial<Primitive>) => {
-    if (onPatchPrimitive) {
-      onPatchPrimitive(id, patch);
-    } else {
-      updatePrimitive(id, patch);
-    }
-  };
-  const selectPrimitive = (id: string) => {
-    if (onSelectPrimitiveOverride) {
-      onSelectPrimitiveOverride(id);
-    } else {
-      setSelectedPrimitiveId(id);
-    }
-  };
+  const patchPrimitive = useCallback(
+    (id: string, patch: Partial<Primitive>) => {
+      if (onPatchPrimitive) {
+        onPatchPrimitive(id, patch);
+      } else {
+        updatePrimitive(id, patch);
+      }
+    },
+    [onPatchPrimitive, updatePrimitive]
+  );
+  const selectPrimitive = useCallback(
+    (id: string) => {
+      if (onSelectPrimitiveOverride) {
+        onSelectPrimitiveOverride(id);
+      } else {
+        setSelectedPrimitiveId(id);
+      }
+    },
+    [onSelectPrimitiveOverride, setSelectedPrimitiveId]
+  );
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingName, setEditingName] = useState(false);

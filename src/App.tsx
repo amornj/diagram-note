@@ -552,6 +552,11 @@ function ComparePane({
     mapId ? s.maps.find((map) => map.id === mapId) ?? null : null
   );
 
+  // Each local write to mapStore eventually echoes back here as a storedMap
+  // change. The sync effect below would otherwise re-run setState/onLoaded
+  // with the same content. Count pending self-writes and skip the echo.
+  const pendingLocalEchoesRef = useRef(0);
+
   const patchWorkspacePrimitive = useCallback(
     (id: string, patch: Partial<import('./types').Primitive>) => {
       setState((current) => {
@@ -565,9 +570,16 @@ function ComparePane({
         return { ...current, workspace };
       });
       if (mapId) {
+        pendingLocalEchoesRef.current += 1;
         void useMapStore
           .getState()
-          .patchMapPrimitive(mapId, pageIndex, id, patch);
+          .patchMapPrimitive(mapId, pageIndex, id, patch)
+          .catch(() => {
+            pendingLocalEchoesRef.current = Math.max(
+              0,
+              pendingLocalEchoesRef.current - 1
+            );
+          });
       }
     },
     [mapId, pageIndex]
@@ -595,7 +607,16 @@ function ComparePane({
         return { ...current, workspace };
       });
       if (mapId) {
-        void useMapStore.getState().addMapPrimitive(mapId, pageIndex, stamped);
+        pendingLocalEchoesRef.current += 1;
+        void useMapStore
+          .getState()
+          .addMapPrimitive(mapId, pageIndex, stamped)
+          .catch(() => {
+            pendingLocalEchoesRef.current = Math.max(
+              0,
+              pendingLocalEchoesRef.current - 1
+            );
+          });
       }
       onSelectPrimitiveRef.current(id);
       return id;
@@ -603,8 +624,18 @@ function ComparePane({
     [mapId, pageIndex]
   );
 
+  // Clear the echo counter whenever this pane switches map or page — any
+  // in-flight echoes for the previous map are no longer relevant.
+  useEffect(() => {
+    pendingLocalEchoesRef.current = 0;
+  }, [mapId, pageIndex]);
+
   useEffect(() => {
     if (!storedMap || storedMap.id !== mapId) return;
+    if (pendingLocalEchoesRef.current > 0) {
+      pendingLocalEchoesRef.current -= 1;
+      return;
+    }
     const workspace = workspaceForPage(storedMap, pageIndex);
     setState((current) => ({
       ...current,
