@@ -225,6 +225,7 @@ export default function Editor({
     const viewer = OpenSeadragon({
       element: containerRef.current,
       tileSources: { type: 'image', url: rasterUrl },
+      drawer: 'canvas',
       prefixUrl: '',
       mouseNavEnabled: true,
       showNavigationControl: false,
