@@ -126,6 +126,7 @@ async function backfillCloudSourcePaths(
   const nextMaps = [...maps];
   for (let index = 0; index < nextMaps.length; index += 1) {
     const map = nextMaps[index];
+    if (map.id === DEFAULT_MAP_ID || map.isDefault) continue;
     if (map.sourceStoragePath) continue;
     const sourceBlob = await idb.getPdfBlob(map.id);
     if (!sourceBlob) continue;

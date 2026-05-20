@@ -262,6 +262,7 @@ async function ensureRemoteSource(
     hasSourceStoragePath: Boolean(map.sourceStoragePath),
     sourceSize: sourceBlob.size,
   });
+  if (map.id === DEFAULT_MAP_ID || map.isDefault) return map;
   if (!uid || map.sourceStoragePath) return map;
   try {
     const sourceStoragePath = await uploadMapSource(
@@ -300,7 +301,7 @@ async function resolveSourceBlob(map: DiagramMap): Promise<Blob | null> {
     return sourceBlob;
   }
 
-  if (map.isDefault) {
+  if (map.isDefault || map.id === DEFAULT_MAP_ID) {
     try {
       debugMap('fetching bundled default source', {
         mapId: map.id,
