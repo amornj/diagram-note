@@ -811,7 +811,7 @@ function MapPage() {
       if (event.key === 'Escape' && !editing && (!leftSidebarCollapsed || rightPaneOpen)) {
         event.preventDefault();
         if (!leftSidebarCollapsed) setLeftSidebarCollapsed(true);
-        if (rightPaneOpen && !splitMode) toggleRightPane();
+        if (rightPaneOpen) toggleRightPane();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -1263,6 +1263,60 @@ function MapPage() {
     [maps, activeMap, workspace]
   );
 
+  const openSplitBacklink = useCallback(
+    async ({
+      targetMapId,
+      targetPageIndex,
+      targetPrimitiveId,
+      openInSplit: shouldOpenInSplit,
+    }: {
+      targetMapId: string;
+      targetPageIndex: number;
+      targetPrimitiveId: string;
+      openInSplit: boolean;
+    }) => {
+      const targetMap = maps.find((map) => map.id === targetMapId);
+      if (!targetMap) return;
+      if (shouldOpenInSplit) {
+        const targetPane: 1 | 2 = focusedSplitPane === 1 ? 2 : 1;
+        setSplitTarget(null);
+        setSplitBacklinkPick(null);
+        setFocusedSplitPane(targetPane);
+        setSplitMaps((current) => ({
+          ...current,
+          [targetPane]: { mapId: targetMapId, pageIndex: targetPageIndex },
+        }));
+        setComparePaneData((current) => ({
+          ...current,
+          [targetPane]: {
+            mapId: targetMapId,
+            mapName: targetMap.name,
+            workspace:
+              activeMap?.id === targetMapId && activeMap.pageIndex === targetPageIndex
+                ? workspace
+                : workspaceForPage(targetMap, targetPageIndex),
+          },
+        }));
+        setCompareSelectedPrimitiveId((current) => ({
+          ...current,
+          [targetPane]: targetPrimitiveId,
+        }));
+        setCompareFocusNonce((value) => value + 1);
+        useEditorStore.setState({ rightPaneOpen: true });
+        return;
+      }
+
+      setSplitMode(false);
+      setSplitTarget(null);
+      setSplitBacklinkPick(null);
+      const opened = await useMapStore.getState().setActiveMap(targetMapId);
+      if (!opened) return;
+      await useMapStore.getState().setActivePage(targetPageIndex);
+      useEditorStore.getState().setSelectedPrimitiveId(targetPrimitiveId);
+    },
+    [activeMap, focusedSplitPane, maps, workspace]
+  );
+
   const handleToggleCompareOverlays1 = useCallback(() => {
     setCompareOverlayFilters((current) => {
       const allVisible = Object.values(current[1]).every(Boolean);
@@ -1640,6 +1694,8 @@ function MapPage() {
                 onPatchPrimitive={patchFocusedSplitPrimitive}
                 onDeletePrimitive={deleteFocusedSplitPrimitive}
                 onStartCrossPaneBacklinkPick={() => startSplitBacklinkPick(focusedSplitPane)}
+                onOpenBacklink={openSplitBacklink}
+                paneLabel={`W${focusedSplitPane}`}
                 crossPaneBacklinkPickActive={
                   splitBacklinkPick?.sourcePane === focusedSplitPane &&
                   splitBacklinkPick.primitiveId === selectedComparePrimitive.id

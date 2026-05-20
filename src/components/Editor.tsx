@@ -526,6 +526,7 @@ export default function Editor({
         target?.isContentEditable;
 
       if (compareOnly) {
+        if (editing) return;
         if (event.key === 'Escape') {
           setShowMapPicker(false);
         }

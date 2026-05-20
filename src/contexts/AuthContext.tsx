@@ -15,10 +15,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!auth) return;
-    return onAuthStateChanged(auth, (next) => {
+    const timeout = window.setTimeout(() => {
+      setLoading(false);
+    }, 4000);
+    const unsubscribe = onAuthStateChanged(auth, (next) => {
+      window.clearTimeout(timeout);
       setUser(next);
       setLoading(false);
+    }, () => {
+      window.clearTimeout(timeout);
+      setLoading(false);
     });
+    return () => {
+      window.clearTimeout(timeout);
+      unsubscribe();
+    };
   }, []);
 
   return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>;

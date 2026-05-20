@@ -10,7 +10,7 @@ import {
   normalizeTagInput,
   parseMemberKey,
 } from '../lib/workspace';
-import type { Primitive } from '../types';
+import type { MapWorkspace, Primitive } from '../types';
 import { ColorPicker, TagEditor } from './sharedControls';
 import NoteCards from './NoteCards';
 import PhotoDropzone from './PhotoDropzone';
@@ -38,16 +38,25 @@ export default function PrimitiveDetailPanel({
   onPatchPrimitive,
   onDeletePrimitive,
   onStartCrossPaneBacklinkPick,
+  onOpenBacklink,
+  paneLabel,
   crossPaneBacklinkPickActive = false,
 }: {
   primitive: Primitive;
-  workspaceOverride?: import('../types').MapWorkspace | null;
+  workspaceOverride?: MapWorkspace | null;
   mapIdOverride?: string | null;
   pageIndexOverride?: number;
   onSelectPrimitiveOverride?: (primitiveId: string) => void;
   onPatchPrimitive?: (id: string, patch: Partial<Primitive>) => void;
   onDeletePrimitive?: (id: string) => void;
   onStartCrossPaneBacklinkPick?: () => void;
+  onOpenBacklink?: (args: {
+    targetMapId: string;
+    targetPageIndex: number;
+    targetPrimitiveId: string;
+    openInSplit: boolean;
+  }) => void;
+  paneLabel?: string | null;
   crossPaneBacklinkPickActive?: boolean;
   onOpenCrossMapBacklink?: (args: {
     sourceMapId: string;
@@ -143,6 +152,15 @@ export default function PrimitiveDetailPanel({
                 : `${memberPrim.name} · ${targetMap.name}${targetMap.pageCount > 1 ? ` · Page ${pageIndex + 1}` : ''}`,
             onClick: async (openInSplit: boolean) => {
               if (!effectiveMap) return;
+              if (onOpenBacklink) {
+                onOpenBacklink({
+                  targetMapId,
+                  targetPageIndex: pageIndex,
+                  targetPrimitiveId: member.id,
+                  openInSplit,
+                });
+                return;
+              }
               if (!sameMap) {
                 if (openInSplit) {
                   onOpenCrossMapBacklink?.({
@@ -183,6 +201,7 @@ export default function PrimitiveDetailPanel({
       setActiveMap,
       setActivePage,
       onOpenCrossMapBacklink,
+      onOpenBacklink,
       selectPrimitive,
     ]
   );
@@ -280,8 +299,13 @@ export default function PrimitiveDetailPanel({
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-          {KIND_LABELS[primitive.kind]}
+        <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <span>{KIND_LABELS[primitive.kind]}</span>
+          {paneLabel && (
+            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600">
+              {paneLabel}
+            </span>
+          )}
         </div>
 
         <div>
