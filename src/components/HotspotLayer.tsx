@@ -39,6 +39,8 @@ interface HotspotLayerProps {
   compareShowAllOverlays?: boolean;
   compareVisibleOverlayFilters?: OverlayFilterState;
   onComparePrimitivePatch?: (id: string, patch: Partial<Primitive>) => void;
+  onComparePrimitiveAdd?: (primitive: Omit<Primitive, 'id'>) => string;
+  isFocusedPane?: boolean;
   compareZoomLocked?: boolean;
   comparePanLocked?: boolean;
   selectedPrimitiveIdOverride?: string | null;
@@ -163,6 +165,8 @@ export default function HotspotLayer({
   compareShowAllOverlays = false,
   compareVisibleOverlayFilters = DEFAULT_OVERLAY_FILTERS,
   onComparePrimitivePatch,
+  onComparePrimitiveAdd,
+  isFocusedPane = false,
   compareZoomLocked = false,
   comparePanLocked = false,
   selectedPrimitiveIdOverride,
@@ -625,6 +629,7 @@ export default function HotspotLayer({
 
   const handleEditorPointerDown = (event: React.PointerEvent<SVGRectElement>) => {
     if (editorMode === 'none') return;
+    if (compareOnly && !isFocusedPane) return;
     const point = toNormalizedPoint(event);
     if (!point) return;
 
@@ -666,6 +671,7 @@ export default function HotspotLayer({
 
   const handleEditorPointerMove = (event: React.PointerEvent<SVGRectElement>) => {
     if (editorMode === 'none') return;
+    if (compareOnly && !isFocusedPane) return;
     const point = toNormalizedPoint(event);
     if (!point) return;
     setDraftPointer(point);
@@ -673,6 +679,7 @@ export default function HotspotLayer({
 
   const handleEditorPointerUp = (event: React.PointerEvent<SVGRectElement>) => {
     if (editorMode !== 'rectangle') return;
+    if (compareOnly && !isFocusedPane) return;
     const start = draftRectangleStart;
     const end = toNormalizedPoint(event);
     if (!start || !end) return;
@@ -683,15 +690,20 @@ export default function HotspotLayer({
     // Always exit drawing mode on release — even if too small to commit.
     setEditorMode('none');
     if (bbox.w < 0.002 || bbox.h < 0.002) return;
-    addPrimitive({
+    const draft = {
       name: `Study box ${workspace.primitives.length + 1}`,
-      kind: 'rectangle',
+      kind: 'rectangle' as const,
       showLabel: false,
       color: draftOverlayColor,
       tags: [],
       notes: [],
       bbox,
-    });
+    };
+    if (compareOnly && onComparePrimitiveAdd) {
+      onComparePrimitiveAdd(draft);
+    } else {
+      addPrimitive(draft);
+    }
   };
 
   const polygonDraftPoints =
@@ -2200,7 +2212,7 @@ export default function HotspotLayer({
           </g>
         ))}
 
-      {!compareOnly &&
+      {(!compareOnly || (isFocusedPane && editorMode === 'rectangle')) &&
         editorMode !== 'none' &&
         editorMode !== 'groupCollect' &&
         editorMode !== 'overlayNeighborPick' && (

@@ -78,6 +78,16 @@ export interface MapStoreState {
     primitiveId: string,
     patch: Partial<Primitive>
   ) => Promise<void>;
+  addMapPrimitive: (
+    mapId: string,
+    pageIndex: number,
+    primitive: Primitive
+  ) => Promise<void>;
+  deleteMapPrimitive: (
+    mapId: string,
+    pageIndex: number,
+    primitiveId: string
+  ) => Promise<void>;
 }
 
 export interface MapPageView {
@@ -1193,6 +1203,52 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
       ...primitive,
       ...patch,
     }));
+    await idb.putMap(updated);
+    set({
+      maps: get().maps.map((m) => (m.id === mapId ? updated : m)),
+    });
+    if (get().activeMapId === mapId && updated.pageIndex === pageIndex) {
+      useEditorStore.getState().setWorkspace(getPageMeta(updated, pageIndex).workspace, false);
+    }
+  },
+
+  addMapPrimitive: async (mapId, pageIndex, primitive) => {
+    const map = await idb.getMap(mapId);
+    if (!map) return;
+    const meta = getPageMeta(map, pageIndex);
+    const now = Date.now();
+    const stamped: Primitive = {
+      ...primitive,
+      createdAt: primitive.createdAt ?? now,
+      updatedAt: now,
+    };
+    const updated = withPageMeta(map, pageIndex, {
+      ...meta,
+      workspace: {
+        ...meta.workspace,
+        primitives: [...meta.workspace.primitives, stamped],
+      },
+    });
+    await idb.putMap(updated);
+    set({
+      maps: get().maps.map((m) => (m.id === mapId ? updated : m)),
+    });
+    if (get().activeMapId === mapId && updated.pageIndex === pageIndex) {
+      useEditorStore.getState().setWorkspace(getPageMeta(updated, pageIndex).workspace, false);
+    }
+  },
+
+  deleteMapPrimitive: async (mapId, pageIndex, primitiveId) => {
+    const map = await idb.getMap(mapId);
+    if (!map) return;
+    const meta = getPageMeta(map, pageIndex);
+    const updated = withPageMeta(map, pageIndex, {
+      ...meta,
+      workspace: {
+        ...meta.workspace,
+        primitives: meta.workspace.primitives.filter((p) => p.id !== primitiveId),
+      },
+    });
     await idb.putMap(updated);
     set({
       maps: get().maps.map((m) => (m.id === mapId ? updated : m)),

@@ -12,7 +12,7 @@ import {
   type OverlayFilterState,
 } from './lib/store';
 import { DEFAULT_MAP_ID, loadMapPageView, useMapStore } from './lib/mapStore';
-import { getPrimitiveBounds } from './lib/workspace';
+import { getPrimitiveBounds, makePrimitiveId } from './lib/workspace';
 import { EMPTY_WORKSPACE } from './lib/workspace';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
@@ -29,7 +29,7 @@ import {
 } from './lib/cloudSync';
 import { uploadMapSource } from './lib/cloudStorage';
 import * as idb from './lib/idb';
-import type { DiagramMap, MapGroup, MapWorkspace } from './types';
+import type { DiagramMap, MapGroup, MapWorkspace, Primitive } from './types';
 
 /** Keep only one map per pdfHash — prefer isDefault, then most-recently updated. */
 function dedupByHash(maps: DiagramMap[]): DiagramMap[] {
@@ -547,6 +547,9 @@ function ComparePane({
     workspace: EMPTY_WORKSPACE,
     mapName: title,
   });
+  const storedMap = useMapStore((s) =>
+    mapId ? s.maps.find((map) => map.id === mapId) ?? null : null
+  );
 
   const patchWorkspacePrimitive = useCallback(
     (id: string, patch: Partial<import('./types').Primitive>) => {
@@ -568,6 +571,47 @@ function ComparePane({
     },
     [mapId, pageIndex]
   );
+
+  const onSelectPrimitiveRef = useRef(onSelectPrimitive);
+  onSelectPrimitiveRef.current = onSelectPrimitive;
+
+  const addWorkspacePrimitive = useCallback(
+    (primitive: Omit<Primitive, 'id'>): string => {
+      const id = makePrimitiveId();
+      const now = Date.now();
+      const stamped: Primitive = {
+        ...primitive,
+        id,
+        createdAt: primitive.createdAt ?? now,
+        updatedAt: now,
+      };
+      setState((current) => {
+        const workspace = {
+          ...current.workspace,
+          primitives: [...current.workspace.primitives, stamped],
+        };
+        onLoadedRef.current({ mapId, mapName: current.mapName, workspace });
+        return { ...current, workspace };
+      });
+      if (mapId) {
+        void useMapStore.getState().addMapPrimitive(mapId, pageIndex, stamped);
+      }
+      onSelectPrimitiveRef.current(id);
+      return id;
+    },
+    [mapId, pageIndex]
+  );
+
+  useEffect(() => {
+    if (!storedMap || storedMap.id !== mapId) return;
+    const workspace = workspaceForPage(storedMap, pageIndex);
+    setState((current) => ({
+      ...current,
+      workspace,
+      mapName: storedMap.name,
+    }));
+    onLoadedRef.current({ mapId: storedMap.id, mapName: storedMap.name, workspace });
+  }, [storedMap, mapId, pageIndex]);
 
   const setAllPriorityNotesCollapsed = useCallback((collapsed: boolean) => {
     setState((current) => {
@@ -645,6 +689,7 @@ function ComparePane({
           onToggleCompareOverlayFilter={onToggleOverlayFilter}
           onSetCompareAllPriorityNotesCollapsed={setAllPriorityNotesCollapsed}
           onComparePrimitivePatch={patchWorkspacePrimitive}
+          onComparePrimitiveAdd={addWorkspacePrimitive}
           compareZoomLocked={zoomLocked}
           onToggleCompareZoomLock={onToggleZoomLock}
           comparePanLocked={panLocked}
@@ -827,6 +872,14 @@ function MapPage() {
     if (!selectedPrimitiveId) return null;
     return workspace.primitives.find((p) => p.id === selectedPrimitiveId) ?? null;
   }, [selectedPrimitiveId, workspace.primitives]);
+
+  const selectedComparePrimitive = useMemo(() => {
+    if (!splitMode) return null;
+    const primitiveId = compareSelectedPrimitiveId[focusedSplitPane];
+    const paneWorkspace = comparePaneData[focusedSplitPane].workspace;
+    if (!primitiveId || !paneWorkspace) return null;
+    return paneWorkspace.primitives.find((primitive) => primitive.id === primitiveId) ?? null;
+  }, [splitMode, compareSelectedPrimitiveId, focusedSplitPane, comparePaneData]);
 
   const compareFocusTargets = useMemo(() => {
     const result: {
@@ -1041,6 +1094,7 @@ function MapPage() {
 
   const selectSplitPrimitive = useCallback((pane: 1 | 2, primitiveId: string) => {
     setFocusedSplitPane(pane);
+    useEditorStore.setState({ rightPaneOpen: true });
     setCompareSelectedPrimitiveId((current) => ({
       ...current,
       [pane]: primitiveId,
@@ -1098,6 +1152,63 @@ function MapPage() {
       setFocusedSplitPane(splitBacklinkPick.sourcePane);
     },
     [splitBacklinkPick, splitMaps]
+  );
+
+  const patchFocusedSplitPrimitive = useCallback(
+    (primitiveId: string, patch: Partial<Primitive>) => {
+      const pane = focusedSplitPane;
+      const mapId = splitMaps[pane].mapId;
+      const pageIndex = splitMaps[pane].pageIndex;
+      if (!mapId) return;
+      setComparePaneData((current) => {
+        const paneData = current[pane];
+        if (!paneData.workspace) return current;
+        return {
+          ...current,
+          [pane]: {
+            ...paneData,
+            workspace: {
+              ...paneData.workspace,
+              primitives: paneData.workspace.primitives.map((primitive) =>
+                primitive.id === primitiveId
+                  ? { ...primitive, ...patch, updatedAt: Date.now() }
+                  : primitive
+              ),
+            },
+          },
+        };
+      });
+      void useMapStore.getState().patchMapPrimitive(mapId, pageIndex, primitiveId, patch);
+    },
+    [focusedSplitPane, splitMaps]
+  );
+
+  const deleteFocusedSplitPrimitive = useCallback(
+    (primitiveId: string) => {
+      const pane = focusedSplitPane;
+      const mapId = splitMaps[pane].mapId;
+      const pageIndex = splitMaps[pane].pageIndex;
+      if (!mapId) return;
+      setComparePaneData((current) => {
+        const paneData = current[pane];
+        if (!paneData.workspace) return current;
+        return {
+          ...current,
+          [pane]: {
+            ...paneData,
+            workspace: {
+              ...paneData.workspace,
+              primitives: paneData.workspace.primitives.filter(
+                (primitive) => primitive.id !== primitiveId
+              ),
+            },
+          },
+        };
+      });
+      setCompareSelectedPrimitiveId((current) => ({ ...current, [pane]: null }));
+      void useMapStore.getState().deleteMapPrimitive(mapId, pageIndex, primitiveId);
+    },
+    [focusedSplitPane, splitMaps]
   );
 
   const openCrossMapBacklink = useCallback(
@@ -1333,7 +1444,7 @@ function MapPage() {
                 selectedPrimitiveId={compareSelectedPrimitiveId[1]}
                 onSelectPrimitive={(primitiveId) => selectSplitPrimitive(1, primitiveId)}
                 onClearSelection={clearSplitLinkConfirmations}
-                compareBacklinkPickActive={splitBacklinkPick !== null}
+                compareBacklinkPickActive={splitBacklinkPick !== null && splitBacklinkPick.sourcePane !== 1}
                 onStartBacklinkPick={() => startSplitBacklinkPick(1)}
                 onPickBacklinkTarget={(primitiveId) => {
                   void handleSplitBacklinkTarget(1, primitiveId);
@@ -1393,7 +1504,7 @@ function MapPage() {
                 selectedPrimitiveId={compareSelectedPrimitiveId[2]}
                 onSelectPrimitive={(primitiveId) => selectSplitPrimitive(2, primitiveId)}
                 onClearSelection={clearSplitLinkConfirmations}
-                compareBacklinkPickActive={splitBacklinkPick !== null}
+                compareBacklinkPickActive={splitBacklinkPick !== null && splitBacklinkPick.sourcePane !== 2}
                 onStartBacklinkPick={() => startSplitBacklinkPick(2)}
                 onPickBacklinkTarget={(primitiveId) => {
                   void handleSplitBacklinkTarget(2, primitiveId);
@@ -1486,6 +1597,58 @@ function MapPage() {
             )}
           </div>
         </div>
+
+        {splitMode && selectedComparePrimitive && !rightPaneOpen && (
+          <button
+            onClick={toggleRightPane}
+            className="fixed right-0 top-1/2 z-40 -translate-y-1/2 rounded-l-xl border border-gray-200 bg-white px-2 py-4 shadow-md transition hover:bg-gray-50"
+            title={`Open window ${focusedSplitPane} detail pane (2)`}
+          >
+            <PanelRightOpen size={18} className="text-gray-600" />
+          </button>
+        )}
+
+        {splitMode && selectedComparePrimitive && rightPaneOpen && (
+          <>
+            <button
+              onClick={toggleRightPane}
+              className="fixed inset-0 z-20 bg-slate-950/30 lg:hidden"
+              aria-label="Hide right pane"
+            />
+            <div
+              className="fixed inset-x-0 bottom-0 z-30 h-[58vh] rounded-t-2xl bg-white shadow-2xl lg:absolute lg:inset-y-0 lg:right-0 lg:left-auto lg:h-full lg:rounded-none lg:shadow-none"
+              style={{ width: rightPaneWidth }}
+            >
+              <div
+                className="absolute inset-y-0 left-0 hidden w-2 cursor-col-resize lg:block"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  startResize(event.clientX, rightPaneWidth);
+                }}
+              >
+                <div className="absolute inset-y-0 left-0 w-px bg-gray-200" />
+                <div className="absolute left-0 top-1/2 h-16 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-300" />
+              </div>
+              <PrimitiveDetailPanel
+                primitive={selectedComparePrimitive}
+                workspaceOverride={comparePaneData[focusedSplitPane].workspace}
+                mapIdOverride={splitMaps[focusedSplitPane].mapId}
+                pageIndexOverride={splitMaps[focusedSplitPane].pageIndex}
+                onSelectPrimitiveOverride={(primitiveId) =>
+                  selectSplitPrimitive(focusedSplitPane, primitiveId)
+                }
+                onPatchPrimitive={patchFocusedSplitPrimitive}
+                onDeletePrimitive={deleteFocusedSplitPrimitive}
+                onStartCrossPaneBacklinkPick={() => startSplitBacklinkPick(focusedSplitPane)}
+                crossPaneBacklinkPickActive={
+                  splitBacklinkPick?.sourcePane === focusedSplitPane &&
+                  splitBacklinkPick.primitiveId === selectedComparePrimitive.id
+                }
+                onOpenCrossMapBacklink={openCrossMapBacklink}
+              />
+            </div>
+          </>
+        )}
 
         {!splitMode && selectedPrimitive && !rightPaneOpen && (
           <button

@@ -61,6 +61,7 @@ interface EditorProps {
   onToggleCompareOverlayFilter?: (key: keyof OverlayFilterState) => void;
   onSetCompareAllPriorityNotesCollapsed?: (collapsed: boolean) => void;
   onComparePrimitivePatch?: (id: string, patch: { priorityNoteCollapsed?: boolean }) => void;
+  onComparePrimitiveAdd?: (primitive: Omit<import('../types').Primitive, 'id'>) => string;
   compareZoomLocked?: boolean;
   onToggleCompareZoomLock?: () => void;
   comparePanLocked?: boolean;
@@ -99,6 +100,7 @@ export default function Editor({
   onToggleCompareOverlayFilter,
   onSetCompareAllPriorityNotesCollapsed,
   onComparePrimitivePatch,
+  onComparePrimitiveAdd,
   compareZoomLocked = false,
   onToggleCompareZoomLock,
   comparePanLocked = false,
@@ -570,6 +572,21 @@ export default function Editor({
           case 'L':
             onStartCompareBacklinkPick?.();
             break;
+          case '6':
+            if (onComparePrimitiveAdd) {
+              openStudyBoxTool();
+            } else {
+              handled = false;
+            }
+            break;
+          case 'Escape':
+            if (editorMode === 'rectangle') {
+              setEditorMode('none');
+              setFloatingTool(null);
+            } else {
+              handled = false;
+            }
+            break;
           case '9':
             onToggleCompareZoomLock?.();
             break;
@@ -894,6 +911,8 @@ export default function Editor({
           compareShowAllOverlays={compareShowAllOverlays}
           compareVisibleOverlayFilters={compareVisibleOverlayFilters}
           onComparePrimitivePatch={onComparePrimitivePatch}
+          onComparePrimitiveAdd={onComparePrimitiveAdd}
+          isFocusedPane={isFocusedPane}
           compareZoomLocked={compareZoomLocked}
           comparePanLocked={comparePanLocked}
           selectedPrimitiveIdOverride={selectedPrimitiveIdOverride}
@@ -1031,7 +1050,7 @@ export default function Editor({
                   <Search size={15} />
                 </button>
               )}
-              {!compareOnly && (
+              {(!compareOnly || onComparePrimitiveAdd) && (
                 <button
                   onClick={openStudyBoxTool}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
@@ -1228,7 +1247,7 @@ export default function Editor({
         )
       )}
 
-      {!compareOnly && floatingTool === 'studybox' && (
+      {floatingTool === 'studybox' && (
         renderDraggablePanel('studybox', 'w-fit',
           <DrawTools
             mode="studybox"

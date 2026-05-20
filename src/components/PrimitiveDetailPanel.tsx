@@ -31,8 +31,24 @@ const KIND_LABELS: Record<Primitive['kind'], string> = {
 export default function PrimitiveDetailPanel({
   primitive,
   onOpenCrossMapBacklink,
+  workspaceOverride,
+  mapIdOverride,
+  pageIndexOverride,
+  onSelectPrimitiveOverride,
+  onPatchPrimitive,
+  onDeletePrimitive,
+  onStartCrossPaneBacklinkPick,
+  crossPaneBacklinkPickActive = false,
 }: {
   primitive: Primitive;
+  workspaceOverride?: import('../types').MapWorkspace | null;
+  mapIdOverride?: string | null;
+  pageIndexOverride?: number;
+  onSelectPrimitiveOverride?: (primitiveId: string) => void;
+  onPatchPrimitive?: (id: string, patch: Partial<Primitive>) => void;
+  onDeletePrimitive?: (id: string) => void;
+  onStartCrossPaneBacklinkPick?: () => void;
+  crossPaneBacklinkPickActive?: boolean;
   onOpenCrossMapBacklink?: (args: {
     sourceMapId: string;
     sourcePageIndex: number;
@@ -61,9 +77,27 @@ export default function PrimitiveDetailPanel({
   const maps = useMapStore((s) => s.maps);
   const activeMapId = useMapStore((s) => s.activeMapId);
   const activeMap = maps.find((m) => m.id === activeMapId) ?? null;
+  const effectiveMapId = mapIdOverride ?? activeMapId;
+  const effectiveMap = maps.find((m) => m.id === effectiveMapId) ?? activeMap;
+  const effectivePageIndex = pageIndexOverride ?? activeMap?.pageIndex ?? 0;
+  const effectiveWorkspace = workspaceOverride ?? workspace;
   const setActiveMap = useMapStore((s) => s.setActiveMap);
   const setActivePage = useMapStore((s) => s.setActivePage);
   const removePrimitiveBacklink = useMapStore((s) => s.removePrimitiveBacklink);
+  const patchPrimitive = (id: string, patch: Partial<Primitive>) => {
+    if (onPatchPrimitive) {
+      onPatchPrimitive(id, patch);
+    } else {
+      updatePrimitive(id, patch);
+    }
+  };
+  const selectPrimitive = (id: string) => {
+    if (onSelectPrimitiveOverride) {
+      onSelectPrimitiveOverride(id);
+    } else {
+      setSelectedPrimitiveId(id);
+    }
+  };
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -72,8 +106,8 @@ export default function PrimitiveDetailPanel({
   const [draggedGroupIndex, setDraggedGroupIndex] = useState<number | null>(null);
   const [deletingBacklinks, setDeletingBacklinks] = useState(false);
   const primitivesById = useMemo(
-    () => new Map(workspace.primitives.map((p) => [p.id, p])),
-    [workspace.primitives]
+    () => new Map(effectiveWorkspace.primitives.map((p) => [p.id, p])),
+    [effectiveWorkspace.primitives]
   );
 
   const relatedMembers = useMemo(
@@ -82,18 +116,18 @@ export default function PrimitiveDetailPanel({
         .map((key) => {
           const member = parseRelatedPrimitiveKey(key);
           if (!member) return null;
-          const targetMapId = member.mapId ?? activeMap?.id ?? null;
+          const targetMapId = member.mapId ?? effectiveMap?.id ?? null;
           if (!targetMapId) return null;
           const targetMap = maps.find((map) => map.id === targetMapId);
           if (!targetMap) return null;
           const pageIndex = member.pageIndex ?? targetMap.pageIndex ?? 0;
           const pageWorkspace =
-            targetMapId === activeMap?.id && pageIndex === activeMap?.pageIndex
-              ? workspace
+            targetMapId === effectiveMap?.id && pageIndex === effectivePageIndex
+              ? effectiveWorkspace
               : targetMap.pages?.[pageIndex]?.workspace ?? targetMap.workspace;
           const memberPrim = pageWorkspace?.primitives.find((p) => p.id === member.id);
           if (!memberPrim) return null;
-          const sameMap = targetMapId === activeMap?.id;
+          const sameMap = targetMapId === effectiveMap?.id;
           return {
             key,
             id: member.id,
@@ -102,18 +136,18 @@ export default function PrimitiveDetailPanel({
             sameMap,
             pageIndex,
             label:
-              sameMap && pageIndex === activeMap?.pageIndex
+              sameMap && pageIndex === effectivePageIndex
                 ? memberPrim.name
                 : sameMap
                 ? `${memberPrim.name} · Page ${pageIndex + 1}`
                 : `${memberPrim.name} · ${targetMap.name}${targetMap.pageCount > 1 ? ` · Page ${pageIndex + 1}` : ''}`,
             onClick: async (openInSplit: boolean) => {
-              if (!activeMap) return;
+              if (!effectiveMap) return;
               if (!sameMap) {
                 if (openInSplit) {
                   onOpenCrossMapBacklink?.({
-                    sourceMapId: activeMap.id,
-                    sourcePageIndex: activeMap.pageIndex,
+                    sourceMapId: effectiveMap.id,
+                    sourcePageIndex: effectivePageIndex,
                     sourcePrimitiveId: primitive.id,
                     targetMapId,
                     targetPageIndex: pageIndex,
@@ -128,10 +162,10 @@ export default function PrimitiveDetailPanel({
                 }
                 return;
               }
-              if (pageIndex !== activeMap.pageIndex) {
+              if (pageIndex !== effectivePageIndex) {
                 await setActivePage(pageIndex);
               }
-              setSelectedPrimitiveId(member.id);
+              selectPrimitive(member.id);
             },
           };
         })
@@ -142,17 +176,18 @@ export default function PrimitiveDetailPanel({
         }),
     [
       primitive,
-      workspace,
+      effectiveWorkspace,
       maps,
-      activeMap,
+      effectiveMap,
+      effectivePageIndex,
       setActiveMap,
       setActivePage,
-      setSelectedPrimitiveId,
       onOpenCrossMapBacklink,
+      selectPrimitive,
     ]
   );
 
-  const isPickingRelated = editorMode === 'overlayNeighborPick';
+  const isPickingRelated = crossPaneBacklinkPickActive || editorMode === 'overlayNeighborPick';
   const isPickingGroupItems =
     primitive.kind === 'group' &&
     editorMode === 'groupCollect' &&
@@ -178,7 +213,7 @@ export default function PrimitiveDetailPanel({
   const saveName = () => {
     const trimmed = nameDraft.trim();
     if (trimmed && trimmed !== primitive.name) {
-      updatePrimitive(primitive.id, { name: trimmed });
+      patchPrimitive(primitive.id, { name: trimmed });
     } else {
       setNameDraft(primitive.name);
     }
@@ -192,7 +227,7 @@ export default function PrimitiveDetailPanel({
       normalized.length === current.length &&
       normalized.every((alias, index) => alias === current[index]);
     if (!unchanged) {
-      updatePrimitive(primitive.id, { aliases: normalized });
+      patchPrimitive(primitive.id, { aliases: normalized });
     }
     setAliasDraft(normalized.join(', '));
   };
@@ -279,7 +314,7 @@ export default function PrimitiveDetailPanel({
           <div className="mt-2">
             <TagEditor
               userTags={primitive.tags ?? []}
-              onChange={(tags) => updatePrimitive(primitive.id, { tags })}
+              onChange={(tags) => patchPrimitive(primitive.id, { tags })}
             />
           </div>
         </div>
@@ -292,17 +327,17 @@ export default function PrimitiveDetailPanel({
             <PhotoDropzone
               label="this primitive"
               url={primitive.photoUrl}
-              disabled={!auth?.currentUser?.uid || !activeMapId}
+              disabled={!auth?.currentUser?.uid || !effectiveMapId}
               disabledHint="Sign in to add a photo."
               onUpload={async (file) => {
                 const uid = auth?.currentUser?.uid;
-                if (!uid || !activeMapId) return;
+                if (!uid || !effectiveMapId) return;
                 const result = await uploadPhoto(
-                  primitivePhotoPath(uid, activeMapId, primitive.id),
+                  primitivePhotoPath(uid, effectiveMapId, primitive.id),
                   file
                 );
                 if (!result) return;
-                updatePrimitive(primitive.id, {
+                patchPrimitive(primitive.id, {
                   photoUrl: result.url,
                   photoStoragePath: result.path,
                 });
@@ -311,7 +346,7 @@ export default function PrimitiveDetailPanel({
                 if (primitive.photoStoragePath) {
                   await deletePhoto(primitive.photoStoragePath);
                 }
-                updatePrimitive(primitive.id, {
+                patchPrimitive(primitive.id, {
                   photoUrl: undefined,
                   photoStoragePath: undefined,
                 });
@@ -329,7 +364,7 @@ export default function PrimitiveDetailPanel({
                 type="checkbox"
                 checked={primitive.showLabel === true}
                 onChange={(event) =>
-                  updatePrimitive(primitive.id, { showLabel: event.target.checked })
+                  patchPrimitive(primitive.id, { showLabel: event.target.checked })
                 }
                 className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
               />
@@ -342,7 +377,7 @@ export default function PrimitiveDetailPanel({
                 type="checkbox"
                 checked={primitive.showMemberNumbers === true}
                 onChange={(event) =>
-                  updatePrimitive(primitive.id, {
+                  patchPrimitive(primitive.id, {
                     showMemberNumbers: event.target.checked,
                   })
                 }
@@ -356,7 +391,7 @@ export default function PrimitiveDetailPanel({
               type="checkbox"
               checked={primitive.showPriorityNote === true}
               onChange={(event) =>
-                updatePrimitive(primitive.id, {
+                patchPrimitive(primitive.id, {
                   showPriorityNote: event.target.checked,
                 })
               }
@@ -369,9 +404,9 @@ export default function PrimitiveDetailPanel({
         <NoteCards
           key={primitive.id}
           notes={primitive.notes ?? []}
-          onChange={(notes) => updatePrimitive(primitive.id, { notes })}
+          onChange={(notes) => patchPrimitive(primitive.id, { notes })}
           placeholder="Link"
-          mapId={activeMapId}
+          mapId={effectiveMapId}
           primitiveId={primitive.id}
         />
 
@@ -384,10 +419,14 @@ export default function PrimitiveDetailPanel({
               <button
                 onClick={() => {
                   setDeletingBacklinks(false);
-                  if (isPickingRelated) {
+                  if (isPickingRelated && onStartCrossPaneBacklinkPick) {
+                    onStartCrossPaneBacklinkPick();
+                  } else if (isPickingRelated) {
                     cancelNeighborPick();
+                  } else if (onStartCrossPaneBacklinkPick) {
+                    onStartCrossPaneBacklinkPick();
                   } else {
-                    startNeighborPick(primitive.id, activeMap?.pageIndex ?? 0);
+                    startNeighborPick(primitive.id, effectivePageIndex);
                   }
                 }}
                 className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
@@ -437,10 +476,10 @@ export default function PrimitiveDetailPanel({
                         event.preventDefault();
                         event.stopPropagation();
                         setDeletingBacklinks(false);
-                        if (activeMap) {
+                        if (effectiveMap) {
                           void removePrimitiveBacklink(
-                            activeMap.id,
-                            activeMap.pageIndex,
+                            effectiveMap.id,
+                            effectivePageIndex,
                             primitive.id,
                             member.mapId,
                             member.pageIndex,
@@ -462,10 +501,10 @@ export default function PrimitiveDetailPanel({
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        if (activeMap) {
+                        if (effectiveMap) {
                           void removePrimitiveBacklink(
-                            activeMap.id,
-                            activeMap.pageIndex,
+                            effectiveMap.id,
+                            effectivePageIndex,
                             primitive.id,
                             member.mapId,
                             member.pageIndex,
@@ -518,7 +557,7 @@ export default function PrimitiveDetailPanel({
               {getGroupMemberKeys(primitive).map((memberKey, index) => {
                 const member = parseMemberKey(memberKey);
                 if (!member) return null;
-                const memberPrim = workspace.primitives.find((p) => p.id === member.id);
+                const memberPrim = effectiveWorkspace.primitives.find((p) => p.id === member.id);
                 if (!memberPrim) return null;
                 return (
                   <div
@@ -533,7 +572,7 @@ export default function PrimitiveDetailPanel({
                     }}
                     onDragEnd={() => setDraggedGroupIndex(null)}
                     onClick={() => {
-                      setSelectedPrimitiveId(member.id);
+                      selectPrimitive(member.id);
                       const bbox = getPrimitiveBounds(memberPrim, primitivesById);
                       if (bbox) {
                         setZoomTarget({
@@ -581,7 +620,7 @@ export default function PrimitiveDetailPanel({
           <div className="mt-2">
             <ColorPicker
               value={primitive.color}
-              onChange={(color) => updatePrimitive(primitive.id, { color })}
+              onChange={(color) => patchPrimitive(primitive.id, { color })}
             />
           </div>
         </div>
@@ -598,7 +637,13 @@ export default function PrimitiveDetailPanel({
           ) : (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => deletePrimitive(primitive.id)}
+                onClick={() => {
+                  if (onDeletePrimitive) {
+                    onDeletePrimitive(primitive.id);
+                  } else {
+                    deletePrimitive(primitive.id);
+                  }
+                }}
                 className="inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
               >
                 <Trash2 size={12} />
