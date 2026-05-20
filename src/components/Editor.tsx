@@ -55,6 +55,7 @@ interface EditorProps {
   mapOptions?: Array<{ id: string; name: string }>;
   selectedMapId?: string | null;
   onSelectMap?: (mapId: string) => void;
+  onOpenMapInSplit?: (mapId: string) => void;
   compareShowAllOverlays?: boolean;
   onToggleCompareOverlays?: () => void;
   compareVisibleOverlayFilters?: OverlayFilterState;
@@ -94,6 +95,7 @@ export default function Editor({
   mapOptions,
   selectedMapId,
   onSelectMap,
+  onOpenMapInSplit,
   compareShowAllOverlays = false,
   onToggleCompareOverlays,
   compareVisibleOverlayFilters = DEFAULT_OVERLAY_FILTERS,
@@ -1210,13 +1212,18 @@ export default function Editor({
               {(mapOptions ?? []).map((map) => (
                 <button
                   key={map.id}
-                  onClick={() => {
-                    onSelectMap?.(map.id);
+                  onClick={(event) => {
+                    if (event.shiftKey && onOpenMapInSplit) {
+                      onOpenMapInSplit(map.id);
+                    } else {
+                      onSelectMap?.(map.id);
+                    }
                     setShowMapPicker(false);
                   }}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition ${
                     selectedMapId === map.id ? 'bg-sky-50 text-sky-700' : 'hover:bg-gray-50'
                   }`}
+                  title="Shift-click to open in split"
                 >
                   <span className="truncate">{map.name}</span>
                   {selectedMapId === map.id && (

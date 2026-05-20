@@ -1606,6 +1606,7 @@ function MapPage() {
               onSelectMap={(mapId) => {
                 void useMapStore.getState().setActiveMap(mapId);
               }}
+              onOpenMapInSplit={openMapInSplit}
             />
           )}
         </div>
