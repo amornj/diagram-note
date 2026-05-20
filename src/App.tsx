@@ -881,27 +881,59 @@ function MapPage() {
     return paneWorkspace.primitives.find((primitive) => primitive.id === primitiveId) ?? null;
   }, [splitMode, compareSelectedPrimitiveId, focusedSplitPane, comparePaneData]);
 
-  const compareFocusTarget1 = useMemo(() => {
-    const workspaceForPane = comparePaneData[1].workspace;
-    const primitiveId = compareSelectedPrimitiveId[1];
-    if (!workspaceForPane || !primitiveId) return null;
-    const primitivesById = new Map(workspaceForPane.primitives.map((primitive) => [primitive.id, primitive]));
-    const primitive = primitivesById.get(primitiveId);
-    if (!primitive) return null;
-    const bbox = getPrimitiveBounds(primitive, primitivesById);
-    return bbox ? { bbox } : null;
-  }, [comparePaneData[1], compareSelectedPrimitiveId[1]]);
+  // Only refit the compare viewport when the selection identity (map/page/primitive)
+  // changes — not on every workspace mutation. Otherwise editing a primitive's
+  // name or notes would yank the user's zoomed-in view back to fit the bbox.
+  const [compareFocusTarget1, setCompareFocusTarget1] = useState<{ bbox: import('./types').BBox } | null>(null);
+  const [compareFocusTarget2, setCompareFocusTarget2] = useState<{ bbox: import('./types').BBox } | null>(null);
+  const lastCompareFocusKey1 = useRef<string | null>(null);
+  const lastCompareFocusKey2 = useRef<string | null>(null);
 
-  const compareFocusTarget2 = useMemo(() => {
-    const workspaceForPane = comparePaneData[2].workspace;
-    const primitiveId = compareSelectedPrimitiveId[2];
-    if (!workspaceForPane || !primitiveId) return null;
-    const primitivesById = new Map(workspaceForPane.primitives.map((primitive) => [primitive.id, primitive]));
-    const primitive = primitivesById.get(primitiveId);
-    if (!primitive) return null;
+  useEffect(() => {
+    const id = compareSelectedPrimitiveId[1];
+    const mapId = splitMaps[1].mapId;
+    const pageIndex = splitMaps[1].pageIndex;
+    const ws = comparePaneData[1].workspace;
+    if (!id || !mapId || !ws) {
+      if (lastCompareFocusKey1.current !== null) {
+        lastCompareFocusKey1.current = null;
+        setCompareFocusTarget1(null);
+      }
+      return;
+    }
+    const key = `${mapId}:${pageIndex}:${id}`;
+    if (key === lastCompareFocusKey1.current) return;
+    const primitivesById = new Map(ws.primitives.map((primitive) => [primitive.id, primitive]));
+    const primitive = primitivesById.get(id);
+    if (!primitive) return;
     const bbox = getPrimitiveBounds(primitive, primitivesById);
-    return bbox ? { bbox } : null;
-  }, [comparePaneData[2], compareSelectedPrimitiveId[2]]);
+    if (!bbox) return;
+    lastCompareFocusKey1.current = key;
+    setCompareFocusTarget1({ bbox });
+  }, [comparePaneData, compareSelectedPrimitiveId, splitMaps]);
+
+  useEffect(() => {
+    const id = compareSelectedPrimitiveId[2];
+    const mapId = splitMaps[2].mapId;
+    const pageIndex = splitMaps[2].pageIndex;
+    const ws = comparePaneData[2].workspace;
+    if (!id || !mapId || !ws) {
+      if (lastCompareFocusKey2.current !== null) {
+        lastCompareFocusKey2.current = null;
+        setCompareFocusTarget2(null);
+      }
+      return;
+    }
+    const key = `${mapId}:${pageIndex}:${id}`;
+    if (key === lastCompareFocusKey2.current) return;
+    const primitivesById = new Map(ws.primitives.map((primitive) => [primitive.id, primitive]));
+    const primitive = primitivesById.get(id);
+    if (!primitive) return;
+    const bbox = getPrimitiveBounds(primitive, primitivesById);
+    if (!bbox) return;
+    lastCompareFocusKey2.current = key;
+    setCompareFocusTarget2({ bbox });
+  }, [comparePaneData, compareSelectedPrimitiveId, splitMaps]);
 
   const mapOptions = useMemo(
     () =>

@@ -204,10 +204,13 @@ export default function Editor({
   }, [editorMode, activeMapId, activeMap?.sourceType]);
 
   // Enable/disable OSD mouse navigation based on mode; reset inline cursor.
+  // In split mode the editor mode is shared globally, so only the focused pane
+  // should react — the other pane stays pannable.
   useEffect(() => {
     if (!viewer) return;
-    const isText = editorMode === 'textSelect';
-    const isRectDraw = editorMode === 'rectangle';
+    const modeAppliesHere = !compareOnly || isFocusedPane;
+    const isText = modeAppliesHere && editorMode === 'textSelect';
+    const isRectDraw = modeAppliesHere && editorMode === 'rectangle';
     viewer.setMouseNavEnabled(!isText && !isRectDraw);
     // In text/rect-draw mode disable hit-testing on the OSD surface so the
     // SVG overlay above receives all pointer events without OSD interference.
@@ -219,7 +222,7 @@ export default function Editor({
     if (canvas) {
       canvas.style.cursor = isText ? 'text' : '';
     }
-  }, [viewer, editorMode]);
+  }, [viewer, editorMode, compareOnly, isFocusedPane]);
 
   // Initialize viewer (rebuild whenever the raster URL changes — i.e. map switch)
   useEffect(() => {
