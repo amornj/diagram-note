@@ -872,7 +872,6 @@ export default function Editor({
       className="relative h-full w-full overflow-hidden bg-gray-900"
       onPointerDown={() => onActivatePane?.()}
       style={{
-        fontSize: 16,
         cursor:
           editorMode === 'textSelect'
             ? 'text'
