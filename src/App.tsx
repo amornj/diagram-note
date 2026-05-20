@@ -1584,6 +1584,12 @@ function MapPage() {
                 >
                   <X size={14} />
                 </button>
+                {focusedSplitPane === 1 && (
+                  <div
+                    className="pointer-events-none absolute right-2 top-2 z-30 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]"
+                    aria-hidden="true"
+                  />
+                )}
               </div>
               <div
                 className="relative z-20 w-2 shrink-0 cursor-col-resize bg-transparent"
@@ -1644,6 +1650,12 @@ function MapPage() {
                 >
                   <X size={14} />
                 </button>
+                {focusedSplitPane === 2 && (
+                  <div
+                    className="pointer-events-none absolute left-2 top-2 z-30 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]"
+                    aria-hidden="true"
+                  />
+                )}
               </div>
             </div>
           ) : (
