@@ -358,11 +358,9 @@ export default function HotspotLayer({
         const priorityNote = getPriorityNote(primitive);
         if (!priorityNote || primitive.showPriorityNote !== true) return null;
         const isSelected = selectedPrimitiveId === primitive.id;
-        const shouldShow =
-          isSelected ||
-          (compareOnly
-            ? allCompareOverlayFiltersVisible || compareVisibleOverlayFilters.priorityNote
-            : allSingleOverlayFiltersVisible || visibleOverlayFilters.priorityNote);
+        const shouldShow = compareOnly
+          ? allCompareOverlayFiltersVisible || compareVisibleOverlayFilters.priorityNote
+          : isSelected || allSingleOverlayFiltersVisible || visibleOverlayFilters.priorityNote;
         if (!shouldShow) return null;
         const bounds = getPrimitiveBounds(primitive, primitivesById);
         if (!bounds) return null;
