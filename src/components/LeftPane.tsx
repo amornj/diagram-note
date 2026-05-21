@@ -224,6 +224,11 @@ interface LeftPaneProps {
   onSetSplitTarget?: (pane: 1 | 2 | null) => void;
   onAssignMapToSplitPane?: (pane: 1 | 2, mapId: string) => void;
   onOpenMapInSplit?: (mapId: string) => void;
+  onJumpToFocusedPanePrimitive?: (entry: {
+    mapId: string;
+    pageIndex: number;
+    primitiveId: string;
+  }) => void;
   workspaceOverride?: MapWorkspace | null;
   selectedPrimitiveIdOverride?: string | null;
   onSelectPrimitiveOverride?: (primitiveId: string) => void;
@@ -237,6 +242,7 @@ export default function LeftPane({
   onSetSplitTarget,
   onAssignMapToSplitPane,
   onOpenMapInSplit,
+  onJumpToFocusedPanePrimitive,
   workspaceOverride,
   selectedPrimitiveIdOverride = null,
   onSelectPrimitiveOverride,
@@ -398,6 +404,14 @@ export default function LeftPane({
           },
         })
       );
+      return;
+    }
+    if (splitMode && onJumpToFocusedPanePrimitive) {
+      onJumpToFocusedPanePrimitive({
+        mapId: entry.mapId,
+        pageIndex: entry.pageIndex,
+        primitiveId: entry.primitive.id,
+      });
       return;
     }
     if (entry.mapId !== activeMapId) {

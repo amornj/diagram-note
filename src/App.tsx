@@ -1073,12 +1073,12 @@ function MapPage() {
     const pageIndex = options?.pageIndex ?? target.pageIndex;
     const primitiveId = options?.primitiveId ?? null;
     if (splitMode) {
-      const targetPane: 1 | 2 = focusedSplitPane === 1 ? 2 : 1;
-      setFocusedSplitPane(targetPane);
+      // Always load into W2 on shift-click — predictable target regardless of focus.
+      setFocusedSplitPane(2);
       setSplitTarget(null);
       setSplitBacklinkPick(null);
-      setSplitMaps((current) => ({ ...current, [targetPane]: { mapId, pageIndex } }));
-      setCompareSelectedPrimitiveId((current) => ({ ...current, [targetPane]: primitiveId }));
+      setSplitMaps((current) => ({ ...current, 2: { mapId, pageIndex } }));
+      setCompareSelectedPrimitiveId((current) => ({ ...current, 2: primitiveId }));
       return;
     }
     useEditorStore.getState().setSelectedPrimitiveId(null);
@@ -1183,6 +1183,46 @@ function MapPage() {
       return allConfirmed.has(primitiveId) ? current : { 1: [], 2: [] };
     });
   }, []);
+
+  const jumpToFocusedPanePrimitive = useCallback(
+    (entry: { mapId: string; pageIndex: number; primitiveId: string }) => {
+      const pane = focusedSplitPane;
+      const currentMapId = splitMaps[pane].mapId;
+      const currentPageIndex = splitMaps[pane].pageIndex;
+      if (currentMapId === entry.mapId && currentPageIndex === entry.pageIndex) {
+        selectSplitPrimitive(pane, entry.primitiveId);
+        return;
+      }
+      const target = useMapStore.getState().maps.find((m) => m.id === entry.mapId);
+      if (!target) return;
+      const pageMetaWorkspace =
+        target.pages?.[entry.pageIndex]?.workspace ??
+        (target.pageIndex === entry.pageIndex ? target.workspace : null);
+      setSplitTarget(null);
+      setSplitBacklinkPick(null);
+      setSplitMaps((current) => ({
+        ...current,
+        [pane]: { mapId: entry.mapId, pageIndex: entry.pageIndex },
+      }));
+      setComparePaneData((current) => ({
+        ...current,
+        [pane]: {
+          mapId: entry.mapId,
+          mapName: target.name,
+          workspace:
+            activeMap?.id === entry.mapId && activeMap.pageIndex === entry.pageIndex
+              ? workspace
+              : pageMetaWorkspace,
+        },
+      }));
+      setCompareSelectedPrimitiveId((current) => ({
+        ...current,
+        [pane]: entry.primitiveId,
+      }));
+      useEditorStore.setState({ rightPaneOpen: true });
+    },
+    [focusedSplitPane, splitMaps, activeMap, workspace, selectSplitPrimitive]
+  );
 
   const startSplitBacklinkPick = useCallback((pane: 1 | 2) => {
     const primitiveId = compareSelectedPrimitiveId[pane];
@@ -1726,6 +1766,9 @@ function MapPage() {
               onSetSplitTarget={setSplitTarget}
               onAssignMapToSplitPane={assignSplitMapToPane}
               onOpenMapInSplit={openMapInSplit}
+              onJumpToFocusedPanePrimitive={
+                splitMode ? jumpToFocusedPanePrimitive : undefined
+              }
               workspaceOverride={splitMode ? comparePaneData[focusedSplitPane].workspace : undefined}
               selectedPrimitiveIdOverride={splitMode ? compareSelectedPrimitiveId[focusedSplitPane] : undefined}
               onSelectPrimitiveOverride={
