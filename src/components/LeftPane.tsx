@@ -26,6 +26,12 @@ interface PrimitiveSearchHit {
   mapName: string;
   pageCount: number;
 }
+interface PrimitiveSearchSection {
+  key: string;
+  label: string;
+  mapName?: string;
+  hits: PrimitiveSearchHit[];
+}
 type PrimitiveSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
 
 const MAP_SORT_STORAGE_KEY = 'diagram-note-map-sort-mode';
@@ -392,6 +398,79 @@ export default function LeftPane({
     });
     return { active, others };
   }, [primitiveSearchQuery, maps, activeMapId]);
+
+  const currentMap = useMemo(
+    () => maps.find((map) => map.id === activeMapId) ?? null,
+    [maps, activeMapId]
+  );
+
+  const primitiveSearchSections = useMemo(() => {
+    if (!primitiveSearchQuery.trim()) return [] as PrimitiveSearchSection[];
+
+    if (splitMode) {
+      const pane1MapId = splitAssignments[1];
+      const pane2MapId = splitAssignments[2];
+      const pane1Map = pane1MapId ? maps.find((map) => map.id === pane1MapId) ?? null : null;
+      const pane2Map = pane2MapId ? maps.find((map) => map.id === pane2MapId) ?? null : null;
+      const pane1Hits: PrimitiveSearchHit[] = [];
+      const pane2Hits: PrimitiveSearchHit[] = [];
+      const otherHits: PrimitiveSearchHit[] = [];
+
+      for (const hit of primitiveSearchResults.active.concat(primitiveSearchResults.others)) {
+        const matchesPane1 = pane1MapId !== null && hit.mapId === pane1MapId;
+        const matchesPane2 = pane2MapId !== null && hit.mapId === pane2MapId;
+        if (matchesPane1) pane1Hits.push(hit);
+        if (matchesPane2) pane2Hits.push(hit);
+        if (!matchesPane1 && !matchesPane2) otherHits.push(hit);
+      }
+
+      const sections: PrimitiveSearchSection[] = [];
+      if (pane1Hits.length > 0) {
+        sections.push({
+          key: `pane-1-${pane1MapId ?? 'none'}`,
+          label: 'W1',
+          mapName: pane1Map?.name,
+          hits: pane1Hits,
+        });
+      }
+      if (pane2Hits.length > 0) {
+        sections.push({
+          key: `pane-2-${pane2MapId ?? 'none'}`,
+          label: 'W2',
+          mapName: pane2Map?.name,
+          hits: pane2Hits,
+        });
+      }
+      if (otherHits.length > 0) {
+        sections.push({
+          key: 'other-maps',
+          label: 'Other maps',
+          hits: otherHits,
+        });
+      }
+      return sections;
+    }
+
+    const currentHits = primitiveSearchResults.active;
+    const otherHits = primitiveSearchResults.others;
+    const sections: PrimitiveSearchSection[] = [];
+    if (currentHits.length > 0) {
+      sections.push({
+        key: 'current-map',
+        label: 'In this map',
+        mapName: currentMap?.name,
+        hits: currentHits,
+      });
+    }
+    if (otherHits.length > 0) {
+      sections.push({
+        key: 'other-maps',
+        label: 'Other maps',
+        hits: otherHits,
+      });
+    }
+    return sections;
+  }, [primitiveSearchQuery, splitMode, splitAssignments, primitiveSearchResults, maps, currentMap]);
 
   const handlePrimitiveSearchPick = async (entry: PrimitiveSearchHit, openInSplit: boolean) => {
     if (openInSplit) {
@@ -1297,26 +1376,24 @@ export default function LeftPane({
         )}
         {primitiveSearchOpen && primitiveSearchQuery.trim() ? (
           <div className="mt-2 space-y-3">
-            {primitiveSearchResults.active.length === 0 &&
-              primitiveSearchResults.others.length === 0 && (
+            {primitiveSearchSections.length === 0 && (
                 <div className="text-xs text-gray-400">No matches across maps.</div>
               )}
-            {primitiveSearchResults.active.length > 0 && (
-              <div className="space-y-1">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                  In this map
+            {primitiveSearchSections.map((section) => (
+              <div key={section.key} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                    {section.label}
+                  </div>
+                  {section.mapName && (
+                    <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600">
+                      {section.mapName}
+                    </span>
+                  )}
                 </div>
-                {primitiveSearchResults.active.map((hit) => renderSearchHit(hit))}
+                {section.hits.map((hit) => renderSearchHit(hit))}
               </div>
-            )}
-            {primitiveSearchResults.others.length > 0 && (
-              <div className="space-y-1">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                  Other maps
-                </div>
-                {primitiveSearchResults.others.map((hit) => renderSearchHit(hit))}
-              </div>
-            )}
+            ))}
           </div>
         ) : (
         <div className="mt-2 space-y-1">
