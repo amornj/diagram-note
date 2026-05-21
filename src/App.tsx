@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PanelRightOpen, X } from 'lucide-react';
+import { ArrowLeftRight, PanelRightOpen, X } from 'lucide-react';
 import Editor from './components/Editor';
 import LeftPane from './components/LeftPane';
 import Landing from './components/Landing';
@@ -1155,6 +1155,21 @@ function MapPage() {
     setCompareLinkConfirmIds({ 1: [], 2: [] });
   }, []);
 
+  const swapSplitPanes = useCallback(() => {
+    setSplitMaps((current) => ({ 1: current[2], 2: current[1] }));
+    setComparePaneData((current) => ({ 1: current[2], 2: current[1] }));
+    setCompareSelectedPrimitiveId((current) => ({ 1: current[2], 2: current[1] }));
+    setCompareOverlayFilters((current) => ({ 1: current[2], 2: current[1] }));
+    setCompareViewportLocks((current) => ({ 1: current[2], 2: current[1] }));
+    setCompareLinkFlash((current) => ({ 1: current[2], 2: current[1] }));
+    setCompareLinkConfirmIds((current) => ({ 1: current[2], 2: current[1] }));
+    setFocusedSplitPane((current) => (current === 1 ? 2 : 1));
+    setSplitTarget((current) => (current === 1 ? 2 : current === 2 ? 1 : null));
+    setSplitBacklinkPick((current) =>
+      current ? { ...current, sourcePane: current.sourcePane === 1 ? 2 : 1 } : current
+    );
+  }, []);
+
   const selectSplitPrimitive = useCallback((pane: 1 | 2, primitiveId: string) => {
     setFocusedSplitPane(pane);
     useEditorStore.setState({ rightPaneOpen: true });
@@ -1600,6 +1615,19 @@ function MapPage() {
               >
                 <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-slate-900/70" />
                 <div className="absolute left-1/2 top-1/2 h-20 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-800/85 shadow" />
+                <button
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    swapSplitPanes();
+                  }}
+                  className="absolute bottom-4 left-1/2 z-30 flex h-8 w-8 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-slate-900/85 text-white/85 shadow-lg backdrop-blur transition hover:bg-slate-900 hover:text-white"
+                  title="Swap windows"
+                  aria-label="Swap windows"
+                >
+                  <ArrowLeftRight size={14} />
+                </button>
               </div>
               <div className="relative h-full flex-1">
               <ComparePane
@@ -1645,7 +1673,7 @@ function MapPage() {
                       });
                     }
                   }}
-                  className="absolute bottom-4 right-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/90 shadow transition hover:bg-black/80"
+                  className="absolute bottom-4 left-4 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/90 shadow transition hover:bg-black/80"
                   title="Close split compare"
                 >
                   <X size={14} />
