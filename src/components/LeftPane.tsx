@@ -14,10 +14,18 @@ import { useMapStore } from '../lib/mapStore';
 import type { DiagramMap, MapWorkspace, Primitive } from '../types';
 import ImportExportBar from './ImportExportBar';
 import GoogleAuthButton from './GoogleAuthButton';
-import { EMPTY_WORKSPACE } from '../lib/workspace';
+import { EMPTY_WORKSPACE, getPrimitiveBounds } from '../lib/workspace';
 import { extractUrls } from '../lib/noteLinks';
 
 type MapSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
+
+interface PrimitiveSearchHit {
+  primitive: Primitive;
+  pageIndex: number;
+  mapId: string;
+  mapName: string;
+  pageCount: number;
+}
 type PrimitiveSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
 
 const MAP_SORT_STORAGE_KEY = 'diagram-note-map-sort-mode';
@@ -240,6 +248,7 @@ export default function LeftPane({
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
   const setHoveredPrimitiveId = useEditorStore((s) => s.setHoveredPrimitiveId);
   const selectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
+  const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
   const effectiveWorkspace =
     workspaceOverride === undefined ? workspace : (workspaceOverride ?? EMPTY_WORKSPACE);
   const effectiveSelectedPrimitiveId =
@@ -249,6 +258,7 @@ export default function LeftPane({
   const groups = useMapStore((s) => s.groups);
   const activeMapId = useMapStore((s) => s.activeMapId);
   const setActiveMap = useMapStore((s) => s.setActiveMap);
+  const setActivePage = useMapStore((s) => s.setActivePage);
   const renameMap = useMapStore((s) => s.renameMap);
   const deleteMap = useMapStore((s) => s.deleteMap);
   const createGroup = useMapStore((s) => s.createGroup);
@@ -275,6 +285,8 @@ export default function LeftPane({
   const [draggingMapId, setDraggingMapId] = useState<string | null>(null);
   const [mapSearchOpen, setMapSearchOpen] = useState(false);
   const [mapSearchQuery, setMapSearchQuery] = useState('');
+  const [primitiveSearchOpen, setPrimitiveSearchOpen] = useState(false);
+  const [primitiveSearchQuery, setPrimitiveSearchQuery] = useState('');
   const mapsListRef = useRef<HTMLDivElement | null>(null);
   const dragScrollFrameRef = useRef<number | null>(null);
   const dragScrollVelocityRef = useRef(0);
@@ -326,6 +338,88 @@ export default function LeftPane({
     });
     return next;
   }, [effectiveWorkspace.primitives, activeTagFilter, primitiveSortMode]);
+
+  const primitiveSearchResults = useMemo(() => {
+    const query = primitiveSearchQuery.trim().toLowerCase();
+    if (!query) return { active: [] as PrimitiveSearchHit[], others: [] as PrimitiveSearchHit[] };
+    const active: PrimitiveSearchHit[] = [];
+    const others: PrimitiveSearchHit[] = [];
+    for (const map of maps) {
+      if (map.archivedAt !== undefined) continue;
+      const pageIndexes = new Set<number>([map.pageIndex]);
+      for (const key of Object.keys(map.pages ?? {})) pageIndexes.add(Number(key));
+      for (const pageIndex of pageIndexes) {
+        const pageWorkspace =
+          map.pages?.[pageIndex]?.workspace ??
+          (map.pageIndex === pageIndex ? map.workspace : null);
+        if (!pageWorkspace) continue;
+        for (const primitive of pageWorkspace.primitives) {
+          const haystack = [
+            primitive.name,
+            ...(primitive.aliases ?? []),
+            ...(primitive.tags ?? []),
+            ...(primitive.notes ?? []).map((n) => n.content),
+          ]
+            .join(' ')
+            .toLowerCase();
+          if (!haystack.includes(query)) continue;
+          const entry: PrimitiveSearchHit = {
+            primitive,
+            pageIndex,
+            mapId: map.id,
+            mapName: map.name,
+            pageCount: map.pageCount ?? 1,
+          };
+          if (map.id === activeMapId) active.push(entry);
+          else others.push(entry);
+          if (active.length + others.length >= 120) break;
+        }
+        if (active.length + others.length >= 120) break;
+      }
+      if (active.length + others.length >= 120) break;
+    }
+    active.sort((a, b) => a.primitive.name.localeCompare(b.primitive.name, undefined, { sensitivity: 'base' }));
+    others.sort((a, b) => {
+      const byMap = a.mapName.localeCompare(b.mapName, undefined, { sensitivity: 'base' });
+      if (byMap !== 0) return byMap;
+      return a.primitive.name.localeCompare(b.primitive.name, undefined, { sensitivity: 'base' });
+    });
+    return { active, others };
+  }, [primitiveSearchQuery, maps, activeMapId]);
+
+  const handlePrimitiveSearchPick = async (entry: PrimitiveSearchHit, openInSplit: boolean) => {
+    if (openInSplit) {
+      window.dispatchEvent(
+        new CustomEvent('map-open-in-split', {
+          detail: {
+            mapId: entry.mapId,
+            pageIndex: entry.pageIndex,
+            primitiveId: entry.primitive.id,
+          },
+        })
+      );
+      return;
+    }
+    if (entry.mapId !== activeMapId) {
+      const opened = await setActiveMap(entry.mapId);
+      if (!opened) return;
+    }
+    const liveMap = useMapStore.getState().maps.find((m) => m.id === entry.mapId);
+    if (liveMap && liveMap.pageIndex !== entry.pageIndex) {
+      await setActivePage(entry.pageIndex);
+    }
+    setSelectedPrimitiveId(entry.primitive.id);
+    const refreshedMap = useMapStore.getState().maps.find((m) => m.id === entry.mapId);
+    const pageWorkspace = refreshedMap
+      ? refreshedMap.pages?.[entry.pageIndex]?.workspace ??
+        (refreshedMap.pageIndex === entry.pageIndex ? refreshedMap.workspace : null)
+      : null;
+    if (pageWorkspace) {
+      const map = new Map(pageWorkspace.primitives.map((p) => [p.id, p]));
+      const bbox = getPrimitiveBounds(entry.primitive, map);
+      if (bbox) setZoomTarget({ bbox, immediate: false, padding: 16 });
+    }
+  };
 
   const visibleMaps = useMemo(
     () => maps.filter((map) => map.archivedAt === undefined),
@@ -730,6 +824,39 @@ export default function LeftPane({
     );
   };
 
+  const renderSearchHit = (hit: PrimitiveSearchHit) => {
+    const showPage = hit.pageCount > 1;
+    return (
+      <button
+        key={`${hit.mapId}:${hit.pageIndex}:${hit.primitive.id}`}
+        onClick={(event) => {
+          void handlePrimitiveSearchPick(hit, event.shiftKey);
+        }}
+        title={`${hit.primitive.name} · ${hit.mapName}${showPage ? ` · Page ${hit.pageIndex + 1}` : ''} — shift-click for split`}
+        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-gray-50"
+      >
+        <span
+          className="inline-block h-3 w-3 shrink-0 rounded-full"
+          style={{ backgroundColor: KIND_DOT_COLORS[hit.primitive.kind] }}
+        />
+        <span className="flex-1 truncate text-sm text-gray-800">
+          {hit.primitive.name}
+        </span>
+        <span className="flex shrink-0 items-center gap-1">
+          {hit.mapId !== activeMapId && (
+            <span className="truncate rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+              {hit.mapName}
+              {showPage ? ` · p${hit.pageIndex + 1}` : ''}
+            </span>
+          )}
+          <span className="text-[10px] leading-none text-gray-400">
+            {KIND_LABELS[hit.primitive.kind]}
+          </span>
+        </span>
+      </button>
+    );
+  };
+
   const togglePrimitiveAlphaSort = () => {
     const nextMode = primitiveSortMode === 'alphaAsc' ? 'alphaDesc' : 'alphaAsc';
     setPrimitiveSortMode(nextMode);
@@ -1066,6 +1193,24 @@ export default function LeftPane({
           </div>
           <div className="flex items-center gap-1">
             <button
+              onClick={() => {
+                setPrimitiveSearchOpen((open) => {
+                  const next = !open;
+                  if (!next) setPrimitiveSearchQuery('');
+                  return next;
+                });
+              }}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                primitiveSearchOpen
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Search primitives across all maps (shift-click result for split)"
+              aria-label="Search primitives across all maps"
+            >
+              <Search size={11} />
+            </button>
+            <button
               onClick={() => setAndPersistPrimitiveSortMode('recent')}
               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
                 primitiveSortMode === 'recent'
@@ -1100,6 +1245,66 @@ export default function LeftPane({
             </button>
           </div>
         </div>
+        {primitiveSearchOpen && (
+          <div className="mt-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              <input
+                autoFocus
+                value={primitiveSearchQuery}
+                onChange={(event) => setPrimitiveSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    if (primitiveSearchQuery) {
+                      setPrimitiveSearchQuery('');
+                    } else {
+                      setPrimitiveSearchOpen(false);
+                    }
+                  }
+                }}
+                placeholder="search primitives across maps"
+                className="w-full rounded border border-gray-200 bg-white py-1 pl-7 pr-7 text-xs outline-none focus:border-sky-300"
+              />
+              {primitiveSearchQuery && (
+                <button
+                  onClick={() => setPrimitiveSearchQuery('')}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                  title="Clear search"
+                  aria-label="Clear primitive search"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            <div className="mt-1 text-[10px] text-gray-400">
+              Click to jump · shift-click to open in split
+            </div>
+          </div>
+        )}
+        {primitiveSearchOpen && primitiveSearchQuery.trim() ? (
+          <div className="mt-2 space-y-3">
+            {primitiveSearchResults.active.length === 0 &&
+              primitiveSearchResults.others.length === 0 && (
+                <div className="text-xs text-gray-400">No matches across maps.</div>
+              )}
+            {primitiveSearchResults.active.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                  In this map
+                </div>
+                {primitiveSearchResults.active.map((hit) => renderSearchHit(hit))}
+              </div>
+            )}
+            {primitiveSearchResults.others.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                  Other maps
+                </div>
+                {primitiveSearchResults.others.map((hit) => renderSearchHit(hit))}
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="mt-2 space-y-1">
           {filteredPrimitives.length === 0 && (
             <div className="text-xs text-gray-400">
@@ -1164,6 +1369,7 @@ export default function LeftPane({
             );
           })}
         </div>
+        )}
       </div>
 
       <div className="mt-auto">

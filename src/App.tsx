@@ -1073,11 +1073,12 @@ function MapPage() {
     const pageIndex = options?.pageIndex ?? target.pageIndex;
     const primitiveId = options?.primitiveId ?? null;
     if (splitMode) {
-      setFocusedSplitPane(2);
+      const targetPane: 1 | 2 = focusedSplitPane === 1 ? 2 : 1;
+      setFocusedSplitPane(targetPane);
       setSplitTarget(null);
       setSplitBacklinkPick(null);
-      setSplitMaps((current) => ({ ...current, 2: { mapId, pageIndex } }));
-      setCompareSelectedPrimitiveId((current) => ({ ...current, 2: primitiveId }));
+      setSplitMaps((current) => ({ ...current, [targetPane]: { mapId, pageIndex } }));
+      setCompareSelectedPrimitiveId((current) => ({ ...current, [targetPane]: primitiveId }));
       return;
     }
     useEditorStore.getState().setSelectedPrimitiveId(null);
