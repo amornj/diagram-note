@@ -1734,6 +1734,7 @@ function MapPage() {
               pageIndex={activeMap.pageIndex}
               pageCount={activeMap.pageCount}
               leftInset={leftSidebarCollapsed ? 0 : leftPaneWidth}
+              mapName={activeMap.name}
               splitMode={splitMode}
               onToggleSplitMode={toggleSplitMode}
               mapOptions={[...getVisibleMaps(maps)]

@@ -47,6 +47,7 @@ interface EditorProps {
   leftInset?: number;
   compareOnly?: boolean;
   title?: string;
+  mapName?: string;
   sourceType?: 'pdf' | 'image';
   onComparePageChange?: (pageIndex: number) => void;
   workspaceOverride?: MapWorkspace;
@@ -88,6 +89,7 @@ export default function Editor({
   leftInset = 0,
   compareOnly = false,
   title,
+  mapName,
   onComparePageChange,
   workspaceOverride,
   splitMode = false,
@@ -950,9 +952,9 @@ export default function Editor({
           </button>
         ) : (
           <div className="flex items-center rounded-2xl border border-white/10 bg-black/45 px-2 py-2 shadow-lg backdrop-blur">
-            {compareOnly && title && (
+            {(compareOnly ? title : mapName) && (
               <div className="mr-2 rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-white/90">
-                {title}
+                {compareOnly ? title : mapName}
               </div>
             )}
             <div className="flex items-center gap-1">
