@@ -818,15 +818,14 @@ export default function LeftPane({
         ) : (
           <button
             onClick={(event) => {
-              if (event.shiftKey && onOpenMapInSplit && map.id !== activeMapId) {
-                onOpenMapInSplit(map.id);
+              if (splitMode) {
+                const targetPane: 1 | 2 = event.shiftKey ? 2 : 1;
+                onAssignMapToSplitPane?.(targetPane, map.id);
+                onSetSplitTarget?.(null);
                 return;
               }
-              if (splitMode) {
-                if (splitTarget !== null) {
-                  onAssignMapToSplitPane?.(splitTarget, map.id);
-                  onSetSplitTarget?.(null);
-                }
+              if (event.shiftKey && onOpenMapInSplit && map.id !== activeMapId) {
+                onOpenMapInSplit(map.id);
                 return;
               }
               void setActiveMap(map.id);
@@ -836,7 +835,11 @@ export default function LeftPane({
               setRenameDraft(map.name);
             }}
             className="flex-1 truncate text-left text-sm font-medium text-gray-800"
-            title={`${map.name} — shift-click to open in split · double-click to rename`}
+            title={
+              splitMode
+                ? `${map.name} — click for window 1 · shift-click for window 2 · double-click to rename`
+                : `${map.name} — shift-click to open in split · double-click to rename`
+            }
           >
             {map.name}
           </button>
