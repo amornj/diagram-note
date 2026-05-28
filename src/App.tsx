@@ -824,11 +824,6 @@ function MapPage() {
     2: string[];
   }>({ 1: [], 2: [] });
   const appliedDeepLinkRef = useRef<string | null>(null);
-  const [pendingPrimitiveDeepLink, setPendingPrimitiveDeepLink] = useState<{
-    mapId: string;
-    pageIndex: number;
-    primitiveId: string;
-  } | null>(null);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -902,7 +897,7 @@ function MapPage() {
     if (!mapsInitialized || maps.length === 0) return;
     const link = parseDiagramDeepLink(window.location.search);
     if (!link) return;
-    const key = `${link.mapId}:${link.pageIndex ?? ''}:${link.primitiveId ?? ''}`;
+    const key = link.mapId;
     if (appliedDeepLinkRef.current === key) return;
     const targetMap = maps.find((map) => map.id === link.mapId && map.archivedAt === undefined);
     if (!targetMap) return;
@@ -913,23 +908,9 @@ function MapPage() {
       setSplitMode(false);
       setSplitTarget(null);
       setSplitBacklinkPick(null);
-      const pageIndex =
-        link.pageIndex === null
-          ? targetMap.pageIndex ?? 0
-          : Math.min(Math.max(link.pageIndex, 0), Math.max(0, targetMap.pageCount - 1));
       const opened = await useMapStore.getState().setActiveMap(targetMap.id);
       if (!opened || cancelled) return;
-      await useMapStore.getState().setActivePage(pageIndex);
-      if (cancelled) return;
-      if (!link.primitiveId) {
-        useEditorStore.getState().openMapOverview();
-        return;
-      }
-      setPendingPrimitiveDeepLink({
-        mapId: targetMap.id,
-        pageIndex,
-        primitiveId: link.primitiveId,
-      });
+      useEditorStore.getState().openMapOverview();
     };
     void openDeepLink();
     return () => {
@@ -1809,14 +1790,6 @@ function MapPage() {
                 });
               }}
               onOpenMapInSplit={openMapInSplit}
-              pendingPrimitiveFocusId={
-                pendingPrimitiveDeepLink &&
-                pendingPrimitiveDeepLink.mapId === activeMap.id &&
-                pendingPrimitiveDeepLink.pageIndex === activeMap.pageIndex
-                  ? pendingPrimitiveDeepLink.primitiveId
-                  : null
-              }
-              onPendingPrimitiveFocusHandled={() => setPendingPrimitiveDeepLink(null)}
             />
           )}
         </div>
@@ -1918,10 +1891,7 @@ function MapPage() {
                   onOpenCrossMapBacklink={openCrossMapBacklink}
                 />
               ) : focusedCompareMap ? (
-                <MapDetailPanel
-                  map={focusedCompareMap}
-                  pageIndex={splitMaps[focusedSplitPane].pageIndex}
-                />
+                <MapDetailPanel map={focusedCompareMap} />
               ) : null}
             </div>
           </>
@@ -1964,7 +1934,7 @@ function MapPage() {
                   onOpenCrossMapBacklink={openCrossMapBacklink}
                 />
               ) : (
-                <MapDetailPanel map={activeMap} pageIndex={activeMap.pageIndex} />
+                <MapDetailPanel map={activeMap} />
               )}
             </div>
           </>

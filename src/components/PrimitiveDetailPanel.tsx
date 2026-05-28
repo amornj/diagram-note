@@ -20,7 +20,6 @@ import {
   primitivePhotoPath,
   uploadPhoto,
 } from '../lib/cloudStorage';
-import CopyDeepLinkButton from './CopyDeepLinkButton';
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
   rectangle: 'Study box',
@@ -296,21 +295,13 @@ export default function PrimitiveDetailPanel({
             {primitive.name}
           </button>
         )}
-        <div className="flex items-center gap-1">
-          <CopyDeepLinkButton
-            mapId={effectiveMapId}
-            pageIndex={effectivePageIndex}
-            primitiveId={primitive.id}
-            label="Copy primitive link"
-          />
-          <button
-            onClick={toggleRightPane}
-            className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100"
-            title="Hide right pane (2)"
-          >
-            <PanelRightClose size={18} />
-          </button>
-        </div>
+        <button
+          onClick={toggleRightPane}
+          className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100"
+          title="Hide right pane (2)"
+        >
+          <PanelRightClose size={18} />
+        </button>
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">

@@ -11,10 +11,8 @@ import CopyDeepLinkButton from './CopyDeepLinkButton';
 
 export default function MapDetailPanel({
   map,
-  pageIndex,
 }: {
   map: DiagramMap;
-  pageIndex?: number;
 }) {
   const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
   const patchMapDetails = useMapStore((s) => s.patchMapDetails);
@@ -77,7 +75,6 @@ export default function MapDetailPanel({
         <div className="flex items-center gap-1">
           <CopyDeepLinkButton
             mapId={map.id}
-            pageIndex={pageIndex ?? map.pageIndex ?? 0}
             label="Copy map link"
           />
           <button

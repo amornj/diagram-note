@@ -32,7 +32,6 @@ import { useMapStore } from '../lib/mapStore';
 import { fitBBox, type SourceDims } from '../lib/coords';
 import * as idb from '../lib/idb';
 import type { BBox, MapWorkspace } from '../types';
-import { getPrimitiveBounds } from '../lib/workspace';
 
 type DraggablePanelKey = 'search' | 'map' | 'studybox' | 'group' | 'polyline';
 
@@ -80,8 +79,6 @@ interface EditorProps {
   onPickCompareBacklinkTarget?: (primitiveId: string) => void;
   compareLinkFlash?: { primitiveId: string; nonce: number } | null;
   compareLinkConfirmIds?: string[];
-  pendingPrimitiveFocusId?: string | null;
-  onPendingPrimitiveFocusHandled?: () => void;
 }
 
 export default function Editor({
@@ -123,8 +120,6 @@ export default function Editor({
   onPickCompareBacklinkTarget,
   compareLinkFlash,
   compareLinkConfirmIds = [],
-  pendingPrimitiveFocusId = null,
-  onPendingPrimitiveFocusHandled,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
@@ -302,39 +297,6 @@ export default function Editor({
     });
     setZoomTarget(null);
   }, [viewer, zoomTarget, setZoomTarget, effectiveZoomLocked, effectivePanLocked, dims]);
-
-  useEffect(() => {
-    if (compareOnly || !viewer || !viewerReady || !pendingPrimitiveFocusId) return;
-    const primitive = effectiveWorkspace.primitives.find(
-      (entry) => entry.id === pendingPrimitiveFocusId
-    );
-    if (!primitive) return;
-    setSelectedPrimitiveId(primitive.id);
-    const primitivesById = new globalThis.Map(
-      effectiveWorkspace.primitives.map((entry) => [entry.id, entry])
-    );
-    const bbox = getPrimitiveBounds(primitive, primitivesById);
-    if (bbox) {
-      fitBBox(viewer, bbox, dims, {
-        immediate: true,
-        locked: effectiveZoomLocked,
-        frozen: effectivePanLocked,
-        padding: 16,
-      });
-    }
-    onPendingPrimitiveFocusHandled?.();
-  }, [
-    compareOnly,
-    viewer,
-    viewerReady,
-    pendingPrimitiveFocusId,
-    effectiveWorkspace,
-    setSelectedPrimitiveId,
-    dims,
-    effectiveZoomLocked,
-    effectivePanLocked,
-    onPendingPrimitiveFocusHandled,
-  ]);
 
   useEffect(() => {
     if (!viewer || !compareOnly || !compareFocusTarget) return;

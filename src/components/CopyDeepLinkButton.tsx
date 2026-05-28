@@ -4,20 +4,16 @@ import { buildDiagramDeepLink } from '../lib/deepLinks';
 
 export default function CopyDeepLinkButton({
   mapId,
-  pageIndex,
-  primitiveId,
   label,
 }: {
   mapId: string | null | undefined;
-  pageIndex: number;
-  primitiveId?: string | null;
   label: string;
 }) {
   const [copied, setCopied] = useState(false);
 
   const copyLink = async () => {
     if (!mapId) return;
-    const url = buildDiagramDeepLink({ mapId, pageIndex, primitiveId });
+    const url = buildDiagramDeepLink({ mapId });
     await navigator.clipboard.writeText(url);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1200);
