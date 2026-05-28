@@ -35,7 +35,7 @@ export default function MapDetailPanel({ map }: { map: DiagramMap }) {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden border-l border-gray-200 bg-white">
-      <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-sky-100 bg-sky-50 px-4 py-3">
         {editingName ? (
           <input
             value={nameDraft}
