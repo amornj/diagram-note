@@ -66,6 +66,9 @@ export interface DiagramMap {
   id: string;
   name: string;
   pdfHash: string;
+  notes?: NoteCard[];
+  photoUrl?: string;
+  photoStoragePath?: string;
   sourceType?: 'pdf' | 'image';
   sourceName?: string;
   sourceMimeType?: string;

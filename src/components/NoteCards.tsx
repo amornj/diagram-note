@@ -18,6 +18,8 @@ interface NoteCardsProps {
   /** Required for photo uploads — when omitted, photo dropzone is hidden. */
   mapId?: string | null;
   primitiveId?: string;
+  notePhotoPathFactory?: (uid: string, mapId: string, noteId: string) => string;
+  showPriorityControl?: boolean;
 }
 
 function generateNoteId(): string {
@@ -49,6 +51,8 @@ export default function NoteCards({
   onChange,
   mapId,
   primitiveId,
+  notePhotoPathFactory,
+  showPriorityControl = true,
 }: NoteCardsProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [currentIndex, setCurrentIndex] = useState(Math.max(0, notes.length - 1));
@@ -77,15 +81,20 @@ export default function NoteCards({
   const handlePrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
   const handleNext = () => setCurrentIndex((i) => Math.min(notes.length - 1, i + 1));
 
+  const normalizeNotes = (nextNotes: NoteCard[]) =>
+    showPriorityControl
+      ? ensurePriorityNote(nextNotes)
+      : nextNotes.map((note) => ({ ...note, isPriority: undefined }));
+
   const handleAdd = () => {
-    const nextNotes = ensurePriorityNote([...notes, { name: '', content: '' }]);
+    const nextNotes = normalizeNotes([...notes, { name: '', content: '' }]);
     onChange(nextNotes);
     setCurrentIndex(nextNotes.length - 1);
   };
 
   const handleDelete = () => {
     if (notes.length === 0) return;
-    const nextNotes = ensurePriorityNote(notes.filter((_, i) => i !== currentIndex));
+    const nextNotes = normalizeNotes(notes.filter((_, i) => i !== currentIndex));
     onChange(nextNotes);
     const nextIndex = Math.max(0, Math.min(currentIndex, nextNotes.length - 1));
     setCurrentIndex(nextIndex);
@@ -106,11 +115,11 @@ export default function NoteCards({
     setEditorDraft(body);
     const nextContent = composeNoteContent(body, urls);
     if (notes.length === 0) {
-      onChange([{ name: '', content: nextContent, isPriority: true }]);
+      onChange(normalizeNotes([{ name: '', content: nextContent, isPriority: true }]));
       setCurrentIndex(0);
       return;
     }
-    const nextNotes = ensurePriorityNote(notes.map((n, i) =>
+    const nextNotes = normalizeNotes(notes.map((n, i) =>
       i === currentIndex ? { ...n, content: nextContent } : n
     ));
     onChange(nextNotes);
@@ -129,11 +138,11 @@ export default function NoteCards({
   const updateCurrentNoteContent = (nextContent: string) => {
     if (notes.length === 0) {
       setEditorDraft(splitNoteContent(nextContent).body);
-      onChange([{ name: '', content: nextContent, isPriority: true }]);
+      onChange(normalizeNotes([{ name: '', content: nextContent, isPriority: true }]));
       setCurrentIndex(0);
       return;
     }
-    const nextNotes = ensurePriorityNote(
+    const nextNotes = normalizeNotes(
       notes.map((note, index) =>
         index === currentIndex ? { ...note, content: nextContent } : note
       )
@@ -154,18 +163,21 @@ export default function NoteCards({
     updateCurrentNoteContent(composeNoteContent(newBody, newUrls));
   };
 
-  const photosEnabled = Boolean(mapId && primitiveId);
+  const photosEnabled = Boolean(mapId && (primitiveId || notePhotoPathFactory));
   const uploadNotePhoto = async (file: File) => {
     if (!photosEnabled) return;
     const uid = auth?.currentUser?.uid;
-    if (!uid || !mapId || !primitiveId) {
+    if (!uid || !mapId || (!primitiveId && !notePhotoPathFactory)) {
       throw new Error('Sign in to add photos.');
     }
     const note = notes[currentIndex];
     if (!note) return;
     const noteId = note.id ?? generateNoteId();
+    const path = notePhotoPathFactory
+      ? notePhotoPathFactory(uid, mapId, noteId)
+      : notePhotoPath(uid, mapId, primitiveId as string, noteId);
     const result = await uploadPhoto(
-      notePhotoPath(uid, mapId, primitiveId, noteId),
+      path,
       file
     );
     if (!result) {
@@ -241,19 +253,25 @@ export default function NoteCards({
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
       <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={handleTogglePriority}
-          disabled={notes.length === 0}
-          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
-            currentNote?.isPriority === true
-              ? 'border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200'
-              : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100'
-          } disabled:cursor-default disabled:opacity-50`}
-          title="Mark this note as the priority note"
-        >
-          Priority
-        </button>
+        {showPriorityControl ? (
+          <button
+            type="button"
+            onClick={handleTogglePriority}
+            disabled={notes.length === 0}
+            className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+              currentNote?.isPriority === true
+                ? 'border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200'
+                : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100'
+            } disabled:cursor-default disabled:opacity-50`}
+            title="Mark this note as the priority note"
+          >
+            Priority
+          </button>
+        ) : (
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Notes
+          </div>
+        )}
         <div className="flex items-center gap-1">
           {notes.length > 0 && (
             <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">

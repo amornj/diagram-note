@@ -55,6 +55,7 @@ export interface EditorState {
   visibleOverlayFilters: OverlayFilterState;
   leftSidebarCollapsed: boolean;
   rightPaneOpen: boolean;
+  rightPaneMode: 'map' | 'primitive';
   zoomTarget: ZoomTarget | null;
   zoomLocked: boolean;
   panLocked: boolean;
@@ -74,6 +75,9 @@ export interface EditorState {
   toggleLeftSidebar: () => void;
   setLeftSidebarCollapsed: (collapsed: boolean) => void;
   toggleRightPane: () => void;
+  openMapOverview: () => void;
+  openPrimitiveDetail: () => void;
+  closeRightPane: () => void;
   setZoomTarget: (target: ZoomTarget | null) => void;
   toggleZoomLock: () => void;
   togglePanLock: () => void;
@@ -184,6 +188,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   visibleOverlayFilters: DEFAULT_OVERLAY_FILTERS,
   leftSidebarCollapsed: true,
   rightPaneOpen: true,
+  rightPaneMode: 'map',
   zoomTarget: null,
   zoomLocked: loadZoomLock(),
   panLocked: loadPanLock(),
@@ -219,6 +224,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       selectedPrimitiveId: id,
       selectedOccurrenceIndex: 0,
       rightPaneOpen: id !== null ? true : useEditorStore.getState().rightPaneOpen,
+      rightPaneMode: id !== null ? 'primitive' : useEditorStore.getState().rightPaneMode,
     }),
 
   setHoveredPrimitiveId: (id) => set({ hoveredPrimitiveId: id }),
@@ -269,6 +275,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       selectedOccurrenceIndex: next,
       zoomTarget: { bbox, immediate: false, lockZoom: true, padding: 16 },
       rightPaneOpen: true,
+      rightPaneMode: 'primitive',
     });
     return true;
   },
@@ -276,7 +283,34 @@ export const useEditorStore = create<EditorState>((set) => ({
   toggleLeftSidebar: () =>
     set((s) => ({ leftSidebarCollapsed: !s.leftSidebarCollapsed })),
   setLeftSidebarCollapsed: (collapsed) => set({ leftSidebarCollapsed: collapsed }),
-  toggleRightPane: () => set((s) => ({ rightPaneOpen: !s.rightPaneOpen })),
+  toggleRightPane: () =>
+    set((s) => {
+      if (!s.rightPaneOpen) {
+        return {
+          rightPaneOpen: true,
+          rightPaneMode: s.selectedPrimitiveId ? 'primitive' : 'map',
+        };
+      }
+      if (s.rightPaneMode === 'primitive') {
+        return { rightPaneOpen: true, rightPaneMode: 'map' };
+      }
+      return { rightPaneOpen: false };
+    }),
+  openMapOverview: () =>
+    set({
+      selectedPrimitiveId: null,
+      selectedOccurrenceIndex: 0,
+      rightPaneOpen: true,
+      rightPaneMode: 'map',
+    }),
+  openPrimitiveDetail: () => set({ rightPaneOpen: true, rightPaneMode: 'primitive' }),
+  closeRightPane: () =>
+    set({
+      selectedPrimitiveId: null,
+      selectedOccurrenceIndex: 0,
+      rightPaneOpen: false,
+      rightPaneMode: 'map',
+    }),
   setZoomTarget: (target) => set({ zoomTarget: target }),
   toggleZoomLock: () =>
     set((s) => {
@@ -320,6 +354,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       selectedPrimitiveId: id,
       selectedOccurrenceIndex: 0,
       rightPaneOpen: true,
+      rightPaneMode: 'primitive',
       pendingNameFocusId: id,
     }));
     return id;
@@ -470,6 +505,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       editorMode: 'groupCollect',
       groupCollectTargetId: primitiveId,
       rightPaneOpen: true,
+      rightPaneMode: 'primitive',
     }),
 
   addGroupMember: (primitiveId, memberKey) =>
@@ -501,6 +537,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         },
         selectedPrimitiveId: primitiveId,
         rightPaneOpen: true,
+        rightPaneMode: 'primitive',
       };
     }),
 
@@ -604,6 +641,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       editorMode: 'none',
       groupCollectTargetId: null,
       rightPaneOpen: true,
+      rightPaneMode: 'primitive',
     }));
     return id;
   },
@@ -616,6 +654,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       overlayNeighborTargetPageIndex: pageIndex,
       groupCollectTargetId: null,
       rightPaneOpen: true,
+      rightPaneMode: 'primitive',
     }),
 
   addNeighborMember: (memberKey) =>
@@ -631,6 +670,7 @@ export const useEditorStore = create<EditorState>((set) => ({
           overlayNeighborTargetPageIndex: null,
           selectedPrimitiveId: targetId,
           rightPaneOpen: true,
+          rightPaneMode: 'primitive',
         };
       }
       return {
@@ -658,6 +698,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         groupCollectTargetId: null,
         selectedPrimitiveId: targetId,
         rightPaneOpen: true,
+        rightPaneMode: 'primitive',
       };
     }),
 

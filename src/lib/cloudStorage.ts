@@ -19,6 +19,14 @@ export function primitivePhotoPath(uid: string, mapId: string, primitiveId: stri
   return `users/${uid}/maps/${mapId}/primitives/${primitiveId}/photo`;
 }
 
+export function mapPhotoPath(uid: string, mapId: string) {
+  return `users/${uid}/maps/${mapId}/photo`;
+}
+
+export function mapNotePhotoPath(uid: string, mapId: string, noteId: string) {
+  return `users/${uid}/maps/${mapId}/notes/${noteId}/photo`;
+}
+
 export function notePhotoPath(
   uid: string,
   mapId: string,

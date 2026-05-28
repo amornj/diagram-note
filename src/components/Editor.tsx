@@ -155,6 +155,7 @@ export default function Editor({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
+  const openMapOverview = useEditorStore((s) => s.openMapOverview);
   const zoomTarget = useEditorStore((s) => s.zoomTarget);
   const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
   const zoomLocked = useEditorStore((s) => s.zoomLocked);
@@ -1222,6 +1223,7 @@ export default function Editor({
                       onOpenMapInSplit(map.id);
                     } else {
                       onSelectMap?.(map.id);
+                      openMapOverview();
                     }
                     setShowMapPicker(false);
                   }}

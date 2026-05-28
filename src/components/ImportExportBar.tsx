@@ -43,6 +43,7 @@ export default function ImportExportBar() {
   const saveActiveWorkspace = useMapStore((s) => s.saveActiveWorkspace);
   const workspace = useEditorStore((s) => s.workspace);
   const setWorkspace = useEditorStore((s) => s.setWorkspace);
+  const openMapOverview = useEditorStore((s) => s.openMapOverview);
 
   const activeMap = maps.find((m) => m.id === activeMapId && m.archivedAt === undefined);
   const exportableMaps = maps.filter((map) => map.archivedAt === undefined);
@@ -83,6 +84,7 @@ export default function ImportExportBar() {
     setError(null);
     try {
       await createMapFromPdf(file, { scale: FIXED_RENDER_SCALE });
+      openMapOverview();
       setMenuOpen(false);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to load map');
@@ -96,6 +98,7 @@ export default function ImportExportBar() {
     try {
       const result = await importDnote(file);
       await importDnoteMap({ map: result.map, sourceBlob: result.sourceBlob });
+      openMapOverview();
       setMenuOpen(false);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to import .dnote');

@@ -4,6 +4,7 @@ import Editor from './components/Editor';
 import LeftPane from './components/LeftPane';
 import Landing from './components/Landing';
 import PrimitiveDetailPanel from './components/PrimitiveDetailPanel';
+import MapDetailPanel from './components/MapDetailPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import HotkeyHelp from './components/HotkeyHelp';
 import {
@@ -761,6 +762,9 @@ function MapPage() {
   const workspace = useEditorStore((s) => s.workspace);
   const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
   const rightPaneOpen = useEditorStore((s) => s.rightPaneOpen);
+  const rightPaneMode = useEditorStore((s) => s.rightPaneMode);
+  const openMapOverview = useEditorStore((s) => s.openMapOverview);
+  const closeRightPane = useEditorStore((s) => s.closeRightPane);
   const leftSidebarCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
   const setLeftSidebarCollapsed = useEditorStore((s) => s.setLeftSidebarCollapsed);
   const maps = useMapStore((s) => s.maps);
@@ -842,7 +846,7 @@ function MapPage() {
       if (event.key === 'Escape' && !editing && (!leftSidebarCollapsed || rightPaneOpen)) {
         event.preventDefault();
         if (!leftSidebarCollapsed) setLeftSidebarCollapsed(true);
-        if (rightPaneOpen) toggleRightPane();
+        if (rightPaneOpen) closeRightPane();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -852,7 +856,7 @@ function MapPage() {
     leftSidebarCollapsed,
     rightPaneOpen,
     setLeftSidebarCollapsed,
-    toggleRightPane,
+    closeRightPane,
     splitMode,
   ]);
 
@@ -911,6 +915,13 @@ function MapPage() {
     if (!primitiveId || !paneWorkspace) return null;
     return paneWorkspace.primitives.find((primitive) => primitive.id === primitiveId) ?? null;
   }, [splitMode, compareSelectedPrimitiveId, focusedSplitPane, comparePaneData]);
+
+  const focusedCompareMap = useMemo(() => {
+    if (!splitMode) return null;
+    const mapId = splitMaps[focusedSplitPane].mapId;
+    if (!mapId) return null;
+    return maps.find((map) => map.id === mapId) ?? null;
+  }, [splitMode, splitMaps, focusedSplitPane, maps]);
 
   // Only refit the compare viewport when the selection identity (map/page/primitive)
   // changes — not on every workspace mutation. Otherwise editing a primitive's
@@ -1173,7 +1184,7 @@ function MapPage() {
 
   const selectSplitPrimitive = useCallback((pane: 1 | 2, primitiveId: string) => {
     setFocusedSplitPane(pane);
-    useEditorStore.setState({ rightPaneOpen: true });
+    useEditorStore.setState({ rightPaneOpen: true, rightPaneMode: 'primitive' });
     setCompareSelectedPrimitiveId((current) => ({
       ...current,
       [pane]: primitiveId,
@@ -1219,7 +1230,7 @@ function MapPage() {
         ...current,
         [pane]: entry.primitiveId,
       }));
-      useEditorStore.setState({ rightPaneOpen: true });
+      useEditorStore.setState({ rightPaneOpen: true, rightPaneMode: 'primitive' });
     },
     [focusedSplitPane, splitMaps, activeMap, workspace, selectSplitPrimitive]
   );
@@ -1418,7 +1429,7 @@ function MapPage() {
           ...current,
           [targetPane]: targetPrimitiveId,
         }));
-        useEditorStore.setState({ rightPaneOpen: true });
+        useEditorStore.setState({ rightPaneOpen: true, rightPaneMode: 'primitive' });
         return;
       }
 
@@ -1746,7 +1757,9 @@ function MapPage() {
                 .map((map) => ({ id: map.id, name: map.name }))}
               selectedMapId={activeMap.id}
               onSelectMap={(mapId) => {
-                void useMapStore.getState().setActiveMap(mapId);
+                void useMapStore.getState().setActiveMap(mapId).then((opened) => {
+                  if (opened) openMapOverview();
+                });
               }}
               onOpenMapInSplit={openMapInSplit}
             />
@@ -1798,7 +1811,7 @@ function MapPage() {
           </div>
         </div>
 
-        {splitMode && selectedComparePrimitive && !rightPaneOpen && (
+        {splitMode && (selectedComparePrimitive || focusedCompareMap) && !rightPaneOpen && (
           <button
             onClick={toggleRightPane}
             className="fixed right-0 top-1/2 z-40 -translate-y-1/2 rounded-l-xl border border-gray-200 bg-white px-2 py-4 shadow-md transition hover:bg-gray-50"
@@ -1808,10 +1821,10 @@ function MapPage() {
           </button>
         )}
 
-        {splitMode && selectedComparePrimitive && rightPaneOpen && (
+        {splitMode && rightPaneOpen && (
           <>
             <button
-              onClick={toggleRightPane}
+              onClick={closeRightPane}
               className="fixed inset-0 z-20 bg-slate-950/30 lg:hidden"
               aria-label="Hide right pane"
             />
@@ -1829,30 +1842,34 @@ function MapPage() {
                 <div className="absolute inset-y-0 left-0 w-px bg-gray-200" />
                 <div className="absolute left-0 top-1/2 h-16 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-300" />
               </div>
-              <PrimitiveDetailPanel
-                primitive={selectedComparePrimitive}
-                workspaceOverride={comparePaneData[focusedSplitPane].workspace}
-                mapIdOverride={splitMaps[focusedSplitPane].mapId}
-                pageIndexOverride={splitMaps[focusedSplitPane].pageIndex}
-                onSelectPrimitiveOverride={(primitiveId) =>
-                  selectSplitPrimitive(focusedSplitPane, primitiveId)
-                }
-                onPatchPrimitive={patchFocusedSplitPrimitive}
-                onDeletePrimitive={deleteFocusedSplitPrimitive}
-                onStartCrossPaneBacklinkPick={() => startSplitBacklinkPick(focusedSplitPane)}
-                onOpenBacklink={openSplitBacklink}
-                paneLabel={`W${focusedSplitPane}`}
-                crossPaneBacklinkPickActive={
-                  splitBacklinkPick?.sourcePane === focusedSplitPane &&
-                  splitBacklinkPick.primitiveId === selectedComparePrimitive.id
-                }
-                onOpenCrossMapBacklink={openCrossMapBacklink}
-              />
+              {rightPaneMode === 'primitive' && selectedComparePrimitive ? (
+                <PrimitiveDetailPanel
+                  primitive={selectedComparePrimitive}
+                  workspaceOverride={comparePaneData[focusedSplitPane].workspace}
+                  mapIdOverride={splitMaps[focusedSplitPane].mapId}
+                  pageIndexOverride={splitMaps[focusedSplitPane].pageIndex}
+                  onSelectPrimitiveOverride={(primitiveId) =>
+                    selectSplitPrimitive(focusedSplitPane, primitiveId)
+                  }
+                  onPatchPrimitive={patchFocusedSplitPrimitive}
+                  onDeletePrimitive={deleteFocusedSplitPrimitive}
+                  onStartCrossPaneBacklinkPick={() => startSplitBacklinkPick(focusedSplitPane)}
+                  onOpenBacklink={openSplitBacklink}
+                  paneLabel={`W${focusedSplitPane}`}
+                  crossPaneBacklinkPickActive={
+                    splitBacklinkPick?.sourcePane === focusedSplitPane &&
+                    splitBacklinkPick.primitiveId === selectedComparePrimitive.id
+                  }
+                  onOpenCrossMapBacklink={openCrossMapBacklink}
+                />
+              ) : focusedCompareMap ? (
+                <MapDetailPanel map={focusedCompareMap} />
+              ) : null}
             </div>
           </>
         )}
 
-        {!splitMode && selectedPrimitive && !rightPaneOpen && (
+        {!splitMode && (selectedPrimitive || activeMap) && !rightPaneOpen && (
           <button
             onClick={toggleRightPane}
             className="fixed right-0 top-1/2 z-40 -translate-y-1/2 rounded-l-xl border border-gray-200 bg-white px-2 py-4 shadow-md transition hover:bg-gray-50"
@@ -1862,10 +1879,10 @@ function MapPage() {
           </button>
         )}
 
-        {!splitMode && selectedPrimitive && rightPaneOpen && (
+        {!splitMode && rightPaneOpen && (selectedPrimitive || activeMap) && (
           <>
             <button
-              onClick={toggleRightPane}
+              onClick={closeRightPane}
               className="fixed inset-0 z-20 bg-slate-950/30 lg:hidden"
               aria-label="Hide right pane"
             />
@@ -1883,10 +1900,14 @@ function MapPage() {
                 <div className="absolute inset-y-0 left-0 w-px bg-gray-200" />
                 <div className="absolute left-0 top-1/2 h-16 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-300" />
               </div>
-              <PrimitiveDetailPanel
-                primitive={selectedPrimitive}
-                onOpenCrossMapBacklink={openCrossMapBacklink}
-              />
+              {rightPaneMode === 'primitive' && selectedPrimitive ? (
+                <PrimitiveDetailPanel
+                  primitive={selectedPrimitive}
+                  onOpenCrossMapBacklink={openCrossMapBacklink}
+                />
+              ) : (
+                <MapDetailPanel map={activeMap} />
+              )}
             </div>
           </>
         )}

@@ -259,7 +259,7 @@ export default function PrimitiveDetailPanel({
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden border-l border-gray-200 bg-white">
-      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
         {editingName ? (
           <input
             value={nameDraft}
@@ -277,7 +277,7 @@ export default function PrimitiveDetailPanel({
               }
             }}
             autoFocus
-            className="w-full rounded-md border border-gray-200 px-2 py-1 text-lg font-bold text-gray-900 outline-none focus:border-sky-300"
+            className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-lg font-bold text-gray-900 outline-none focus:border-sky-300"
           />
         ) : (
           <button
@@ -289,7 +289,7 @@ export default function PrimitiveDetailPanel({
               setNameDraft(primitive.name);
               setEditingName(true);
             }}
-            className="truncate text-left text-lg font-bold text-gray-900"
+            className="min-w-0 flex-1 truncate text-left text-lg font-bold text-gray-900"
             title="Click to edit name"
           >
             {primitive.name}

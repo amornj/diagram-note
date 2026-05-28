@@ -70,6 +70,10 @@ export interface MapStoreState {
   restoreMap: (id: string) => Promise<void>;
   permanentlyDeleteMap: (id: string) => Promise<void>;
   renameMap: (id: string, name: string) => Promise<void>;
+  patchMapDetails: (
+    id: string,
+    patch: Partial<Pick<DiagramMap, 'name' | 'notes' | 'photoUrl' | 'photoStoragePath'>>
+  ) => Promise<void>;
   reorderMaps: (fromIndex: number, toIndex: number) => Promise<void>;
   saveActiveWorkspace: (workspace: MapWorkspace) => Promise<void>;
   patchMapPrimitive: (
@@ -1152,6 +1156,16 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     const map = await idb.getMap(id);
     if (!map) return;
     const updated: DiagramMap = { ...map, name, updatedAt: Date.now() };
+    await idb.putMap(updated);
+    set({
+      maps: get().maps.map((m) => (m.id === id ? updated : m)),
+    });
+  },
+
+  patchMapDetails: async (id, patch) => {
+    const map = await idb.getMap(id);
+    if (!map) return;
+    const updated: DiagramMap = { ...map, ...patch, updatedAt: Date.now() };
     await idb.putMap(updated);
     set({
       maps: get().maps.map((m) => (m.id === id ? updated : m)),

@@ -256,6 +256,7 @@ export default function LeftPane({
 }: LeftPaneProps) {
   const leftSidebarCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
   const toggleLeftSidebar = useEditorStore((s) => s.toggleLeftSidebar);
+  const openMapOverview = useEditorStore((s) => s.openMapOverview);
   const workspace = useEditorStore((s) => s.workspace);
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
   const setHoveredPrimitiveId = useEditorStore((s) => s.setHoveredPrimitiveId);
@@ -775,6 +776,10 @@ export default function LeftPane({
   const renderMapRow = (map: DiagramMap) => {
     const isActive = map.id === activeMapId;
     const isDragging = draggingMapId === map.id;
+    const hasNote = (map.notes ?? []).some((note) => note.content.trim());
+    const hasExternalLink = (map.notes ?? []).some(
+      (note) => extractUrls(note.content).length > 0
+    );
     return (
       <div
         key={map.id}
@@ -828,20 +833,28 @@ export default function LeftPane({
                 onOpenMapInSplit(map.id);
                 return;
               }
-              void setActiveMap(map.id);
+              void setActiveMap(map.id).then((opened) => {
+                if (opened) openMapOverview();
+              });
             }}
             onDoubleClick={() => {
               setRenamingId(map.id);
               setRenameDraft(map.name);
             }}
-            className="flex-1 truncate text-left text-sm font-medium text-gray-800"
+            className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-gray-800"
             title={
               splitMode
                 ? `${map.name} — click for window 1 · shift-click for window 2 · double-click to rename`
                 : `${map.name} — shift-click to open in split · double-click to rename`
             }
           >
-            {map.name}
+            <span className="min-w-0 flex-1 truncate">{map.name}</span>
+            {(hasNote || hasExternalLink) && (
+              <span className="flex shrink-0 items-center gap-1 text-amber-500">
+                {hasNote && <NoteMetaIcon />}
+                {hasExternalLink && <ExternalLinkMetaIcon />}
+              </span>
+            )}
           </button>
         )}
         {splitMode && (
