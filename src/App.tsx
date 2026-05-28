@@ -824,6 +824,11 @@ function MapPage() {
     2: string[];
   }>({ 1: [], 2: [] });
   const appliedDeepLinkRef = useRef<string | null>(null);
+  const [pendingPrimitiveDeepLink, setPendingPrimitiveDeepLink] = useState<{
+    mapId: string;
+    pageIndex: number;
+    primitiveId: string;
+  } | null>(null);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -916,25 +921,15 @@ function MapPage() {
       if (!opened || cancelled) return;
       await useMapStore.getState().setActivePage(pageIndex);
       if (cancelled) return;
-      const liveMap = useMapStore.getState().maps.find((map) => map.id === targetMap.id);
-      const liveWorkspace =
-        liveMap?.pages?.[pageIndex]?.workspace ??
-        (liveMap?.pageIndex === pageIndex ? liveMap.workspace : null);
-      if (!liveMap || !liveWorkspace || !link.primitiveId) {
+      if (!link.primitiveId) {
         useEditorStore.getState().openMapOverview();
         return;
       }
-      const primitive = liveWorkspace.primitives.find((entry) => entry.id === link.primitiveId);
-      if (!primitive) {
-        useEditorStore.getState().openMapOverview();
-        return;
-      }
-      useEditorStore.getState().setSelectedPrimitiveId(primitive.id);
-      const primitivesById = new Map(liveWorkspace.primitives.map((entry) => [entry.id, entry]));
-      const bbox = getPrimitiveBounds(primitive, primitivesById);
-      if (bbox) {
-        useEditorStore.getState().setZoomTarget({ bbox, immediate: false, padding: 16 });
-      }
+      setPendingPrimitiveDeepLink({
+        mapId: targetMap.id,
+        pageIndex,
+        primitiveId: link.primitiveId,
+      });
     };
     void openDeepLink();
     return () => {
@@ -1814,6 +1809,14 @@ function MapPage() {
                 });
               }}
               onOpenMapInSplit={openMapInSplit}
+              pendingPrimitiveFocusId={
+                pendingPrimitiveDeepLink &&
+                pendingPrimitiveDeepLink.mapId === activeMap.id &&
+                pendingPrimitiveDeepLink.pageIndex === activeMap.pageIndex
+                  ? pendingPrimitiveDeepLink.primitiveId
+                  : null
+              }
+              onPendingPrimitiveFocusHandled={() => setPendingPrimitiveDeepLink(null)}
             />
           )}
         </div>
