@@ -7,8 +7,15 @@ import { useMapStore } from '../lib/mapStore';
 import type { DiagramMap, NoteCard } from '../types';
 import NoteCards from './NoteCards';
 import PhotoDropzone from './PhotoDropzone';
+import CopyDeepLinkButton from './CopyDeepLinkButton';
 
-export default function MapDetailPanel({ map }: { map: DiagramMap }) {
+export default function MapDetailPanel({
+  map,
+  pageIndex,
+}: {
+  map: DiagramMap;
+  pageIndex?: number;
+}) {
   const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
   const patchMapDetails = useMapStore((s) => s.patchMapDetails);
   const [editingName, setEditingName] = useState(false);
@@ -67,13 +74,20 @@ export default function MapDetailPanel({ map }: { map: DiagramMap }) {
             {map.name}
           </button>
         )}
-        <button
-          onClick={toggleRightPane}
-          className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100"
-          title="Hide right pane (2)"
-        >
-          <PanelRightClose size={18} />
-        </button>
+        <div className="flex items-center gap-1">
+          <CopyDeepLinkButton
+            mapId={map.id}
+            pageIndex={pageIndex ?? map.pageIndex ?? 0}
+            label="Copy map link"
+          />
+          <button
+            onClick={toggleRightPane}
+            className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100"
+            title="Hide right pane (2)"
+          >
+            <PanelRightClose size={18} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">

@@ -15,6 +15,7 @@ import {
 import { DEFAULT_MAP_ID, loadMapPageView, useMapStore } from './lib/mapStore';
 import { getPrimitiveBounds, makePrimitiveId } from './lib/workspace';
 import { EMPTY_WORKSPACE } from './lib/workspace';
+import { parseDiagramDeepLink } from './lib/deepLinks';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SyncStatusContext, type SyncStatus } from './contexts/SyncStatusContext';
 import {
@@ -768,6 +769,7 @@ function MapPage() {
   const leftSidebarCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
   const setLeftSidebarCollapsed = useEditorStore((s) => s.setLeftSidebarCollapsed);
   const maps = useMapStore((s) => s.maps);
+  const mapsInitialized = useMapStore((s) => s.initialized);
   const activeMap = useMapStore((s) => s.maps.find((m) => m.id === s.activeMapId) ?? null);
   const activeRasterUrl = useMapStore((s) => s.activeRasterUrl);
   const [showHelp, setShowHelp] = useState(false);
@@ -821,6 +823,7 @@ function MapPage() {
     1: string[];
     2: string[];
   }>({ 1: [], 2: [] });
+  const appliedDeepLinkRef = useRef<string | null>(null);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -889,6 +892,55 @@ function MapPage() {
       timers.forEach((timer) => window.clearTimeout(timer));
     };
   }, [compareLinkFlash]);
+
+  useEffect(() => {
+    if (!mapsInitialized || maps.length === 0) return;
+    const link = parseDiagramDeepLink(window.location.search);
+    if (!link) return;
+    const key = `${link.mapId}:${link.pageIndex ?? ''}:${link.primitiveId ?? ''}`;
+    if (appliedDeepLinkRef.current === key) return;
+    const targetMap = maps.find((map) => map.id === link.mapId && map.archivedAt === undefined);
+    if (!targetMap) return;
+    appliedDeepLinkRef.current = key;
+
+    let cancelled = false;
+    const openDeepLink = async () => {
+      setSplitMode(false);
+      setSplitTarget(null);
+      setSplitBacklinkPick(null);
+      const pageIndex =
+        link.pageIndex === null
+          ? targetMap.pageIndex ?? 0
+          : Math.min(Math.max(link.pageIndex, 0), Math.max(0, targetMap.pageCount - 1));
+      const opened = await useMapStore.getState().setActiveMap(targetMap.id);
+      if (!opened || cancelled) return;
+      await useMapStore.getState().setActivePage(pageIndex);
+      if (cancelled) return;
+      const liveMap = useMapStore.getState().maps.find((map) => map.id === targetMap.id);
+      const liveWorkspace =
+        liveMap?.pages?.[pageIndex]?.workspace ??
+        (liveMap?.pageIndex === pageIndex ? liveMap.workspace : null);
+      if (!liveMap || !liveWorkspace || !link.primitiveId) {
+        useEditorStore.getState().openMapOverview();
+        return;
+      }
+      const primitive = liveWorkspace.primitives.find((entry) => entry.id === link.primitiveId);
+      if (!primitive) {
+        useEditorStore.getState().openMapOverview();
+        return;
+      }
+      useEditorStore.getState().setSelectedPrimitiveId(primitive.id);
+      const primitivesById = new Map(liveWorkspace.primitives.map((entry) => [entry.id, entry]));
+      const bbox = getPrimitiveBounds(primitive, primitivesById);
+      if (bbox) {
+        useEditorStore.getState().setZoomTarget({ bbox, immediate: false, padding: 16 });
+      }
+    };
+    void openDeepLink();
+    return () => {
+      cancelled = true;
+    };
+  }, [mapsInitialized, maps]);
 
   const [leftPaneWidth, setLeftPaneWidth] = useState(() => {
     if (typeof window === 'undefined') return 280;
@@ -1863,7 +1915,10 @@ function MapPage() {
                   onOpenCrossMapBacklink={openCrossMapBacklink}
                 />
               ) : focusedCompareMap ? (
-                <MapDetailPanel map={focusedCompareMap} />
+                <MapDetailPanel
+                  map={focusedCompareMap}
+                  pageIndex={splitMaps[focusedSplitPane].pageIndex}
+                />
               ) : null}
             </div>
           </>
@@ -1906,7 +1961,7 @@ function MapPage() {
                   onOpenCrossMapBacklink={openCrossMapBacklink}
                 />
               ) : (
-                <MapDetailPanel map={activeMap} />
+                <MapDetailPanel map={activeMap} pageIndex={activeMap.pageIndex} />
               )}
             </div>
           </>
