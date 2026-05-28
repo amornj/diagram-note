@@ -98,6 +98,9 @@ export default function NoteCards({
     onChange(nextNotes);
     const nextIndex = Math.max(0, Math.min(currentIndex, nextNotes.length - 1));
     setCurrentIndex(nextIndex);
+    if (nextNotes.length === 0) {
+      setEditorDraft('');
+    }
   };
 
   const handleTogglePriority = () => {
