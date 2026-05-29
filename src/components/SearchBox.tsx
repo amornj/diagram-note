@@ -95,7 +95,7 @@ export default function SearchBox({
   const mapNoteResults = useMemo(() => {
     if (!allowMapNoteSearch) return [];
     const q = deferredQuery.trim().toLowerCase();
-    if (!q) return [];
+    if (!q || activeTypeFilters.includes('map')) return [];
     const searchAcrossAllMaps = activeTypeFilters.includes('allmap');
     const sourceMaps = searchAcrossAllMaps
       ? maps.filter((map) => map.archivedAt === undefined)
@@ -398,42 +398,6 @@ export default function SearchBox({
         })}
       </div>
 
-      {mapNoteResults.length > 0 && (
-        <div className="mt-2">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-            Map notes
-          </div>
-          <div className="max-h-80 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
-            {mapNoteResults.map((hit) => {
-              const noteLabel = hit.note.name.trim() || `Note ${hit.noteIndex + 1}`;
-              return (
-                <button
-                  key={`${hit.mapId}:${hit.noteIndex}`}
-                  onClick={(event) => {
-                    void handleMapNoteSelect(hit, event.shiftKey);
-                  }}
-                  title="Shift-click to open map in split"
-                  className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-gray-900">
-                      {noteLabel}
-                    </span>
-                    <span className="ml-auto text-[11px] text-gray-400">{hit.mapName}</span>
-                  </div>
-                  <div className="mt-1 flex items-start gap-2 text-[11px] text-slate-500">
-                    <span className="rounded-full bg-sky-50 px-1.5 py-0.5 font-semibold text-sky-700">
-                      Map note
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{hit.excerpt || ' '}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {mapResults.length > 0 && (
         <div className="mt-2">
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
@@ -472,8 +436,33 @@ export default function SearchBox({
         </div>
       )}
 
-      {results.length > 0 && (
+      {(mapNoteResults.length > 0 || results.length > 0) && (
         <div className="mt-2 max-h-80 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
+          {mapNoteResults.map((hit) => {
+            const noteLabel = hit.note.name.trim() || `Note ${hit.noteIndex + 1}`;
+            return (
+              <button
+                key={`map-note:${hit.mapId}:${hit.noteIndex}`}
+                onClick={(event) => {
+                  void handleMapNoteSelect(hit, event.shiftKey);
+                }}
+                title="Shift-click to open map in split"
+                className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-3 w-3 shrink-0 rounded-full bg-sky-400" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
+                    {hit.mapName}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-gray-400">map note</span>
+                </div>
+                <div className="mt-1 min-w-0 truncate pl-5 text-[11px] text-slate-500">
+                  <span className="font-medium text-slate-600">{noteLabel}</span>
+                  {hit.excerpt && <span>{`  ${hit.excerpt}`}</span>}
+                </div>
+              </button>
+            );
+          })}
           {results.map((group) => (
             <button
               key={group.key}
