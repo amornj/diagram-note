@@ -1248,6 +1248,7 @@ export default function Editor({
           <SearchBox
             floating
             autoFocus
+            allowMapNoteSearch={!compareOnly}
             onRequestClose={() => setShowQuickSearch(false)}
           />
         )

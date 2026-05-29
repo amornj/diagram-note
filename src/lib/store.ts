@@ -61,6 +61,7 @@ export interface EditorState {
   panLocked: boolean;
   spacePanActive: boolean;
   pendingNameFocusId: string | null;
+  pendingMapNoteFocus: { mapId: string; noteIndex: number } | null;
   overlayNeighborTargetId: string | null;
   overlayNeighborTargetPageIndex: number | null;
   groupCollectTargetId: string | null;
@@ -84,6 +85,7 @@ export interface EditorState {
   setSpacePanActive: (active: boolean) => void;
   setEditorMode: (mode: EditorMode) => void;
   setDraftOverlayColor: (color: string) => void;
+  setPendingMapNoteFocus: (focus: { mapId: string; noteIndex: number } | null) => void;
   addDraftPolygonPoint: (point: Point) => void;
   clearDraftPolygon: () => void;
   setDraftRectangleStart: (point: Point | null) => void;
@@ -194,6 +196,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   panLocked: loadPanLock(),
   spacePanActive: false,
   pendingNameFocusId: null,
+  pendingMapNoteFocus: null,
   overlayNeighborTargetId: null,
   overlayNeighborTargetPageIndex: null,
   groupCollectTargetId: null,
@@ -325,6 +328,8 @@ export const useEditorStore = create<EditorState>((set) => ({
       return { panLocked: next };
     }),
   setSpacePanActive: (active) => set({ spacePanActive: active }),
+
+  setPendingMapNoteFocus: (focus) => set({ pendingMapNoteFocus: focus }),
 
   setEditorMode: (mode) =>
     set((s) => ({

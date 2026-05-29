@@ -4,12 +4,13 @@ import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
 import { splitNoteContent } from '../lib/noteLinks';
 import { getPrimitiveBounds } from '../lib/workspace';
-import type { DiagramMap, Primitive } from '../types';
+import type { DiagramMap, NoteCard, Primitive } from '../types';
 
 interface SearchBoxProps {
   autoFocus?: boolean;
   floating?: boolean;
   onRequestClose?: () => void;
+  allowMapNoteSearch?: boolean;
 }
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
@@ -27,6 +28,14 @@ type SearchPrimitiveMatch = {
   mapId: string;
   mapName: string;
   pageIndex: number;
+};
+
+type SearchMapNoteMatch = {
+  mapId: string;
+  mapName: string;
+  noteIndex: number;
+  note: NoteCard;
+  excerpt: string;
 };
 
 type SearchResultGroup = {
@@ -63,6 +72,7 @@ export default function SearchBox({
   autoFocus = false,
   floating = false,
   onRequestClose,
+  allowMapNoteSearch = false,
 }: SearchBoxProps = {}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -75,10 +85,41 @@ export default function SearchBox({
   const setSelectedPrimitiveId = useEditorStore((s) => s.setSelectedPrimitiveId);
   const setSelectedOccurrenceIndex = useEditorStore((s) => s.setSelectedOccurrenceIndex);
   const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
+  const setPendingMapNoteFocus = useEditorStore((s) => s.setPendingMapNoteFocus);
+  const openMapOverview = useEditorStore((s) => s.openMapOverview);
   const maps = useMapStore((s) => s.maps);
   const activeMapId = useMapStore((s) => s.activeMapId);
   const setActiveMap = useMapStore((s) => s.setActiveMap);
   const setActivePage = useMapStore((s) => s.setActivePage);
+
+  const mapNoteResults = useMemo(() => {
+    if (!allowMapNoteSearch) return [];
+    const q = deferredQuery.trim().toLowerCase();
+    if (!q) return [];
+    const searchAcrossAllMaps = activeTypeFilters.includes('allmap');
+    const sourceMaps = searchAcrossAllMaps
+      ? maps.filter((map) => map.archivedAt === undefined)
+      : maps.filter((map) => map.id === activeMapId && map.archivedAt === undefined);
+
+    const matches: SearchMapNoteMatch[] = [];
+    for (const map of sourceMaps) {
+      for (const [noteIndex, note] of (map.notes ?? []).entries()) {
+        const parsed = splitNoteContent(note.content);
+        const searchableText = [note.name, parsed.body, ...parsed.urls].join(' ').toLowerCase();
+        if (!searchableText.includes(q)) continue;
+        const excerptSource = parsed.body.trim() || parsed.urls.join(' ');
+        const excerpt = excerptSource.length > 120 ? `${excerptSource.slice(0, 119)}…` : excerptSource;
+        matches.push({
+          mapId: map.id,
+          mapName: map.name,
+          noteIndex,
+          note,
+          excerpt,
+        });
+      }
+    }
+    return matches.slice(0, 20);
+  }, [allowMapNoteSearch, activeTypeFilters, deferredQuery, maps, activeMapId]);
 
   const mapResults = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
@@ -171,6 +212,19 @@ export default function SearchBox({
     primitiveId?: string | null;
   }) => {
     window.dispatchEvent(new CustomEvent('map-open-in-split', { detail }));
+    onRequestClose?.();
+  };
+
+  const handleMapNoteSelect = async (hit: SearchMapNoteMatch, openInSplit: boolean) => {
+    if (openInSplit) {
+      dispatchOpenInSplit({ mapId: hit.mapId });
+      return;
+    }
+    setPendingMapNoteFocus({ mapId: hit.mapId, noteIndex: hit.noteIndex });
+    if (activeMapId !== hit.mapId) {
+      await setActiveMap(hit.mapId);
+    }
+    openMapOverview();
     onRequestClose?.();
   };
 
@@ -344,36 +398,77 @@ export default function SearchBox({
         })}
       </div>
 
+      {mapNoteResults.length > 0 && (
+        <div className="mt-2">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+            Map notes
+          </div>
+          <div className="max-h-80 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
+            {mapNoteResults.map((hit) => {
+              const noteLabel = hit.note.name.trim() || `Note ${hit.noteIndex + 1}`;
+              return (
+                <button
+                  key={`${hit.mapId}:${hit.noteIndex}`}
+                  onClick={(event) => {
+                    void handleMapNoteSelect(hit, event.shiftKey);
+                  }}
+                  title="Shift-click to open map in split"
+                  className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-gray-900">
+                      {noteLabel}
+                    </span>
+                    <span className="ml-auto text-[11px] text-gray-400">{hit.mapName}</span>
+                  </div>
+                  <div className="mt-1 flex items-start gap-2 text-[11px] text-slate-500">
+                    <span className="rounded-full bg-sky-50 px-1.5 py-0.5 font-semibold text-sky-700">
+                      Map note
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{hit.excerpt || ' '}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {mapResults.length > 0 && (
-        <div className="mt-2 max-h-80 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
-          {mapResults.map((map) => (
-            <button
-              key={map.id}
-              onClick={(event) => {
-                if (event.shiftKey) {
-                  dispatchOpenInSplit({ mapId: map.id, pageIndex: map.pageIndex });
-                  return;
-                }
-                void handleMapSelect(map.id);
-              }}
-              title="Shift-click to open in split"
-              className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-block h-3 w-3 rounded-full ${
-                    map.id === activeMapId ? 'bg-sky-500' : 'bg-gray-300'
-                  }`}
-                />
-                <span className="truncate text-sm font-medium text-gray-900">
-                  {map.name}
-                </span>
-                {map.id === activeMapId && (
-                  <span className="ml-auto text-[11px] text-sky-600">active</span>
-                )}
-              </div>
-            </button>
-          ))}
+        <div className="mt-2">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+            Maps
+          </div>
+          <div className="max-h-80 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
+            {mapResults.map((map) => (
+              <button
+                key={map.id}
+                onClick={(event) => {
+                  if (event.shiftKey) {
+                    dispatchOpenInSplit({ mapId: map.id, pageIndex: map.pageIndex });
+                    return;
+                  }
+                  void handleMapSelect(map.id);
+                }}
+                title="Shift-click to open in split"
+                className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-block h-3 w-3 rounded-full ${
+                      map.id === activeMapId ? 'bg-sky-500' : 'bg-gray-300'
+                    }`}
+                  />
+                  <span className="truncate text-sm font-medium text-gray-900">
+                    {map.name}
+                  </span>
+                  {map.id === activeMapId && (
+                    <span className="ml-auto text-[11px] text-sky-600">active</span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

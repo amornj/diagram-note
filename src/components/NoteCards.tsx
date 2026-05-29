@@ -18,6 +18,7 @@ interface NoteCardsProps {
   /** Required for photo uploads — when omitted, photo dropzone is hidden. */
   mapId?: string | null;
   primitiveId?: string;
+  focusedIndex?: number | null;
   notePhotoPathFactory?: (uid: string, mapId: string, noteId: string) => string;
   showPriorityControl?: boolean;
 }
@@ -51,6 +52,7 @@ export default function NoteCards({
   onChange,
   mapId,
   primitiveId,
+  focusedIndex = null,
   notePhotoPathFactory,
   showPriorityControl = true,
 }: NoteCardsProps) {
@@ -68,6 +70,11 @@ export default function NoteCards({
       setCurrentIndex(notes.length - 1);
     }
   }, [notes, notes.length, currentIndex]);
+
+  useEffect(() => {
+    if (focusedIndex === null || notes.length === 0) return;
+    setCurrentIndex(Math.max(0, Math.min(focusedIndex, notes.length - 1)));
+  }, [focusedIndex, notes.length]);
 
   const currentNote = notes[currentIndex];
   const currentContent = notes.length > 0 ? currentNote?.content ?? '' : editorDraft;

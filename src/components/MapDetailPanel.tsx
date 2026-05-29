@@ -15,14 +15,27 @@ export default function MapDetailPanel({
   map: DiagramMap;
 }) {
   const toggleRightPane = useEditorStore((s) => s.toggleRightPane);
+  const pendingMapNoteFocus = useEditorStore((s) => s.pendingMapNoteFocus);
+  const setPendingMapNoteFocus = useEditorStore((s) => s.setPendingMapNoteFocus);
   const patchMapDetails = useMapStore((s) => s.patchMapDetails);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(map.name);
+  const [focusedNoteIndex, setFocusedNoteIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setNameDraft(map.name);
     setEditingName(false);
   }, [map.id, map.name]);
+
+  useEffect(() => {
+    setFocusedNoteIndex(null);
+  }, [map.id]);
+
+  useEffect(() => {
+    if (!pendingMapNoteFocus || pendingMapNoteFocus.mapId !== map.id) return;
+    setFocusedNoteIndex(pendingMapNoteFocus.noteIndex);
+    setPendingMapNoteFocus(null);
+  }, [map.id, pendingMapNoteFocus, setPendingMapNoteFocus]);
 
   const saveName = () => {
     const trimmed = nameDraft.trim();
@@ -130,6 +143,7 @@ export default function MapDetailPanel({
           notes={map.notes ?? []}
           onChange={patchNotes}
           mapId={map.id}
+          focusedIndex={focusedNoteIndex}
           notePhotoPathFactory={mapNotePhotoPath}
           showPriorityControl={false}
         />
