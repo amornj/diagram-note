@@ -6,10 +6,11 @@ import {
   getGroupMemberKeys,
   getPrimitiveBounds,
   getRelatedMemberKeys,
-  parseRelatedPrimitiveKey,
   normalizeTagInput,
   parseMemberKey,
+  type RelatedTarget,
 } from '../lib/workspace';
+import { resolveBacklinks } from '../lib/backlinks';
 import type { MapWorkspace, Primitive } from '../types';
 import { ColorPicker, TagEditor } from './sharedControls';
 import NoteCards from './NoteCards';
@@ -30,7 +31,6 @@ const KIND_LABELS: Record<Primitive['kind'], string> = {
 
 export default function PrimitiveDetailPanel({
   primitive,
-  onOpenCrossMapBacklink,
   workspaceOverride,
   mapIdOverride,
   pageIndexOverride,
@@ -51,9 +51,7 @@ export default function PrimitiveDetailPanel({
   onDeletePrimitive?: (id: string) => void;
   onStartCrossPaneBacklinkPick?: () => void;
   onOpenBacklink?: (args: {
-    targetMapId: string;
-    targetPageIndex: number;
-    targetPrimitiveId: string;
+    target: RelatedTarget;
     openInSplit: boolean;
   }) => void;
   paneLabel?: string | null;
@@ -92,7 +90,7 @@ export default function PrimitiveDetailPanel({
   const effectiveWorkspace = workspaceOverride ?? workspace;
   const setActiveMap = useMapStore((s) => s.setActiveMap);
   const setActivePage = useMapStore((s) => s.setActivePage);
-  const removePrimitiveBacklink = useMapStore((s) => s.removePrimitiveBacklink);
+  const removeBacklink = useMapStore((s) => s.removeBacklink);
   const patchPrimitive = useCallback(
     (id: string, patch: Partial<Primitive>) => {
       if (onPatchPrimitive) {
@@ -125,90 +123,62 @@ export default function PrimitiveDetailPanel({
     [effectiveWorkspace.primitives]
   );
 
+  const sourceTarget: RelatedTarget | null = effectiveMap
+    ? { kind: 'primitive', mapId: effectiveMap.id, pageIndex: effectivePageIndex, id: primitive.id }
+    : null;
   const relatedMembers = useMemo(
     () =>
-      getRelatedMemberKeys(primitive)
-        .map((key) => {
-          const member = parseRelatedPrimitiveKey(key);
-          if (!member) return null;
-          const targetMapId = member.mapId ?? effectiveMap?.id ?? null;
-          if (!targetMapId) return null;
-          const targetMap = maps.find((map) => map.id === targetMapId);
-          if (!targetMap) return null;
-          const pageIndex = member.pageIndex ?? targetMap.pageIndex ?? 0;
-          const pageWorkspace =
-            targetMapId === effectiveMap?.id && pageIndex === effectivePageIndex
-              ? effectiveWorkspace
-              : targetMap.pages?.[pageIndex]?.workspace ?? targetMap.workspace;
-          const memberPrim = pageWorkspace?.primitives.find((p) => p.id === member.id);
-          if (!memberPrim) return null;
-          const sameMap = targetMapId === effectiveMap?.id;
-          return {
-            key,
-            id: member.id,
-            mapId: targetMapId,
-            mapName: targetMap.name,
-            sameMap,
-            pageIndex,
-            label:
-              sameMap && pageIndex === effectivePageIndex
-                ? memberPrim.name
-                : sameMap
-                ? `${memberPrim.name} · Page ${pageIndex + 1}`
-                : `${memberPrim.name} · ${targetMap.name}${targetMap.pageCount > 1 ? ` · Page ${pageIndex + 1}` : ''}`,
-            onClick: async (openInSplit: boolean) => {
-              if (!effectiveMap) return;
-              if (onOpenBacklink) {
-                onOpenBacklink({
-                  targetMapId,
-                  targetPageIndex: pageIndex,
-                  targetPrimitiveId: member.id,
-                  openInSplit,
-                });
-                return;
-              }
-              if (!sameMap) {
-                if (openInSplit) {
-                  onOpenCrossMapBacklink?.({
-                    sourceMapId: effectiveMap.id,
-                    sourcePageIndex: effectivePageIndex,
-                    sourcePrimitiveId: primitive.id,
-                    targetMapId,
-                    targetPageIndex: pageIndex,
-                    targetPrimitiveId: member.id,
-                  });
-                } else {
-                  await setActiveMap(targetMapId);
-                  if (pageIndex !== targetMap.pageIndex) {
-                    await setActivePage(pageIndex);
-                  }
-                  setSelectedPrimitiveId(member.id);
-                }
-                return;
-              }
-              if (pageIndex !== effectivePageIndex) {
-                await setActivePage(pageIndex);
-              }
-              selectPrimitive(member.id);
-            },
-          };
-        })
-        .filter((m): m is NonNullable<typeof m> => m !== null)
-        .sort((a, b) => {
-          if (a.sameMap !== b.sameMap) return a.sameMap ? -1 : 1;
-          return a.label.localeCompare(b.label);
-        }),
+      resolveBacklinks({
+        keys: getRelatedMemberKeys(primitive),
+        maps,
+        fallbackMap: effectiveMap,
+        fallbackPageIndex: effectivePageIndex,
+        fallbackWorkspace: effectiveWorkspace,
+      }),
+    [primitive, effectiveWorkspace, maps, effectiveMap, effectivePageIndex]
+  );
+
+  const openBacklink = useCallback(
+    async (target: RelatedTarget, openInSplit: boolean) => {
+      if (!effectiveMap) return;
+      if (onOpenBacklink) {
+        onOpenBacklink({ target, openInSplit });
+        return;
+      }
+      if (target.kind === 'map') {
+        if (openInSplit) {
+          window.dispatchEvent(new CustomEvent('map-open-in-split', { detail: { mapId: target.mapId } }));
+        } else {
+          await setActiveMap(target.mapId);
+          useEditorStore.getState().openMapOverview();
+        }
+        return;
+      }
+      const targetMapId = target.mapId ?? effectiveMap.id;
+      const targetMap = maps.find((map) => map.id === targetMapId);
+      if (!targetMap || target.pageIndex === null) return;
+      if (targetMapId !== effectiveMap.id) {
+        await setActiveMap(targetMapId);
+      }
+      if (target.pageIndex !== targetMap.pageIndex) {
+        await setActivePage(target.pageIndex);
+      }
+      if (targetMapId === effectiveMap.id && target.pageIndex === effectivePageIndex) {
+        selectPrimitive(target.id);
+      } else {
+        setSelectedPrimitiveId(target.id);
+      }
+    },
     [
-      primitive,
-      effectiveWorkspace,
-      maps,
       effectiveMap,
       effectivePageIndex,
+      maps,
+      onOpenBacklink,
+      primitive.id,
+      selectPrimitive,
       setActiveMap,
       setActivePage,
-      onOpenCrossMapBacklink,
-      onOpenBacklink,
-      selectPrimitive,
+      setSelectedPrimitiveId,
     ]
   );
 
@@ -507,24 +477,32 @@ export default function PrimitiveDetailPanel({
                         event.stopPropagation();
                         setDeletingBacklinks(false);
                         if (effectiveMap) {
-                          void removePrimitiveBacklink(
-                            effectiveMap.id,
-                            effectivePageIndex,
-                            primitive.id,
-                            member.mapId,
-                            member.pageIndex,
-                            member.id
-                          );
+                          if (sourceTarget) {
+                            void removeBacklink(sourceTarget, member.target);
+                          }
                           return;
                         }
                         removeNeighborMember(primitive.id, member.key);
                         return;
                       }
-                      void member.onClick(event.shiftKey);
+                      void openBacklink(member.target, event.shiftKey);
                     }}
                     className={deletingBacklinks ? '' : 'mr-1'}
                   >
-                    {member.label}
+                    <span
+                      className={
+                        member.kind === 'map'
+                          ? 'rounded-full bg-sky-50 px-2 py-0.5 text-sky-700'
+                          : ''
+                      }
+                    >
+                      {member.label}
+                    </span>
+                    {member.detail && (
+                      <span className="ml-1 text-[10px] font-normal text-gray-400">
+                        {member.detail}
+                      </span>
+                    )}
                   </button>
                   {!deletingBacklinks && (
                     <button
@@ -532,14 +510,9 @@ export default function PrimitiveDetailPanel({
                         event.preventDefault();
                         event.stopPropagation();
                         if (effectiveMap) {
-                          void removePrimitiveBacklink(
-                            effectiveMap.id,
-                            effectivePageIndex,
-                            primitive.id,
-                            member.mapId,
-                            member.pageIndex,
-                            member.id
-                          );
+                          if (sourceTarget) {
+                            void removeBacklink(sourceTarget, member.target);
+                          }
                           return;
                         }
                         removeNeighborMember(primitive.id, member.key);

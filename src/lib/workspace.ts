@@ -23,6 +23,14 @@ export function parseMemberKey(key: string): { id: string } | null {
   return { id: key.slice('primitive:'.length) };
 }
 
+export type RelatedTarget =
+  | { kind: 'map'; mapId: string }
+  | { kind: 'primitive'; mapId: string | null; pageIndex: number | null; id: string };
+
+export function makeRelatedMapKey(mapId: string) {
+  return `map:${mapId}`;
+}
+
 export function makeRelatedPrimitiveKey(
   id: string,
   pageIndex: number,
@@ -34,9 +42,20 @@ export function makeRelatedPrimitiveKey(
   return `primitive-page:${pageIndex}:${id}`;
 }
 
-export function parseRelatedPrimitiveKey(
-  key: string
-): { id: string; pageIndex: number | null; mapId: string | null } | null {
+export function makeRelatedTargetKey(target: RelatedTarget) {
+  if (target.kind === 'map') return makeRelatedMapKey(target.mapId);
+  if (target.mapId && target.pageIndex !== null) {
+    return makeRelatedPrimitiveKey(target.id, target.pageIndex, target.mapId);
+  }
+  if (target.pageIndex !== null) return makeRelatedPrimitiveKey(target.id, target.pageIndex);
+  return makeMemberKey(target.id);
+}
+
+export function parseRelatedTargetKey(key: string): RelatedTarget | null {
+  if (key.startsWith('map:')) {
+    const mapId = key.slice('map:'.length);
+    return mapId ? { kind: 'map', mapId } : null;
+  }
   if (key.startsWith('primitive-map-page:')) {
     const rest = key.slice('primitive-map-page:'.length);
     const firstSep = rest.indexOf(':');
@@ -46,7 +65,7 @@ export function parseRelatedPrimitiveKey(
     const pageIndex = Number.parseInt(rest.slice(firstSep + 1, secondSep), 10);
     const id = rest.slice(secondSep + 1);
     if (!mapId || !Number.isFinite(pageIndex) || !id) return null;
-    return { id, pageIndex, mapId };
+    return { kind: 'primitive', id, pageIndex, mapId };
   }
   if (key.startsWith('primitive-page:')) {
     const rest = key.slice('primitive-page:'.length);
@@ -55,11 +74,19 @@ export function parseRelatedPrimitiveKey(
     const pageIndex = Number.parseInt(rest.slice(0, sep), 10);
     const id = rest.slice(sep + 1);
     if (!Number.isFinite(pageIndex) || !id) return null;
-    return { id, pageIndex, mapId: null };
+    return { kind: 'primitive', id, pageIndex, mapId: null };
   }
   const legacy = parseMemberKey(key);
   if (!legacy) return null;
-  return { id: legacy.id, pageIndex: null, mapId: null };
+  return { kind: 'primitive', id: legacy.id, pageIndex: null, mapId: null };
+}
+
+export function parseRelatedPrimitiveKey(
+  key: string
+): { id: string; pageIndex: number | null; mapId: string | null } | null {
+  const target = parseRelatedTargetKey(key);
+  if (!target || target.kind !== 'primitive') return null;
+  return { id: target.id, pageIndex: target.pageIndex, mapId: target.mapId };
 }
 
 export function bboxFromPoints(a: Point, b: Point): BBox {

@@ -77,6 +77,8 @@ interface EditorProps {
   compareBacklinkPickActive?: boolean;
   onStartCompareBacklinkPick?: () => void;
   onPickCompareBacklinkTarget?: (primitiveId: string) => void;
+  onPickCompareBacklinkMapTarget?: () => void;
+  onOpenCompareMapOverview?: () => void;
   compareLinkFlash?: { primitiveId: string; nonce: number } | null;
   compareLinkConfirmIds?: string[];
 }
@@ -118,6 +120,8 @@ export default function Editor({
   compareBacklinkPickActive = false,
   onStartCompareBacklinkPick,
   onPickCompareBacklinkTarget,
+  onPickCompareBacklinkMapTarget,
+  onOpenCompareMapOverview,
   compareLinkFlash,
   compareLinkConfirmIds = [],
 }: EditorProps) {
@@ -954,9 +958,28 @@ export default function Editor({
         ) : (
           <div className="flex items-center rounded-2xl border border-white/10 bg-black/45 px-2 py-2 shadow-lg backdrop-blur">
             {(compareOnly ? title : mapName) && (
-              <div className="mr-2 rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-white/90">
+              <button
+                type="button"
+                onClick={() => {
+                  if (compareOnly && compareBacklinkPickActive) {
+                    onPickCompareBacklinkMapTarget?.();
+                    return;
+                  }
+                  if (compareOnly) {
+                    onOpenCompareMapOverview?.();
+                  } else {
+                    openMapOverview();
+                  }
+                }}
+                className="mr-2 rounded-lg bg-white/10 px-2 py-1 text-xs font-semibold text-white/90 transition hover:bg-white/20"
+                title={
+                  compareOnly && compareBacklinkPickActive
+                    ? 'Pick this map as backlink target'
+                    : 'Open map overview'
+                }
+              >
                 {compareOnly ? title : mapName}
-              </div>
+              </button>
             )}
             <div className="flex items-center gap-1">
               <button

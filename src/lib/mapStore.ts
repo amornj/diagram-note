@@ -4,7 +4,10 @@ import { EMPTY_WORKSPACE } from './workspace';
 import * as idb from './idb';
 import { detectSourceType, rasterizeSource } from './pdf';
 import { useEditorStore } from './store';
-import { makeRelatedPrimitiveKey } from './workspace';
+import {
+  makeRelatedTargetKey,
+  type RelatedTarget,
+} from './workspace';
 import { auth } from './firebase';
 import {
   deleteMapSource,
@@ -58,6 +61,7 @@ export interface MapStoreState {
     targetPageIndex: number,
     targetId: string
   ) => Promise<boolean>;
+  addBacklink: (source: RelatedTarget, target: RelatedTarget) => Promise<boolean>;
   removePrimitiveBacklink: (
     sourceMapId: string,
     sourcePageIndex: number,
@@ -66,6 +70,7 @@ export interface MapStoreState {
     targetPageIndex: number,
     targetId: string
   ) => Promise<void>;
+  removeBacklink: (source: RelatedTarget, target: RelatedTarget) => Promise<void>;
   deleteMap: (id: string) => Promise<void>;
   restoreMap: (id: string) => Promise<void>;
   permanentlyDeleteMap: (id: string) => Promise<void>;
@@ -454,6 +459,40 @@ export async function loadMapPageView(
     rasterBlob: loaded.raster.blob,
     dims: { width: loaded.raster.width, height: loaded.raster.height },
   };
+}
+
+function endpointExists(map: DiagramMap, target: RelatedTarget) {
+  if (target.kind === 'map') return map.id === target.mapId;
+  if (target.pageIndex === null) return false;
+  return getPageMeta(map, target.pageIndex).workspace.primitives.some(
+    (primitive) => primitive.id === target.id
+  );
+}
+
+function updateRelatedKeysOnEndpoint(
+  map: DiagramMap,
+  target: RelatedTarget,
+  updater: (keys: string[]) => string[]
+): DiagramMap {
+  if (target.kind === 'map') {
+    return {
+      ...map,
+      relatedMemberKeys: updater(map.relatedMemberKeys ?? []),
+      updatedAt: Date.now(),
+    };
+  }
+  if (target.pageIndex === null) return map;
+  return updatePrimitiveOnPage(map, target.pageIndex, target.id, (primitive) => ({
+    ...primitive,
+    relatedMemberKeys: updater(primitive.relatedMemberKeys ?? []),
+  }));
+}
+
+function syncActiveWorkspaceIfNeeded(activeMapId: string | null, map: DiagramMap) {
+  if (activeMapId !== map.id) return;
+  useEditorStore
+    .getState()
+    .setWorkspace(getPageMeta(map, map.pageIndex).workspace, false);
 }
 
 export const useMapStore = create<MapStoreState>((set, get) => ({
@@ -967,60 +1006,50 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     targetPageIndex,
     targetId
   ) => {
-    if (sourceMapId === targetMapId && sourceId === targetId && sourcePageIndex === targetPageIndex) {
-      return false;
-    }
-    const sourceMap = await idb.getMap(sourceMapId);
-    const targetMap = sourceMapId === targetMapId ? sourceMap : await idb.getMap(targetMapId);
+    return get().addBacklink(
+      { kind: 'primitive', mapId: sourceMapId, pageIndex: sourcePageIndex, id: sourceId },
+      { kind: 'primitive', mapId: targetMapId, pageIndex: targetPageIndex, id: targetId }
+    );
+  },
+
+  addBacklink: async (source, target) => {
+    if (!source.mapId || !target.mapId) return false;
+    const sourceKey = makeRelatedTargetKey(source);
+    const targetKey = makeRelatedTargetKey(target);
+    if (sourceKey === targetKey) return false;
+    const sourceMap = await idb.getMap(source.mapId);
+    const targetMap = source.mapId === target.mapId ? sourceMap : await idb.getMap(target.mapId);
     if (!sourceMap || !targetMap) return false;
+    if (!endpointExists(sourceMap, source) || !endpointExists(targetMap, target)) return false;
 
-    const sourceKey = makeRelatedPrimitiveKey(sourceId, sourcePageIndex, sourceMapId);
-    const targetKey = makeRelatedPrimitiveKey(targetId, targetPageIndex, targetMapId);
-    const sourcePrimitive = getPageMeta(sourceMap, sourcePageIndex).workspace.primitives.find(
-      (primitive) => primitive.id === sourceId
-    );
-    const targetPrimitive = getPageMeta(targetMap, targetPageIndex).workspace.primitives.find(
-      (primitive) => primitive.id === targetId
-    );
-    if (!sourcePrimitive || !targetPrimitive) return false;
-    const sourceHasLink = (sourcePrimitive.relatedMemberKeys ?? []).includes(targetKey);
-    const targetHasLink = (targetPrimitive.relatedMemberKeys ?? []).includes(sourceKey);
-    if (sourceHasLink && targetHasLink) return false;
+    const sourceKeys =
+      source.kind === 'map'
+        ? sourceMap.relatedMemberKeys ?? []
+        : getPageMeta(sourceMap, source.pageIndex ?? 0).workspace.primitives.find(
+            (primitive) => primitive.id === source.id
+          )?.relatedMemberKeys ?? [];
+    const targetKeys =
+      target.kind === 'map'
+        ? targetMap.relatedMemberKeys ?? []
+        : getPageMeta(targetMap, target.pageIndex ?? 0).workspace.primitives.find(
+            (primitive) => primitive.id === target.id
+          )?.relatedMemberKeys ?? [];
+    if (sourceKeys.includes(targetKey) && targetKeys.includes(sourceKey)) return false;
 
-    const nextSourceMap = updatePrimitiveOnPage(
-      sourceMap,
-      sourcePageIndex,
-      sourceId,
-      (primitive) => ({
-        ...primitive,
-        relatedMemberKeys: Array.from(
-          new Set([...(primitive.relatedMemberKeys ?? []), targetKey])
-        ).filter((key) => key !== sourceKey),
-      })
+    const nextSourceMap = updateRelatedKeysOnEndpoint(sourceMap, source, (keys) =>
+      Array.from(new Set([...keys, targetKey])).filter((key) => key !== sourceKey)
     );
-    const nextTargetBase = sourceMapId === targetMapId ? nextSourceMap : targetMap;
-    const nextTargetMap = updatePrimitiveOnPage(
-      nextTargetBase,
-      targetPageIndex,
-      targetId,
-      (primitive) => ({
-        ...primitive,
-        relatedMemberKeys: Array.from(
-          new Set([...(primitive.relatedMemberKeys ?? []), sourceKey])
-        ).filter((key) => key !== targetKey),
-      })
+    const nextTargetBase = source.mapId === target.mapId ? nextSourceMap : targetMap;
+    const nextTargetMap = updateRelatedKeysOnEndpoint(nextTargetBase, target, (keys) =>
+      Array.from(new Set([...keys, sourceKey])).filter((key) => key !== targetKey)
     );
 
-    if (sourceMapId === targetMapId) {
+    if (source.mapId === target.mapId) {
       await idb.putMap(nextTargetMap);
       set({
         maps: get().maps.map((entry) => (entry.id === nextTargetMap.id ? nextTargetMap : entry)),
       });
-      if (get().activeMapId === nextTargetMap.id) {
-        useEditorStore
-          .getState()
-          .setWorkspace(getPageMeta(nextTargetMap, nextTargetMap.pageIndex).workspace, false);
-      }
+      syncActiveWorkspaceIfNeeded(get().activeMapId, nextTargetMap);
       return true;
     }
 
@@ -1033,15 +1062,8 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         return entry;
       }),
     });
-    if (get().activeMapId === nextSourceMap.id) {
-      useEditorStore
-        .getState()
-        .setWorkspace(getPageMeta(nextSourceMap, nextSourceMap.pageIndex).workspace, false);
-    } else if (get().activeMapId === nextTargetMap.id) {
-      useEditorStore
-        .getState()
-        .setWorkspace(getPageMeta(nextTargetMap, nextTargetMap.pageIndex).workspace, false);
-    }
+    syncActiveWorkspaceIfNeeded(get().activeMapId, nextSourceMap);
+    syncActiveWorkspaceIfNeeded(get().activeMapId, nextTargetMap);
     return true;
   },
 
@@ -1053,34 +1075,32 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
     targetPageIndex,
     targetId
   ) => {
-    const sourceMap = await idb.getMap(sourceMapId);
-    const targetMap = sourceMapId === targetMapId ? sourceMap : await idb.getMap(targetMapId);
+    await get().removeBacklink(
+      { kind: 'primitive', mapId: sourceMapId, pageIndex: sourcePageIndex, id: sourceId },
+      { kind: 'primitive', mapId: targetMapId, pageIndex: targetPageIndex, id: targetId }
+    );
+  },
+
+  removeBacklink: async (source, target) => {
+    if (!source.mapId || !target.mapId) return;
+    const sourceMap = await idb.getMap(source.mapId);
+    const targetMap = source.mapId === target.mapId ? sourceMap : await idb.getMap(target.mapId);
     if (!sourceMap || !targetMap) return;
-    const sourceKey = makeRelatedPrimitiveKey(sourceId, sourcePageIndex, sourceMapId);
-    const targetKey = makeRelatedPrimitiveKey(targetId, targetPageIndex, targetMapId);
-    const nextSourceMap = updatePrimitiveOnPage(sourceMap, sourcePageIndex, sourceId, (primitive) => ({
-      ...primitive,
-      relatedMemberKeys: (primitive.relatedMemberKeys ?? []).filter(
-        (key) => key !== targetKey
-      ),
-    }));
-    const nextTargetBase = sourceMapId === targetMapId ? nextSourceMap : targetMap;
-    const nextTargetMap = updatePrimitiveOnPage(nextTargetBase, targetPageIndex, targetId, (primitive) => ({
-      ...primitive,
-      relatedMemberKeys: (primitive.relatedMemberKeys ?? []).filter(
-        (key) => key !== sourceKey
-      ),
-    }));
-    if (sourceMapId === targetMapId) {
+    const sourceKey = makeRelatedTargetKey(source);
+    const targetKey = makeRelatedTargetKey(target);
+    const nextSourceMap = updateRelatedKeysOnEndpoint(sourceMap, source, (keys) =>
+      keys.filter((key) => key !== targetKey)
+    );
+    const nextTargetBase = source.mapId === target.mapId ? nextSourceMap : targetMap;
+    const nextTargetMap = updateRelatedKeysOnEndpoint(nextTargetBase, target, (keys) =>
+      keys.filter((key) => key !== sourceKey)
+    );
+    if (source.mapId === target.mapId) {
       await idb.putMap(nextTargetMap);
       set({
         maps: get().maps.map((entry) => (entry.id === nextTargetMap.id ? nextTargetMap : entry)),
       });
-      if (get().activeMapId === nextTargetMap.id) {
-        useEditorStore
-          .getState()
-          .setWorkspace(getPageMeta(nextTargetMap, nextTargetMap.pageIndex).workspace, false);
-      }
+      syncActiveWorkspaceIfNeeded(get().activeMapId, nextTargetMap);
       return;
     }
     await idb.putMap(nextSourceMap);
@@ -1092,15 +1112,8 @@ export const useMapStore = create<MapStoreState>((set, get) => ({
         return entry;
       }),
     });
-    if (get().activeMapId === nextSourceMap.id) {
-      useEditorStore
-        .getState()
-        .setWorkspace(getPageMeta(nextSourceMap, nextSourceMap.pageIndex).workspace, false);
-    } else if (get().activeMapId === nextTargetMap.id) {
-      useEditorStore
-        .getState()
-        .setWorkspace(getPageMeta(nextTargetMap, nextTargetMap.pageIndex).workspace, false);
-    }
+    syncActiveWorkspaceIfNeeded(get().activeMapId, nextSourceMap);
+    syncActiveWorkspaceIfNeeded(get().activeMapId, nextTargetMap);
   },
 
   deleteMap: async (id) => {

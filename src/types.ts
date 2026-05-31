@@ -45,7 +45,7 @@ export interface Primitive {
   /** group */
   groupMemberKeys?: string[];
   showMemberNumbers?: boolean;
-  /** any-to-any backlinks (single namespace: 'primitive:<id>') */
+  /** Backlinks to primitives or maps. */
   relatedMemberKeys?: string[];
   photoUrl?: string;
   photoStoragePath?: string;
@@ -94,6 +94,8 @@ export interface DiagramMap {
   archivedAt?: number;
   /** Optional user-defined group id; maps without a group fall under "Other". */
   groupId?: string;
+  /** Backlinks to primitives or maps. */
+  relatedMemberKeys?: string[];
   createdAt: number;
   updatedAt: number;
 }
