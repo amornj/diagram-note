@@ -502,6 +502,7 @@ function ComparePane({
   onPickBacklinkTarget,
   onPickBacklinkMapTarget,
   onOpenMapOverview,
+  onToggleRightPaneShortcut,
   linkFlash,
   linkConfirmIds,
 }: {
@@ -535,6 +536,7 @@ function ComparePane({
   onPickBacklinkTarget: (primitiveId: string) => void;
   onPickBacklinkMapTarget: () => void;
   onOpenMapOverview: () => void;
+  onToggleRightPaneShortcut: () => void;
   linkFlash: { primitiveId: string; nonce: number } | null;
   linkConfirmIds: string[];
 }) {
@@ -747,6 +749,7 @@ function ComparePane({
           onPickCompareBacklinkTarget={onPickBacklinkTarget}
           onPickCompareBacklinkMapTarget={onPickBacklinkMapTarget}
           onOpenCompareMapOverview={onOpenMapOverview}
+          onToggleCompareRightPane={onToggleRightPaneShortcut}
           compareLinkFlash={linkFlash}
           compareLinkConfirmIds={linkConfirmIds}
         />
@@ -1222,6 +1225,25 @@ function MapPage() {
   const handleActivatePane2 = useCallback(() => {
     setFocusedSplitPane(2);
   }, []);
+
+  const toggleSplitRightPane = useCallback(
+    (pane: 1 | 2) => {
+      setFocusedSplitPane(pane);
+      useEditorStore.setState((state) => {
+        if (!state.rightPaneOpen) {
+          return {
+            rightPaneOpen: true,
+            rightPaneMode: compareSelectedPrimitiveId[pane] ? 'primitive' : 'map',
+          };
+        }
+        if (state.rightPaneMode === 'primitive') {
+          return { rightPaneOpen: true, rightPaneMode: 'map' };
+        }
+        return { rightPaneOpen: false, rightPaneMode: 'map' };
+      });
+    },
+    [compareSelectedPrimitiveId]
+  );
 
   const clearSplitLinkConfirmations = useCallback(() => {
     setCompareLinkConfirmIds({ 1: [], 2: [] });
@@ -1725,6 +1747,7 @@ function MapPage() {
                   setCompareSelectedPrimitiveId((current) => ({ ...current, 1: null }));
                   useEditorStore.setState({ rightPaneOpen: true, rightPaneMode: 'map' });
                 }}
+                onToggleRightPaneShortcut={() => toggleSplitRightPane(1)}
                 linkFlash={compareLinkFlash[1]}
                 linkConfirmIds={compareLinkConfirmIds[1]}
               />
@@ -1819,6 +1842,7 @@ function MapPage() {
                   setCompareSelectedPrimitiveId((current) => ({ ...current, 2: null }));
                   useEditorStore.setState({ rightPaneOpen: true, rightPaneMode: 'map' });
                 }}
+                onToggleRightPaneShortcut={() => toggleSplitRightPane(2)}
                 linkFlash={compareLinkFlash[2]}
                 linkConfirmIds={compareLinkConfirmIds[2]}
               />

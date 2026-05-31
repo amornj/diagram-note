@@ -79,6 +79,7 @@ interface EditorProps {
   onPickCompareBacklinkTarget?: (primitiveId: string) => void;
   onPickCompareBacklinkMapTarget?: () => void;
   onOpenCompareMapOverview?: () => void;
+  onToggleCompareRightPane?: () => void;
   compareLinkFlash?: { primitiveId: string; nonce: number } | null;
   compareLinkConfirmIds?: string[];
 }
@@ -122,6 +123,7 @@ export default function Editor({
   onPickCompareBacklinkTarget,
   onPickCompareBacklinkMapTarget,
   onOpenCompareMapOverview,
+  onToggleCompareRightPane,
   compareLinkFlash,
   compareLinkConfirmIds = [],
 }: EditorProps) {
@@ -554,6 +556,9 @@ export default function Editor({
           case '1':
             if (isFocusedPane) toggleLeftSidebar();
             break;
+          case '2':
+            onToggleCompareRightPane?.();
+            break;
           case '\\':
             onToggleCompareOverlays?.();
             break;
@@ -869,6 +874,7 @@ export default function Editor({
     onSetCompareAllPriorityNotesCollapsed,
     onStartCompareBacklinkPick,
     onPickCompareBacklinkTarget,
+    onToggleCompareRightPane,
     isFocusedPane,
     effectivePanLocked,
     effectiveZoomLocked,
