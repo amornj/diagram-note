@@ -221,6 +221,7 @@ export default function PrimitiveDetailPanel({
     if (!sourceTarget) return;
     const added = await addBacklink(sourceTarget, target);
     if (!added) return;
+    selectPrimitive(primitive.id);
     setSoftLinkAddMode(false);
     if (isPickingRelated) {
       if (onStartCrossPaneBacklinkPick) {
