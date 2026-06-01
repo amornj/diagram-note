@@ -119,6 +119,7 @@ export default function PrimitiveDetailPanel({
   const [aliasDraft, setAliasDraft] = useState((primitive.aliases ?? []).join(', '));
   const [draggedGroupIndex, setDraggedGroupIndex] = useState<number | null>(null);
   const [deletingBacklinks, setDeletingBacklinks] = useState(false);
+  const [backlinksCollapsed, setBacklinksCollapsed] = useState(false);
   const [softLinksCollapsed, setSoftLinksCollapsed] = useState(true);
   const [softLinkAddMode, setSoftLinkAddMode] = useState(false);
   const primitivesById = useMemo(
@@ -447,9 +448,19 @@ export default function PrimitiveDetailPanel({
 
         <div>
           <div className="flex items-center justify-between gap-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Backlinks
-            </div>
+            <button
+              type="button"
+              onClick={() => setBacklinksCollapsed((value) => !value)}
+              className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-gray-500 transition hover:text-gray-700"
+            >
+              {backlinksCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+              <span>Backlinks</span>
+              {relatedMembers.length > 0 && (
+                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] tracking-normal text-slate-500">
+                  {relatedMembers.length}
+                </span>
+              )}
+            </button>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
@@ -494,75 +505,77 @@ export default function PrimitiveDetailPanel({
               Click a primitive on the map to backlink it.
             </div>
           )}
-          {relatedMembers.length > 0 ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {relatedMembers.map((member) => (
-                <div
-                  key={member.key}
-                  className={`group inline-flex items-center rounded-full border py-1 text-xs font-medium transition ${
-                    deletingBacklinks
-                      ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                      : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
-                  } ${deletingBacklinks ? 'px-2.5' : 'pl-2.5 pr-1'}`}
-                >
-                  <button
-                    onClick={(event) => {
-                      if (deletingBacklinks) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setDeletingBacklinks(false);
-                        if (effectiveMap) {
-                          if (sourceTarget) {
-                            void removeBacklink(sourceTarget, member.target);
-                          }
-                          return;
-                        }
-                        removeNeighborMember(primitive.id, member.key);
-                        return;
-                      }
-                      void openBacklink(member.target, event.shiftKey);
-                    }}
-                    className={deletingBacklinks ? '' : 'mr-1'}
+          {!backlinksCollapsed && (
+            relatedMembers.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {relatedMembers.map((member) => (
+                  <div
+                    key={member.key}
+                    className={`group inline-flex items-center rounded-full border py-1 text-xs font-medium transition ${
+                      deletingBacklinks
+                        ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                        : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                    } ${deletingBacklinks ? 'px-2.5' : 'pl-2.5 pr-1'}`}
                   >
-                    <span
-                      className={
-                        member.kind === 'map'
-                          ? 'rounded-full bg-sky-50 px-2 py-0.5 text-sky-700'
-                          : ''
-                      }
-                    >
-                      {member.label}
-                    </span>
-                    {member.detail && (
-                      <span className="ml-1 text-[10px] font-normal text-gray-400">
-                        {member.detail}
-                      </span>
-                    )}
-                  </button>
-                  {!deletingBacklinks && (
                     <button
                       onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        if (effectiveMap) {
-                          if (sourceTarget) {
-                            void removeBacklink(sourceTarget, member.target);
+                        if (deletingBacklinks) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setDeletingBacklinks(false);
+                          if (effectiveMap) {
+                            if (sourceTarget) {
+                              void removeBacklink(sourceTarget, member.target);
+                            }
+                            return;
                           }
+                          removeNeighborMember(primitive.id, member.key);
                           return;
                         }
-                        removeNeighborMember(primitive.id, member.key);
+                        void openBacklink(member.target, event.shiftKey);
                       }}
-                      className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                      aria-label={`Remove ${member.label}`}
+                      className={deletingBacklinks ? '' : 'mr-1'}
                     >
-                      <X size={12} />
+                      <span
+                        className={
+                          member.kind === 'map'
+                            ? 'rounded-full bg-sky-50 px-2 py-0.5 text-sky-700'
+                            : ''
+                        }
+                      >
+                        {member.label}
+                      </span>
+                      {member.detail && (
+                        <span className="ml-1 text-[10px] font-normal text-gray-400">
+                          {member.detail}
+                        </span>
+                      )}
                     </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-2 text-xs text-gray-400">No backlinks added yet.</div>
+                    {!deletingBacklinks && (
+                      <button
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (effectiveMap) {
+                            if (sourceTarget) {
+                              void removeBacklink(sourceTarget, member.target);
+                            }
+                            return;
+                          }
+                          removeNeighborMember(primitive.id, member.key);
+                        }}
+                        className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                        aria-label={`Remove ${member.label}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 text-xs text-gray-400">No backlinks added yet.</div>
+            )
           )}
         </div>
 
@@ -574,7 +587,7 @@ export default function PrimitiveDetailPanel({
               className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-gray-500 transition hover:text-gray-700"
             >
               {softLinksCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
-              <span>Soft link</span>
+              <span>Softlinks</span>
               {softLinks.length > 0 && (
                 <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] tracking-normal text-slate-500">
                   {softLinks.length}
