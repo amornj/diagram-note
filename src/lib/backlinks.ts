@@ -13,6 +13,16 @@ export type ResolvedBacklink = {
   detail: string;
 };
 
+export type SoftLinkSource =
+  | { kind: 'map'; map: DiagramMap }
+  | {
+      kind: 'primitive';
+      map: DiagramMap;
+      pageIndex: number;
+      workspace: MapWorkspace;
+      primitive: Primitive;
+    };
+
 export function workspaceForMapPage(map: DiagramMap, pageIndex: number): MapWorkspace {
   return map.pages?.[pageIndex]?.workspace ?? map.workspace;
 }
@@ -84,6 +94,111 @@ export function resolveBacklinks({
       if (a.kind !== b.kind) return a.kind === 'map' ? -1 : 1;
       return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
     });
+}
+
+export function resolveSoftLinks({
+  source,
+  maps,
+}: {
+  source: SoftLinkSource;
+  maps: DiagramMap[];
+}): ResolvedBacklink[] {
+  const sourceName = normalizeName(source.kind === 'map' ? source.map.name : source.primitive.name);
+  if (!sourceName) return [];
+  const sourceKey =
+    source.kind === 'map'
+      ? `map:${source.map.id}`
+      : `primitive:${source.map.id}:${source.pageIndex}:${source.primitive.id}`;
+  const existingKeys = new Set(
+    (source.kind === 'map'
+      ? source.map.relatedMemberKeys ?? []
+      : source.primitive.relatedMemberKeys ?? []
+    ).map((key) =>
+      normalizeRelatedKey(key, source.map, source.kind === 'primitive' ? source.pageIndex : undefined)
+    )
+  );
+
+  const matches: ResolvedBacklink[] = [];
+  for (const map of maps) {
+    if (map.archivedAt !== undefined) continue;
+    const mapTarget: RelatedTarget = { kind: 'map', mapId: map.id };
+    const mapKey = `map:${map.id}`;
+    if (
+      mapKey !== sourceKey &&
+      normalizeName(map.name) === sourceName &&
+      !existingKeys.has(mapKey)
+    ) {
+      matches.push({
+        key: `soft:${mapKey}`,
+        target: mapTarget,
+        kind: 'map',
+        mapId: map.id,
+        mapName: map.name,
+        label: map.name,
+        detail: 'Map',
+      });
+    }
+
+    for (const pageIndex of getPageIndexes(map)) {
+      const pageWorkspace = workspaceForMapPage(map, pageIndex);
+      for (const primitive of pageWorkspace.primitives) {
+        const primitiveKey = `primitive:${map.id}:${pageIndex}:${primitive.id}`;
+        if (
+          primitiveKey === sourceKey ||
+          normalizeName(primitive.name) !== sourceName ||
+          existingKeys.has(primitiveKey)
+        ) {
+          continue;
+        }
+        matches.push({
+          key: `soft:${primitiveKey}`,
+          target: {
+            kind: 'primitive',
+            mapId: map.id,
+            pageIndex,
+            id: primitive.id,
+          },
+          kind: 'primitive',
+          mapId: map.id,
+          mapName: map.name,
+          pageIndex,
+          primitiveId: primitive.id,
+          label: primitive.name,
+          detail:
+            source.kind === 'primitive' && map.id === source.map.id && pageIndex === source.pageIndex
+              ? primitiveKindLabel(primitive)
+              : `${map.name}${map.pageCount > 1 ? ` · Page ${pageIndex + 1}` : ''}`,
+        });
+      }
+    }
+  }
+  return matches.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === 'map' ? -1 : 1;
+    if (a.label !== b.label) return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
+    return a.detail.localeCompare(b.detail, undefined, { sensitivity: 'base' });
+  });
+}
+
+function normalizeName(value: string) {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function getPageIndexes(map: DiagramMap) {
+  const indexes = new Set<number>([map.pageIndex]);
+  for (const key of Object.keys(map.pages ?? {})) {
+    const index = Number(key);
+    if (Number.isFinite(index)) indexes.add(index);
+  }
+  return Array.from(indexes).sort((a, b) => a - b);
+}
+
+function normalizeRelatedKey(key: string, fallbackMap: DiagramMap, fallbackPageIndex?: number) {
+  const target = parseRelatedTargetKey(key);
+  if (!target) return key;
+  if (target.kind === 'map') return `map:${target.mapId}`;
+  const mapId = target.mapId ?? fallbackMap.id;
+  const pageIndex = target.pageIndex ?? fallbackPageIndex ?? fallbackMap.pageIndex;
+  return `primitive:${mapId}:${pageIndex}:${target.id}`;
 }
 
 function primitiveKindLabel(primitive: Primitive) {
