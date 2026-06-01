@@ -233,6 +233,17 @@ export default function PrimitiveDetailPanel({
     }
   };
 
+  const deleteBacklink = async (target: RelatedTarget, fallbackKey: string) => {
+    if (effectiveMap) {
+      if (sourceTarget) {
+        await removeBacklink(sourceTarget, target);
+        selectPrimitive(primitive.id);
+      }
+      return;
+    }
+    removeNeighborMember(primitive.id, fallbackKey);
+  };
+
   // Auto-focus name input on freshly-created primitives
   useEffect(() => {
     if (pendingNameFocusId !== primitive.id) return;
@@ -523,13 +534,7 @@ export default function PrimitiveDetailPanel({
                           event.preventDefault();
                           event.stopPropagation();
                           setDeletingBacklinks(false);
-                          if (effectiveMap) {
-                            if (sourceTarget) {
-                              void removeBacklink(sourceTarget, member.target);
-                            }
-                            return;
-                          }
-                          removeNeighborMember(primitive.id, member.key);
+                          void deleteBacklink(member.target, member.key);
                           return;
                         }
                         void openBacklink(member.target, event.shiftKey);
@@ -556,13 +561,7 @@ export default function PrimitiveDetailPanel({
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-                          if (effectiveMap) {
-                            if (sourceTarget) {
-                              void removeBacklink(sourceTarget, member.target);
-                            }
-                            return;
-                          }
-                          removeNeighborMember(primitive.id, member.key);
+                          void deleteBacklink(member.target, member.key);
                         }}
                         className="rounded-full p-0.5 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                         aria-label={`Remove ${member.label}`}
