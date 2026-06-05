@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, ExternalLink, Plus, Trash2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { NoteCard } from '../types';
 import {
   composeNoteContent,
@@ -60,6 +60,7 @@ export default function NoteCards({
   const [currentIndex, setCurrentIndex] = useState(Math.max(0, notes.length - 1));
   const [noteHeight, setNoteHeight] = useState(loadSavedHeight);
   const [editorDraft, setEditorDraft] = useState('');
+  const [pendingFocusNoteId, setPendingFocusNoteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (notes.length === 0) {
@@ -75,6 +76,18 @@ export default function NoteCards({
     if (focusedIndex === null || notes.length === 0) return;
     setCurrentIndex(Math.max(0, Math.min(focusedIndex, notes.length - 1)));
   }, [focusedIndex, notes.length]);
+
+  useLayoutEffect(() => {
+    if (!pendingFocusNoteId) return;
+    const nextIndex = notes.findIndex((note) => note.id === pendingFocusNoteId);
+    if (nextIndex === -1) return;
+
+    setCurrentIndex(nextIndex);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+    setPendingFocusNoteId(null);
+  }, [notes, pendingFocusNoteId]);
 
   const currentNote = notes[currentIndex];
   const currentContent = notes.length > 0 ? currentNote?.content ?? '' : editorDraft;
@@ -94,9 +107,12 @@ export default function NoteCards({
       : nextNotes.map((note) => ({ ...note, isPriority: undefined }));
 
   const handleAdd = () => {
-    const nextNotes = normalizeNotes([...notes, { name: '', content: '' }]);
+    const newNote: NoteCard = { id: generateNoteId(), name: '', content: '' };
+    const nextNotes = normalizeNotes([...notes, newNote]);
     onChange(nextNotes);
+    setEditorDraft('');
     setCurrentIndex(nextNotes.length - 1);
+    setPendingFocusNoteId(newNote.id ?? null);
   };
 
   const handleDelete = () => {
