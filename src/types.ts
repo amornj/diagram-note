@@ -15,6 +15,8 @@ export interface NoteCard {
   id?: string;
   name: string;
   content: string;
+  createdAt?: number;
+  updatedAt?: number;
   isPriority?: boolean;
   photoUrl?: string;
   photoStoragePath?: string;

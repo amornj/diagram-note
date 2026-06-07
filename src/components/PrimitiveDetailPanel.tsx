@@ -74,6 +74,7 @@ export default function PrimitiveDetailPanel({
   const workspace = useEditorStore((s) => s.workspace);
   const pendingNameFocusId = useEditorStore((s) => s.pendingNameFocusId);
   const clearPendingNameFocus = useEditorStore((s) => s.clearPendingNameFocus);
+  const pendingPrimitiveNoteFocus = useEditorStore((s) => s.pendingPrimitiveNoteFocus);
   const startNeighborPick = useEditorStore((s) => s.startNeighborPick);
   const cancelNeighborPick = useEditorStore((s) => s.cancelNeighborPick);
   const removeNeighborMember = useEditorStore((s) => s.removeNeighborMember);
@@ -122,6 +123,10 @@ export default function PrimitiveDetailPanel({
   const [backlinksCollapsed, setBacklinksCollapsed] = useState(false);
   const [softLinksCollapsed, setSoftLinksCollapsed] = useState(true);
   const [softLinkAddMode, setSoftLinkAddMode] = useState(false);
+  const focusedNoteIndex =
+    pendingPrimitiveNoteFocus?.primitiveId === primitive.id
+      ? pendingPrimitiveNoteFocus.noteIndex
+      : null;
   const primitivesById = useMemo(
     () => new Map(effectiveWorkspace.primitives.map((p) => [p.id, p])),
     [effectiveWorkspace.primitives]
@@ -455,6 +460,7 @@ export default function PrimitiveDetailPanel({
           placeholder="Link"
           mapId={effectiveMapId}
           primitiveId={primitive.id}
+          focusedIndex={focusedNoteIndex}
         />
 
         <div>

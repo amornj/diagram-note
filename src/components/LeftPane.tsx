@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   ExternalLink,
   FolderPlus,
   Pin,
@@ -11,11 +14,12 @@ import {
 } from 'lucide-react';
 import { useEditorStore } from '../lib/store';
 import { useMapStore } from '../lib/mapStore';
-import type { DiagramMap, MapWorkspace, Primitive } from '../types';
+import type { DiagramMap, MapWorkspace, NoteCard, Primitive } from '../types';
 import ImportExportBar from './ImportExportBar';
 import GoogleAuthButton from './GoogleAuthButton';
 import { EMPTY_WORKSPACE, getPrimitiveBounds } from '../lib/workspace';
-import { extractUrls } from '../lib/noteLinks';
+import { extractUrls, splitNoteContent } from '../lib/noteLinks';
+import { buildDiagramDeepLink } from '../lib/deepLinks';
 
 type MapSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
 
@@ -33,6 +37,31 @@ interface PrimitiveSearchSection {
   hits: PrimitiveSearchHit[];
 }
 type PrimitiveSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
+
+type JourneyActivityType =
+  | 'map-created'
+  | 'primitive-created'
+  | 'map-note'
+  | 'primitive-note';
+
+interface JourneyActivity {
+  id: string;
+  type: JourneyActivityType;
+  action?: 'created' | 'updated';
+  timestamp: number;
+  map: DiagramMap;
+  pageIndex: number;
+  primitive?: Primitive;
+  note?: NoteCard;
+  noteIndex?: number;
+}
+
+interface JourneyDay {
+  key: string;
+  label: string;
+  timestamp: number;
+  activities: JourneyActivity[];
+}
 
 const MAP_SORT_STORAGE_KEY = 'diagram-note-map-sort-mode';
 const MAP_GROUP_VIEW_STORAGE_KEY = 'diagram-note-map-group-view';
@@ -139,6 +168,98 @@ function getMonthGroupLabel(timestamp: number) {
     month: 'short',
     year: 'numeric',
   }).format(new Date(timestamp));
+}
+
+function getDayKey(timestamp: number) {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getDayLabel(timestamp: number) {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(timestamp));
+}
+
+function isValidTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 946684800000;
+}
+
+function getMapPageWorkspace(map: DiagramMap, pageIndex: number): MapWorkspace | null {
+  return map.pages?.[pageIndex]?.workspace ??
+    (map.pageIndex === pageIndex ? map.workspace : null);
+}
+
+function getMapPageIndexes(map: DiagramMap) {
+  const pageIndexes = new Set<number>([map.pageIndex]);
+  for (const key of Object.keys(map.pages ?? {})) {
+    const pageIndex = Number(key);
+    if (Number.isFinite(pageIndex)) pageIndexes.add(pageIndex);
+  }
+  return [...pageIndexes].sort((a, b) => a - b);
+}
+
+function getNoteBody(note: NoteCard) {
+  return splitNoteContent(note.content).body.trim();
+}
+
+function getActivityLabel(activity: JourneyActivity) {
+  switch (activity.type) {
+    case 'map-created':
+      return 'Map created';
+    case 'primitive-created':
+      return `${KIND_LABELS[activity.primitive?.kind ?? 'rectangle']} created`;
+    case 'map-note':
+      return `Map note ${activity.action ?? 'updated'}`;
+    case 'primitive-note':
+      return `Primitive note ${activity.action ?? 'updated'}`;
+  }
+}
+
+function getActivityTitle(activity: JourneyActivity) {
+  if (activity.type === 'primitive-created' || activity.type === 'primitive-note') {
+    return activity.primitive?.name || 'Untitled primitive';
+  }
+  return activity.map.name;
+}
+
+function buildJourneyCopyText(day: JourneyDay) {
+  return day.activities
+    .map((activity) => {
+      const mapUrl = buildDiagramDeepLink({ mapId: activity.map.id });
+      const mapLink = `[${activity.map.name}](${mapUrl})`;
+      if (activity.type === 'map-created') {
+        return `${mapLink}\nMap created`;
+      }
+      if (activity.type === 'primitive-created') {
+        const primitive = activity.primitive;
+        return [
+          mapLink,
+          `Primitive created: ${primitive?.name || 'Untitled primitive'}`,
+          primitive ? `Type: ${KIND_LABELS[primitive.kind]}` : '',
+        ].filter(Boolean).join('\n');
+      }
+      const noteBody = activity.note ? getNoteBody(activity.note) : '';
+      if (activity.type === 'map-note') {
+        return [
+          mapLink,
+          `Map note ${activity.action ?? 'updated'}`,
+          noteBody,
+        ].filter(Boolean).join('\n');
+      }
+      return [
+        mapLink,
+        `Primitive note ${activity.action ?? 'updated'}: ${activity.primitive?.name || 'Untitled primitive'}`,
+        noteBody,
+      ].filter(Boolean).join('\n');
+    })
+    .join('\n\n');
 }
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
@@ -262,6 +383,8 @@ export default function LeftPane({
   const setHoveredPrimitiveId = useEditorStore((s) => s.setHoveredPrimitiveId);
   const selectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
   const setZoomTarget = useEditorStore((s) => s.setZoomTarget);
+  const setPendingMapNoteFocus = useEditorStore((s) => s.setPendingMapNoteFocus);
+  const setPendingPrimitiveNoteFocus = useEditorStore((s) => s.setPendingPrimitiveNoteFocus);
   const effectiveWorkspace =
     workspaceOverride === undefined ? workspace : (workspaceOverride ?? EMPTY_WORKSPACE);
   const effectiveSelectedPrimitiveId =
@@ -300,6 +423,9 @@ export default function LeftPane({
   const [mapSearchQuery, setMapSearchQuery] = useState('');
   const [primitiveSearchOpen, setPrimitiveSearchOpen] = useState(false);
   const [primitiveSearchQuery, setPrimitiveSearchQuery] = useState('');
+  const [journeyCollapsed, setJourneyCollapsed] = useState(true);
+  const [expandedJourneyDates, setExpandedJourneyDates] = useState<Record<string, boolean>>({});
+  const [copiedJourneyDateKey, setCopiedJourneyDateKey] = useState<string | null>(null);
   const mapsListRef = useRef<HTMLDivElement | null>(null);
   const dragScrollFrameRef = useRef<number | null>(null);
   const dragScrollVelocityRef = useRef(0);
@@ -541,6 +667,161 @@ export default function LeftPane({
     }
     return groups;
   }, [sortedMaps]);
+
+  const journeyDays = useMemo(() => {
+    const activities: JourneyActivity[] = [];
+    for (const map of visibleMaps) {
+      if (isValidTimestamp(map.createdAt)) {
+        activities.push({
+          id: `map-created-${map.id}`,
+          type: 'map-created',
+          action: 'created',
+          timestamp: map.createdAt,
+          map,
+          pageIndex: map.pageIndex,
+        });
+      }
+
+      for (const [noteIndex, note] of (map.notes ?? []).entries()) {
+        const noteId = note.id ?? `${noteIndex}`;
+        const createdAt = isValidTimestamp(note.createdAt) ? note.createdAt : null;
+        const updatedAt = isValidTimestamp(note.updatedAt) ? note.updatedAt : null;
+        if (createdAt) {
+          activities.push({
+            id: `map-note-created-${map.id}-${noteId}`,
+            type: 'map-note',
+            action: 'created',
+            timestamp: createdAt,
+            map,
+            pageIndex: map.pageIndex,
+            note,
+            noteIndex,
+          });
+        }
+        if (updatedAt && (!createdAt || getDayKey(updatedAt) !== getDayKey(createdAt))) {
+          activities.push({
+            id: `map-note-updated-${map.id}-${noteId}`,
+            type: 'map-note',
+            action: 'updated',
+            timestamp: updatedAt,
+            map,
+            pageIndex: map.pageIndex,
+            note,
+            noteIndex,
+          });
+        }
+      }
+
+      for (const pageIndex of getMapPageIndexes(map)) {
+        const pageWorkspace = getMapPageWorkspace(map, pageIndex);
+        if (!pageWorkspace) continue;
+        for (const primitive of pageWorkspace.primitives) {
+          if (isValidTimestamp(primitive.createdAt)) {
+            activities.push({
+              id: `primitive-created-${map.id}-${pageIndex}-${primitive.id}`,
+              type: 'primitive-created',
+              action: 'created',
+              timestamp: primitive.createdAt,
+              map,
+              pageIndex,
+              primitive,
+            });
+          }
+
+          for (const [noteIndex, note] of (primitive.notes ?? []).entries()) {
+            const noteId = note.id ?? `${noteIndex}`;
+            const createdAt = isValidTimestamp(note.createdAt) ? note.createdAt : null;
+            const updatedAt = isValidTimestamp(note.updatedAt) ? note.updatedAt : null;
+            if (createdAt) {
+              activities.push({
+                id: `primitive-note-created-${map.id}-${pageIndex}-${primitive.id}-${noteId}`,
+                type: 'primitive-note',
+                action: 'created',
+                timestamp: createdAt,
+                map,
+                pageIndex,
+                primitive,
+                note,
+                noteIndex,
+              });
+            }
+            if (updatedAt && (!createdAt || getDayKey(updatedAt) !== getDayKey(createdAt))) {
+              activities.push({
+                id: `primitive-note-updated-${map.id}-${pageIndex}-${primitive.id}-${noteId}`,
+                type: 'primitive-note',
+                action: 'updated',
+                timestamp: updatedAt,
+                map,
+                pageIndex,
+                primitive,
+                note,
+                noteIndex,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    activities.sort((a, b) => b.timestamp - a.timestamp);
+    const dayMap = new Map<string, JourneyDay>();
+    for (const activity of activities) {
+      const key = getDayKey(activity.timestamp);
+      const existing = dayMap.get(key);
+      if (existing) {
+        existing.activities.push(activity);
+        existing.timestamp = Math.max(existing.timestamp, activity.timestamp);
+      } else {
+        dayMap.set(key, {
+          key,
+          label: getDayLabel(activity.timestamp),
+          timestamp: activity.timestamp,
+          activities: [activity],
+        });
+      }
+    }
+    return [...dayMap.values()].sort((a, b) => b.timestamp - a.timestamp);
+  }, [visibleMaps]);
+
+  const copyJourneyDay = async (day: JourneyDay) => {
+    await navigator.clipboard.writeText(buildJourneyCopyText(day));
+    setCopiedJourneyDateKey(day.key);
+    window.setTimeout(() => setCopiedJourneyDateKey(null), 1200);
+  };
+
+  const jumpToJourneyActivity = async (activity: JourneyActivity) => {
+    if (activity.map.id !== activeMapId) {
+      const opened = await setActiveMap(activity.map.id);
+      if (!opened) return;
+    }
+    const liveMap = useMapStore.getState().maps.find((map) => map.id === activity.map.id);
+    if (liveMap && liveMap.pageIndex !== activity.pageIndex) {
+      await setActivePage(activity.pageIndex);
+    }
+    if (activity.type === 'map-created' || activity.type === 'map-note') {
+      openMapOverview();
+      if (activity.type === 'map-note' && activity.noteIndex !== undefined) {
+        setPendingMapNoteFocus({ mapId: activity.map.id, noteIndex: activity.noteIndex });
+      }
+      return;
+    }
+    if (!activity.primitive) return;
+    setSelectedPrimitiveId(activity.primitive.id);
+    if (activity.type === 'primitive-note' && activity.noteIndex !== undefined) {
+      setPendingPrimitiveNoteFocus({
+        primitiveId: activity.primitive.id,
+        noteIndex: activity.noteIndex,
+      });
+    }
+    const refreshedMap = useMapStore.getState().maps.find((map) => map.id === activity.map.id);
+    const pageWorkspace = refreshedMap ? getMapPageWorkspace(refreshedMap, activity.pageIndex) : null;
+    const primitive = pageWorkspace?.primitives.find((entry) => entry.id === activity.primitive?.id);
+    if (primitive && pageWorkspace) {
+      const primitiveMap = new Map(pageWorkspace.primitives.map((entry) => [entry.id, entry]));
+      const bbox = getPrimitiveBounds(primitive, primitiveMap);
+      if (bbox) setZoomTarget({ bbox, immediate: false, padding: 16 });
+    }
+  };
 
   const togglePinMap = (id: string) => {
     setPinnedMapIds((prev) => {
@@ -965,6 +1246,118 @@ export default function LeftPane({
       </button>
     );
   };
+
+  const renderJourneyActivity = (activity: JourneyActivity) => {
+    const noteBody = activity.note ? getNoteBody(activity.note) : '';
+    const showMapName = activity.map.id !== activeMapId || activity.pageIndex !== currentMap?.pageIndex;
+    return (
+      <button
+        key={activity.id}
+        onClick={() => void jumpToJourneyActivity(activity)}
+        className="w-full rounded-lg border border-slate-100 bg-white px-2.5 py-2 text-left transition hover:border-sky-200 hover:bg-sky-50"
+        title={`Open ${getActivityTitle(activity)}`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate text-xs font-semibold text-slate-800">
+              {getActivityTitle(activity)}
+            </div>
+            <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              {getActivityLabel(activity)}
+              {showMapName ? ` · ${activity.map.name}` : ''}
+              {activity.map.pageCount > 1 ? ` · p${activity.pageIndex + 1}` : ''}
+            </div>
+          </div>
+          <span className="shrink-0 text-[10px] tabular-nums text-slate-400">
+            {new Intl.DateTimeFormat('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+            }).format(new Date(activity.timestamp))}
+          </span>
+        </div>
+        {noteBody && (
+          <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">
+            {noteBody}
+          </div>
+        )}
+      </button>
+    );
+  };
+
+  const renderJourneySection = () => (
+    <div className="mt-4 border-t border-gray-100 pt-3">
+      <button
+        type="button"
+        onClick={() => setJourneyCollapsed((collapsed) => !collapsed)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+          Journey
+        </span>
+        <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-400">
+          {journeyDays.length}
+          {journeyCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+        </span>
+      </button>
+      {!journeyCollapsed && (
+        <div className="mt-2 space-y-2">
+          {journeyDays.length === 0 ? (
+            <div className="text-xs text-gray-400">No activity yet.</div>
+          ) : (
+            journeyDays.map((day) => {
+              const expanded = expandedJourneyDates[day.key] === true;
+              const copied = copiedJourneyDateKey === day.key;
+              return (
+                <div key={day.key} className="rounded-lg bg-slate-50 px-2 py-2">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedJourneyDates((prev) => ({
+                          ...prev,
+                          [day.key]: !prev[day.key],
+                        }))
+                      }
+                      className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                    >
+                      <span className="truncate text-xs font-semibold text-slate-700">
+                        {day.label}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-slate-400">
+                        {day.activities.length}
+                        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void copyJourneyDay(day);
+                      }}
+                      className={`rounded-md p-1 transition ${
+                        copied
+                          ? 'bg-emerald-50 text-emerald-600'
+                          : 'text-slate-400 hover:bg-white hover:text-slate-700'
+                      }`}
+                      title={copied ? 'Copied day' : 'Copy day'}
+                      aria-label={copied ? `Copied ${day.label}` : `Copy ${day.label}`}
+                    >
+                      {copied ? <Check size={13} /> : <Copy size={13} />}
+                    </button>
+                  </div>
+                  {expanded && (
+                    <div className="mt-2 space-y-1.5">
+                      {day.activities.map((activity) => renderJourneyActivity(activity))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   const togglePrimitiveAlphaSort = () => {
     const nextMode = primitiveSortMode === 'alphaAsc' ? 'alphaDesc' : 'alphaAsc';
@@ -1477,6 +1870,7 @@ export default function LeftPane({
           })}
         </div>
         )}
+        {renderJourneySection()}
       </div>
 
       <div className="mt-auto">

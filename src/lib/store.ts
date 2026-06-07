@@ -62,6 +62,7 @@ export interface EditorState {
   spacePanActive: boolean;
   pendingNameFocusId: string | null;
   pendingMapNoteFocus: { mapId: string; noteIndex: number } | null;
+  pendingPrimitiveNoteFocus: { primitiveId: string; noteIndex: number } | null;
   overlayNeighborTargetId: string | null;
   overlayNeighborTargetPageIndex: number | null;
   groupCollectTargetId: string | null;
@@ -86,6 +87,9 @@ export interface EditorState {
   setEditorMode: (mode: EditorMode) => void;
   setDraftOverlayColor: (color: string) => void;
   setPendingMapNoteFocus: (focus: { mapId: string; noteIndex: number } | null) => void;
+  setPendingPrimitiveNoteFocus: (
+    focus: { primitiveId: string; noteIndex: number } | null
+  ) => void;
   addDraftPolygonPoint: (point: Point) => void;
   clearDraftPolygon: () => void;
   setDraftRectangleStart: (point: Point | null) => void;
@@ -197,6 +201,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   spacePanActive: false,
   pendingNameFocusId: null,
   pendingMapNoteFocus: null,
+  pendingPrimitiveNoteFocus: null,
   overlayNeighborTargetId: null,
   overlayNeighborTargetPageIndex: null,
   groupCollectTargetId: null,
@@ -215,6 +220,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       draftRectangleStart: null,
       ...(resetUi ? { visibleOverlayFilters: DEFAULT_OVERLAY_FILTERS } : {}),
       pendingNameFocusId: null,
+      pendingPrimitiveNoteFocus: null,
       overlayNeighborTargetId:
         s.editorMode === 'overlayNeighborPick' ? s.overlayNeighborTargetId : null,
       overlayNeighborTargetPageIndex:
@@ -228,6 +234,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       selectedOccurrenceIndex: 0,
       rightPaneOpen: id !== null ? true : useEditorStore.getState().rightPaneOpen,
       rightPaneMode: id !== null ? 'primitive' : useEditorStore.getState().rightPaneMode,
+      pendingPrimitiveNoteFocus: null,
     }),
 
   setHoveredPrimitiveId: (id) => set({ hoveredPrimitiveId: id }),
@@ -330,6 +337,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   setSpacePanActive: (active) => set({ spacePanActive: active }),
 
   setPendingMapNoteFocus: (focus) => set({ pendingMapNoteFocus: focus }),
+  setPendingPrimitiveNoteFocus: (focus) => set({ pendingPrimitiveNoteFocus: focus }),
 
   setEditorMode: (mode) =>
     set((s) => ({

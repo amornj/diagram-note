@@ -47,6 +47,37 @@ function ensurePriorityNote(notes: NoteCard[]) {
   }));
 }
 
+function createBlankNote(): NoteCard {
+  const now = Date.now();
+  return {
+    id: generateNoteId(),
+    name: '',
+    content: '',
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function createContentNote(content: string, isPriority: boolean): NoteCard {
+  const now = Date.now();
+  return {
+    id: generateNoteId(),
+    name: '',
+    content,
+    createdAt: now,
+    updatedAt: now,
+    isPriority,
+  };
+}
+
+function stampNoteUpdated(note: NoteCard): NoteCard {
+  return {
+    ...note,
+    id: note.id ?? generateNoteId(),
+    updatedAt: Date.now(),
+  };
+}
+
 export default function NoteCards({
   notes,
   onChange,
@@ -107,7 +138,7 @@ export default function NoteCards({
       : nextNotes.map((note) => ({ ...note, isPriority: undefined }));
 
   const handleAdd = () => {
-    const newNote: NoteCard = { id: generateNoteId(), name: '', content: '' };
+    const newNote = createBlankNote();
     const nextNotes = normalizeNotes([...notes, newNote]);
     onChange(nextNotes);
     setEditorDraft('');
@@ -141,12 +172,12 @@ export default function NoteCards({
     setEditorDraft(body);
     const nextContent = composeNoteContent(body, urls);
     if (notes.length === 0) {
-      onChange(normalizeNotes([{ name: '', content: nextContent, isPriority: true }]));
+      onChange(normalizeNotes([createContentNote(nextContent, true)]));
       setCurrentIndex(0);
       return;
     }
     const nextNotes = normalizeNotes(notes.map((n, i) =>
-      i === currentIndex ? { ...n, content: nextContent } : n
+      i === currentIndex ? stampNoteUpdated({ ...n, content: nextContent }) : n
     ));
     onChange(nextNotes);
   };
@@ -164,13 +195,13 @@ export default function NoteCards({
   const updateCurrentNoteContent = (nextContent: string) => {
     if (notes.length === 0) {
       setEditorDraft(splitNoteContent(nextContent).body);
-      onChange(normalizeNotes([{ name: '', content: nextContent, isPriority: true }]));
+      onChange(normalizeNotes([createContentNote(nextContent, true)]));
       setCurrentIndex(0);
       return;
     }
     const nextNotes = normalizeNotes(
       notes.map((note, index) =>
-        index === currentIndex ? { ...note, content: nextContent } : note
+        index === currentIndex ? stampNoteUpdated({ ...note, content: nextContent }) : note
       )
     );
     onChange(nextNotes);
@@ -211,7 +242,7 @@ export default function NoteCards({
     }
     const nextNotes = notes.map((n, i) =>
       i === currentIndex
-        ? { ...n, id: noteId, photoUrl: result.url, photoStoragePath: result.path }
+        ? stampNoteUpdated({ ...n, id: noteId, photoUrl: result.url, photoStoragePath: result.path })
         : n
     );
     onChange(nextNotes);
@@ -225,7 +256,9 @@ export default function NoteCards({
       await deletePhoto(note.photoStoragePath);
     }
     const nextNotes = notes.map((n, i) =>
-      i === currentIndex ? { ...n, photoUrl: undefined, photoStoragePath: undefined } : n
+      i === currentIndex
+        ? stampNoteUpdated({ ...n, photoUrl: undefined, photoStoragePath: undefined })
+        : n
     );
     onChange(nextNotes);
   };

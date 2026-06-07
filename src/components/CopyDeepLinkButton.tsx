@@ -1,4 +1,4 @@
-import { Check, Link2 } from 'lucide-react';
+import { Check, Share2 } from 'lucide-react';
 import { useState } from 'react';
 import { buildDiagramDeepLink } from '../lib/deepLinks';
 
@@ -32,7 +32,7 @@ export default function CopyDeepLinkButton({
       title={copied ? 'Link copied' : label}
       aria-label={copied ? 'Link copied' : label}
     >
-      {copied ? <Check size={18} /> : <Link2 size={18} />}
+      {copied ? <Check size={18} /> : <Share2 size={18} />}
     </button>
   );
 }
