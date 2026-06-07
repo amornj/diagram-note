@@ -230,36 +230,71 @@ function getActivityTitle(activity: JourneyActivity) {
 }
 
 function buildJourneyCopyText(day: JourneyDay) {
-  return day.activities
-    .map((activity) => {
-      const mapUrl = buildDiagramDeepLink({ mapId: activity.map.id });
-      const mapLink = `[${activity.map.name}](${mapUrl})`;
-      if (activity.type === 'map-created') {
-        return `${mapLink}\nMap created`;
+  const maps = new Map<string, {
+    map: DiagramMap;
+    mapActivities: JourneyActivity[];
+    primitives: Map<string, { primitive: Primitive; activities: JourneyActivity[] }>;
+  }>();
+
+  for (const activity of day.activities) {
+    let mapEntry = maps.get(activity.map.id);
+    if (!mapEntry) {
+      mapEntry = {
+        map: activity.map,
+        mapActivities: [],
+        primitives: new Map(),
+      };
+      maps.set(activity.map.id, mapEntry);
+    }
+
+    if (activity.primitive) {
+      const primitiveKey = `${activity.pageIndex}:${activity.primitive.id}`;
+      let primitiveEntry = mapEntry.primitives.get(primitiveKey);
+      if (!primitiveEntry) {
+        primitiveEntry = { primitive: activity.primitive, activities: [] };
+        mapEntry.primitives.set(primitiveKey, primitiveEntry);
       }
-      if (activity.type === 'primitive-created') {
-        const primitive = activity.primitive;
-        return [
-          mapLink,
-          `Primitive created: ${primitive?.name || 'Untitled primitive'}`,
-          primitive ? `Type: ${KIND_LABELS[primitive.kind]}` : '',
-        ].filter(Boolean).join('\n');
+      primitiveEntry.activities.push(activity);
+    } else {
+      mapEntry.mapActivities.push(activity);
+    }
+  }
+
+  return [...maps.values()]
+    .map((mapEntry) => {
+      const mapLink = `[${mapEntry.map.name}](${buildDiagramDeepLink({ mapId: mapEntry.map.id })})`;
+      const lines = [`- ${mapLink}`];
+
+      for (const activity of mapEntry.mapActivities) {
+        if (activity.type === 'map-created') {
+          lines.push('  - Map created');
+          continue;
+        }
+        if (activity.type === 'map-note') {
+          const noteBody = activity.note ? getNoteBody(activity.note) : '';
+          lines.push(`  - Map note ${activity.action ?? 'updated'}`);
+          if (noteBody) lines.push(`    - ${noteBody}`);
+        }
       }
-      const noteBody = activity.note ? getNoteBody(activity.note) : '';
-      if (activity.type === 'map-note') {
-        return [
-          mapLink,
-          `Map note ${activity.action ?? 'updated'}`,
-          noteBody,
-        ].filter(Boolean).join('\n');
+
+      for (const primitiveEntry of mapEntry.primitives.values()) {
+        lines.push(`  - ${primitiveEntry.primitive.name || 'Untitled primitive'}`);
+        for (const activity of primitiveEntry.activities) {
+          if (activity.type === 'primitive-created') {
+            lines.push('    - Primitive created');
+            continue;
+          }
+          if (activity.type === 'primitive-note') {
+            const noteBody = activity.note ? getNoteBody(activity.note) : '';
+            lines.push(`    - Primitive note ${activity.action ?? 'updated'}`);
+            if (noteBody) lines.push(`      - ${noteBody}`);
+          }
+        }
       }
-      return [
-        mapLink,
-        `Primitive note ${activity.action ?? 'updated'}: ${activity.primitive?.name || 'Untitled primitive'}`,
-        noteBody,
-      ].filter(Boolean).join('\n');
+
+      return lines.join('\n');
     })
-    .join('\n\n');
+    .join('\n---\n');
 }
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
