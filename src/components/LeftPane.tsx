@@ -38,15 +38,15 @@ interface PrimitiveSearchSection {
 }
 type PrimitiveSortMode = 'recent' | 'alphaAsc' | 'alphaDesc' | 'createdDesc' | 'createdAsc';
 
-type LogActivityType =
+type LogsActivityType =
   | 'map-created'
   | 'primitive-created'
   | 'map-note'
   | 'primitive-note';
 
-interface LogActivity {
+interface LogsActivity {
   id: string;
-  type: LogActivityType;
+  type: LogsActivityType;
   action?: 'created' | 'updated';
   timestamp: number;
   map: DiagramMap;
@@ -56,11 +56,11 @@ interface LogActivity {
   noteIndex?: number;
 }
 
-interface LogDay {
+interface LogsDay {
   key: string;
   label: string;
   timestamp: number;
-  activities: LogActivity[];
+  activities: LogsActivity[];
 }
 
 const MAP_SORT_STORAGE_KEY = 'diagram-note-map-sort-mode';
@@ -217,7 +217,7 @@ function getNoteBody(note: NoteCard) {
   return splitNoteContent(note.content).body.trim();
 }
 
-function getActivityLabel(activity: LogActivity) {
+function getActivityLabel(activity: LogsActivity) {
   switch (activity.type) {
     case 'map-created':
       return 'Map created';
@@ -230,18 +230,18 @@ function getActivityLabel(activity: LogActivity) {
   }
 }
 
-function getActivityTitle(activity: LogActivity) {
+function getActivityTitle(activity: LogsActivity) {
   if (activity.type === 'primitive-created' || activity.type === 'primitive-note') {
     return activity.primitive?.name || 'Untitled primitive';
   }
   return activity.map.name;
 }
 
-function buildLogCopyText(day: LogDay) {
+function buildLogsCopyText(day: LogsDay) {
   const maps = new Map<string, {
     map: DiagramMap;
-    mapActivities: LogActivity[];
-    primitives: Map<string, { primitive: Primitive; activities: LogActivity[] }>;
+    mapActivities: LogsActivity[];
+    primitives: Map<string, { primitive: Primitive; activities: LogsActivity[] }>;
   }>();
 
   for (const activity of day.activities) {
@@ -466,9 +466,9 @@ export default function LeftPane({
   const [mapSearchQuery, setMapSearchQuery] = useState('');
   const [primitiveSearchOpen, setPrimitiveSearchOpen] = useState(false);
   const [primitiveSearchQuery, setPrimitiveSearchQuery] = useState('');
-  const [logCollapsed, setLogCollapsed] = useState(true);
-  const [expandedLogDates, setExpandedLogDates] = useState<Record<string, boolean>>({});
-  const [copiedLogDateKey, setCopiedLogDateKey] = useState<string | null>(null);
+  const [logsCollapsed, setLogsCollapsed] = useState(true);
+  const [expandedLogsDates, setExpandedLogsDates] = useState<Record<string, boolean>>({});
+  const [copiedLogsDateKey, setCopiedLogsDateKey] = useState<string | null>(null);
   const mapsListRef = useRef<HTMLDivElement | null>(null);
   const dragScrollFrameRef = useRef<number | null>(null);
   const dragScrollVelocityRef = useRef(0);
@@ -711,8 +711,8 @@ export default function LeftPane({
     return groups;
   }, [sortedMaps]);
 
-  const logDays = useMemo(() => {
-    const activities: LogActivity[] = [];
+  const logsDays = useMemo(() => {
+    const activities: LogsActivity[] = [];
     for (const map of visibleMaps) {
       if (isValidTimestamp(map.createdAt)) {
         activities.push({
@@ -807,7 +807,7 @@ export default function LeftPane({
     }
 
     activities.sort((a, b) => b.timestamp - a.timestamp);
-    const dayMap = new Map<string, LogDay>();
+    const dayMap = new Map<string, LogsDay>();
     for (const activity of activities) {
       const key = getDayKey(activity.timestamp);
       const existing = dayMap.get(key);
@@ -826,13 +826,13 @@ export default function LeftPane({
     return [...dayMap.values()].sort((a, b) => b.timestamp - a.timestamp);
   }, [visibleMaps]);
 
-  const copyLogDay = async (day: LogDay) => {
-    await navigator.clipboard.writeText(buildLogCopyText(day));
-    setCopiedLogDateKey(day.key);
-    window.setTimeout(() => setCopiedLogDateKey(null), 1200);
+  const copyLogsDay = async (day: LogsDay) => {
+    await navigator.clipboard.writeText(buildLogsCopyText(day));
+    setCopiedLogsDateKey(day.key);
+    window.setTimeout(() => setCopiedLogsDateKey(null), 1200);
   };
 
-  const jumpToLogActivity = async (activity: LogActivity) => {
+  const jumpToLogsActivity = async (activity: LogsActivity) => {
     if (activity.map.id !== activeMapId) {
       const opened = await setActiveMap(activity.map.id);
       if (!opened) return;
@@ -1290,13 +1290,13 @@ export default function LeftPane({
     );
   };
 
-  const renderLogActivity = (activity: LogActivity) => {
+  const renderLogsActivity = (activity: LogsActivity) => {
     const noteBody = activity.note ? getNoteBody(activity.note) : '';
     const showMapName = activity.map.id !== activeMapId || activity.pageIndex !== currentMap?.pageIndex;
     return (
       <button
         key={activity.id}
-        onClick={() => void jumpToLogActivity(activity)}
+        onClick={() => void jumpToLogsActivity(activity)}
         className="w-full rounded-lg border border-slate-100 bg-white px-2.5 py-2 text-left transition hover:border-sky-200 hover:bg-sky-50"
         title={`Open ${getActivityTitle(activity)}`}
       >
@@ -1327,36 +1327,34 @@ export default function LeftPane({
     );
   };
 
-  const renderLogSection = () => (
+  const renderLogsSection = () => (
     <div className="mt-4 border-t border-gray-100 pt-3">
       <button
         type="button"
-        onClick={() => setLogCollapsed((collapsed) => !collapsed)}
+        onClick={() => setLogsCollapsed((collapsed) => !collapsed)}
         className="flex w-full items-center justify-between gap-2 text-left"
       >
-        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Log
-        </span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Logs</span>
         <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-400">
-          {logDays.length}
-          {logCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+          {logsDays.length}
+          {logsCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
         </span>
       </button>
-      {!logCollapsed && (
+      {!logsCollapsed && (
         <div className="mt-2 space-y-2">
-          {logDays.length === 0 ? (
+          {logsDays.length === 0 ? (
             <div className="text-xs text-gray-400">No activity yet.</div>
           ) : (
-            logDays.map((day) => {
-              const expanded = expandedLogDates[day.key] === true;
-              const copied = copiedLogDateKey === day.key;
+            logsDays.map((day) => {
+              const expanded = expandedLogsDates[day.key] === true;
+              const copied = copiedLogsDateKey === day.key;
               return (
                 <div key={day.key} className="rounded-lg bg-slate-50 px-2 py-2">
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() =>
-                        setExpandedLogDates((prev) => ({
+                        setExpandedLogsDates((prev) => ({
                           ...prev,
                           [day.key]: !prev[day.key],
                         }))
@@ -1375,7 +1373,7 @@ export default function LeftPane({
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        void copyLogDay(day);
+                        void copyLogsDay(day);
                       }}
                       className={`rounded-md p-1 transition ${
                         copied
@@ -1390,7 +1388,7 @@ export default function LeftPane({
                   </div>
                   {expanded && (
                     <div className="mt-2 space-y-1.5">
-                      {day.activities.map((activity) => renderLogActivity(activity))}
+                      {day.activities.map((activity) => renderLogsActivity(activity))}
                     </div>
                   )}
                 </div>
@@ -1913,7 +1911,7 @@ export default function LeftPane({
           })}
         </div>
         )}
-        {renderLogSection()}
+        {renderLogsSection()}
       </div>
 
       <div className="mt-auto">
