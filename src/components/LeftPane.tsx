@@ -187,6 +187,14 @@ function getDayLabel(timestamp: number) {
   }).format(new Date(timestamp));
 }
 
+function getCopyDayLabel(timestamp: number) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(timestamp));
+}
+
 function isValidTimestamp(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 946684800000;
 }
@@ -260,41 +268,41 @@ function buildJourneyCopyText(day: JourneyDay) {
     }
   }
 
-  return [...maps.values()]
-    .map((mapEntry) => {
-      const mapLink = `[${mapEntry.map.name}](${buildDiagramDeepLink({ mapId: mapEntry.map.id })})`;
-      const lines = [`- ${mapLink}`];
+  const lines = [`- What you learn with diagram-note on ${getCopyDayLabel(day.timestamp)}`];
 
-      for (const activity of mapEntry.mapActivities) {
-        if (activity.type === 'map-created') {
-          lines.push('  - Map created');
+  for (const mapEntry of maps.values()) {
+    const mapLink = `[${mapEntry.map.name}](${buildDiagramDeepLink({ mapId: mapEntry.map.id })})`;
+    lines.push(`  - ${mapLink}`);
+
+    for (const activity of mapEntry.mapActivities) {
+      if (activity.type === 'map-created') {
+        lines.push('    - Map created');
+        continue;
+      }
+      if (activity.type === 'map-note') {
+        const noteBody = activity.note ? getNoteBody(activity.note) : '';
+        lines.push(`    - Map note ${activity.action ?? 'updated'}`);
+        if (noteBody) lines.push(`      - ${noteBody}`);
+      }
+    }
+
+    for (const primitiveEntry of mapEntry.primitives.values()) {
+      lines.push(`    - ${primitiveEntry.primitive.name || 'Untitled primitive'}`);
+      for (const activity of primitiveEntry.activities) {
+        if (activity.type === 'primitive-created') {
+          lines.push('      - Primitive created');
           continue;
         }
-        if (activity.type === 'map-note') {
+        if (activity.type === 'primitive-note') {
           const noteBody = activity.note ? getNoteBody(activity.note) : '';
-          lines.push(`  - Map note ${activity.action ?? 'updated'}`);
-          if (noteBody) lines.push(`    - ${noteBody}`);
+          lines.push(`      - Primitive note ${activity.action ?? 'updated'}`);
+          if (noteBody) lines.push(`        - ${noteBody}`);
         }
       }
+    }
+  }
 
-      for (const primitiveEntry of mapEntry.primitives.values()) {
-        lines.push(`  - ${primitiveEntry.primitive.name || 'Untitled primitive'}`);
-        for (const activity of primitiveEntry.activities) {
-          if (activity.type === 'primitive-created') {
-            lines.push('    - Primitive created');
-            continue;
-          }
-          if (activity.type === 'primitive-note') {
-            const noteBody = activity.note ? getNoteBody(activity.note) : '';
-            lines.push(`    - Primitive note ${activity.action ?? 'updated'}`);
-            if (noteBody) lines.push(`      - ${noteBody}`);
-          }
-        }
-      }
-
-      return lines.join('\n');
-    })
-    .join('\n---\n');
+  return lines.join('\n');
 }
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
