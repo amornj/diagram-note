@@ -241,6 +241,12 @@ function getCopyActionLabel(action: LogsActivity['action']) {
   return action ?? 'updated';
 }
 
+function pushIndentedBlock(lines: string[], text: string, indent: string) {
+  for (const line of text.split(/\r?\n/)) {
+    lines.push(`${indent}${line}`);
+  }
+}
+
 function buildLogsCopyText(day: LogsDay) {
   const maps = new Map<string, {
     map: DiagramMap;
@@ -286,8 +292,8 @@ function buildLogsCopyText(day: LogsDay) {
       if (activity.type === 'map-note') {
         const noteBody = activity.note ? getNoteBody(activity.note) : '';
         const noteTitle = activity.note?.name.trim() || `Map note ${(activity.noteIndex ?? 0) + 1}`;
-        lines.push(`      ${noteTitle} : ${getCopyActionLabel(activity.action)}`);
-        if (noteBody) lines.push(`        ${noteBody}`);
+        lines.push(`    ${noteTitle} : ${getCopyActionLabel(activity.action)}`);
+        if (noteBody) pushIndentedBlock(lines, noteBody, '      ');
       }
     }
 
@@ -296,7 +302,7 @@ function buildLogsCopyText(day: LogsDay) {
         (activity) => activity.type === 'primitive-created'
       );
       const primitiveName = primitiveEntry.primitive.name || 'Untitled primitive';
-      lines.push(`      ${primitiveName}${primitiveCreated ? ' : primitive created' : ''}`);
+      lines.push(`    ${primitiveName}${primitiveCreated ? ' : primitive created' : ''}`);
       for (const activity of primitiveEntry.activities) {
         if (activity.type === 'primitive-created') {
           continue;
@@ -304,8 +310,8 @@ function buildLogsCopyText(day: LogsDay) {
         if (activity.type === 'primitive-note') {
           const noteBody = activity.note ? getNoteBody(activity.note) : '';
           const noteTitle = activity.note?.name.trim() || `Note ${(activity.noteIndex ?? 0) + 1}`;
-          lines.push(`        ${noteTitle} : ${getCopyActionLabel(activity.action)}`);
-          if (noteBody) lines.push(`           ${noteBody}`);
+          lines.push(`      ${noteTitle} : ${getCopyActionLabel(activity.action)}`);
+          if (noteBody) pushIndentedBlock(lines, noteBody, '        ');
         }
       }
     }
