@@ -237,6 +237,10 @@ function getActivityTitle(activity: LogsActivity) {
   return activity.map.name;
 }
 
+function getCopyActionLabel(action: LogsActivity['action']) {
+  return action ?? 'updated';
+}
+
 function buildLogsCopyText(day: LogsDay) {
   const maps = new Map<string, {
     map: DiagramMap;
@@ -268,35 +272,40 @@ function buildLogsCopyText(day: LogsDay) {
     }
   }
 
-  const lines = [`- What you learn with diagram-note on ${getCopyDayLabel(day.timestamp)}`];
+  const lines = [`What you learn with diagram-note on ${getCopyDayLabel(day.timestamp)}`];
 
   for (const mapEntry of maps.values()) {
     const mapLink = `[${mapEntry.map.name}](${buildDiagramDeepLink({ mapId: mapEntry.map.id })})`;
-    lines.push(`  - ${mapLink}`);
+    const mapCreated = mapEntry.mapActivities.some((activity) => activity.type === 'map-created');
+    lines.push(`  ${mapLink}${mapCreated ? ' : map created' : ''}`);
 
     for (const activity of mapEntry.mapActivities) {
       if (activity.type === 'map-created') {
-        lines.push('    - Map created');
         continue;
       }
       if (activity.type === 'map-note') {
         const noteBody = activity.note ? getNoteBody(activity.note) : '';
-        lines.push(`    - Map note ${activity.action ?? 'updated'}`);
-        if (noteBody) lines.push(`      - ${noteBody}`);
+        const noteTitle = activity.note?.name.trim() || `Map note ${(activity.noteIndex ?? 0) + 1}`;
+        lines.push(`      ${noteTitle} : ${getCopyActionLabel(activity.action)}`);
+        if (noteBody) lines.push(`        ${noteBody}`);
       }
     }
 
     for (const primitiveEntry of mapEntry.primitives.values()) {
-      lines.push(`    - ${primitiveEntry.primitive.name || 'Untitled primitive'}`);
+      const primitiveCreated = primitiveEntry.activities.some(
+        (activity) => activity.type === 'primitive-created'
+      );
+      const primitiveName = primitiveEntry.primitive.name || 'Untitled primitive';
+      lines.push(`      ${primitiveName}${primitiveCreated ? ' : primitive created' : ''}`);
       for (const activity of primitiveEntry.activities) {
         if (activity.type === 'primitive-created') {
-          lines.push('      - Primitive created');
           continue;
         }
         if (activity.type === 'primitive-note') {
           const noteBody = activity.note ? getNoteBody(activity.note) : '';
-          lines.push(`      - Primitive note ${activity.action ?? 'updated'}`);
-          if (noteBody) lines.push(`        - ${noteBody}`);
+          const noteTitle = activity.note?.name.trim() || `Note ${(activity.noteIndex ?? 0) + 1}`;
+          lines.push(`        ${noteTitle} : ${getCopyActionLabel(activity.action)}`);
+          if (noteBody) lines.push(`           ${noteBody}`);
         }
       }
     }
