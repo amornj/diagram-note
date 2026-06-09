@@ -92,7 +92,7 @@ export default function MapDetailPanel({
       return;
     }
     if (target.kind === 'map') {
-      if (openInSplit) {
+      if (openInSplit && target.mapId !== map.id) {
         window.dispatchEvent(new CustomEvent('map-open-in-split', { detail: { mapId: target.mapId } }));
       } else {
         await setActiveMap(target.mapId);
@@ -101,7 +101,7 @@ export default function MapDetailPanel({
       return;
     }
     if (!target.mapId || target.pageIndex === null) return;
-    if (openInSplit) {
+    if (openInSplit && target.mapId !== map.id) {
       window.dispatchEvent(
         new CustomEvent('map-open-in-split', {
           detail: {

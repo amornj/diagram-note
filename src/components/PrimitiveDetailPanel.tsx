@@ -171,7 +171,7 @@ export default function PrimitiveDetailPanel({
         return;
       }
       if (target.kind === 'map') {
-        if (openInSplit) {
+        if (openInSplit && target.mapId !== effectiveMap.id) {
           window.dispatchEvent(new CustomEvent('map-open-in-split', { detail: { mapId: target.mapId } }));
         } else {
           await setActiveMap(target.mapId);
@@ -182,6 +182,18 @@ export default function PrimitiveDetailPanel({
       const targetMapId = target.mapId ?? effectiveMap.id;
       const targetMap = maps.find((map) => map.id === targetMapId);
       if (!targetMap || target.pageIndex === null) return;
+      if (openInSplit && targetMapId !== effectiveMap.id) {
+        window.dispatchEvent(
+          new CustomEvent('map-open-in-split', {
+            detail: {
+              mapId: targetMapId,
+              pageIndex: target.pageIndex,
+              primitiveId: target.id,
+            },
+          })
+        );
+        return;
+      }
       if (targetMapId !== effectiveMap.id) {
         await setActiveMap(targetMapId);
       }
