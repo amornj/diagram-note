@@ -57,6 +57,7 @@ interface EditorProps {
   selectedMapId?: string | null;
   onSelectMap?: (mapId: string) => void;
   onOpenMapInSplit?: (mapId: string) => void;
+  onSelectMapNoteOverride?: (args: { mapId: string; noteIndex: number }) => void;
   compareShowAllOverlays?: boolean;
   onToggleCompareOverlays?: () => void;
   compareVisibleOverlayFilters?: OverlayFilterState;
@@ -101,6 +102,7 @@ export default function Editor({
   selectedMapId,
   onSelectMap,
   onOpenMapInSplit,
+  onSelectMapNoteOverride,
   compareShowAllOverlays = false,
   onToggleCompareOverlays,
   compareVisibleOverlayFilters = DEFAULT_OVERLAY_FILTERS,
@@ -324,12 +326,12 @@ export default function Editor({
   }, [viewer, effectiveZoomLocked]);
   const goHome = useCallback(() => viewer?.viewport.goHome(), [viewer]);
   const openSearch = useCallback(() => {
-    setLeftSidebarCollapsed(true);
+    if (!compareOnly) setLeftSidebarCollapsed(true);
     setFloatingTool(null);
     setShowMapPicker(false);
     setShowQuickSearch(true);
     window.dispatchEvent(new Event('map-search-focus'));
-  }, [setLeftSidebarCollapsed]);
+  }, [compareOnly, setLeftSidebarCollapsed]);
   const toggleMapPicker = useCallback(() => {
     setShowQuickSearch(false);
     setFloatingTool(null);
@@ -1076,19 +1078,17 @@ export default function Editor({
                   <span className="text-[13px] font-bold leading-none">T</span>
                 </button>
               )}
-              {!compareOnly && (
-                <button
-                  onClick={openSearch}
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
-                    showQuickSearch
-                      ? 'bg-sky-500 text-white hover:bg-sky-600'
-                      : 'bg-white/90 text-gray-700 hover:bg-white'
-                  }`}
-                  title="Search (5)"
-                >
-                  <Search size={15} />
-                </button>
-              )}
+              <button
+                onClick={openSearch}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg shadow transition ${
+                  showQuickSearch
+                    ? 'bg-sky-500 text-white hover:bg-sky-600'
+                    : 'bg-white/90 text-gray-700 hover:bg-white'
+                }`}
+                title="Search (5)"
+              >
+                <Search size={15} />
+              </button>
               {(!compareOnly || onComparePrimitiveAdd) && (
                 <button
                   onClick={openStudyBoxTool}
@@ -1272,12 +1272,27 @@ export default function Editor({
         )
       )}
 
-      {!compareOnly && showQuickSearch && (
+      {showQuickSearch && (
         renderDraggablePanel('search', 'w-80', 
           <SearchBox
             floating
             autoFocus
-            allowMapNoteSearch={!compareOnly}
+            allowMapNoteSearch
+            searchMapId={compareOnly ? selectedMapId : undefined}
+            selectedPrimitiveIdOverride={
+              compareOnly ? selectedPrimitiveIdOverride : undefined
+            }
+            onSelectMapOverride={compareOnly ? onSelectMap : undefined}
+            onSelectPrimitiveOverride={
+              compareOnly
+                ? ({ mapId, pageIndex: targetPageIndex, primitive }) => {
+                    if (mapId !== selectedMapId) onSelectMap?.(mapId);
+                    if (targetPageIndex !== pageIndex) onComparePageChange?.(targetPageIndex);
+                    onSelectPrimitiveOverride?.(primitive.id);
+                  }
+                : undefined
+            }
+            onSelectMapNoteOverride={compareOnly ? onSelectMapNoteOverride : undefined}
             onRequestClose={() => setShowQuickSearch(false)}
           />
         )

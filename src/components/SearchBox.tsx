@@ -11,6 +11,18 @@ interface SearchBoxProps {
   floating?: boolean;
   onRequestClose?: () => void;
   allowMapNoteSearch?: boolean;
+  searchMapId?: string | null;
+  selectedPrimitiveIdOverride?: string | null;
+  onSelectMapOverride?: (mapId: string) => void;
+  onSelectPrimitiveOverride?: (args: {
+    mapId: string;
+    pageIndex: number;
+    primitive: Primitive;
+  }) => void;
+  onSelectMapNoteOverride?: (args: {
+    mapId: string;
+    noteIndex: number;
+  }) => void;
 }
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
@@ -73,11 +85,17 @@ export default function SearchBox({
   floating = false,
   onRequestClose,
   allowMapNoteSearch = false,
+  searchMapId,
+  selectedPrimitiveIdOverride,
+  onSelectMapOverride,
+  onSelectPrimitiveOverride,
+  onSelectMapNoteOverride,
 }: SearchBoxProps = {}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [activeTypeFilters, setActiveTypeFilters] = useState<SearchTypeFilter[]>([]);
   const [activeContentFilters, setActiveContentFilters] = useState<SearchContentFilter[]>([]);
+  const [localOccurrenceIndex, setLocalOccurrenceIndex] = useState(0);
   const deferredQuery = useDeferredValue(query);
 
   const selectedPrimitiveId = useEditorStore((s) => s.selectedPrimitiveId);
@@ -91,6 +109,11 @@ export default function SearchBox({
   const activeMapId = useMapStore((s) => s.activeMapId);
   const setActiveMap = useMapStore((s) => s.setActiveMap);
   const setActivePage = useMapStore((s) => s.setActivePage);
+  const effectiveMapId = searchMapId ?? activeMapId;
+  const effectiveSelectedPrimitiveId = selectedPrimitiveIdOverride ?? selectedPrimitiveId;
+  const effectiveSelectedOccurrenceIndex = onSelectPrimitiveOverride
+    ? localOccurrenceIndex
+    : selectedOccurrenceIndex;
 
   const mapNoteResults = useMemo(() => {
     if (!allowMapNoteSearch) return [];
@@ -99,7 +122,7 @@ export default function SearchBox({
     const searchAcrossAllMaps = activeTypeFilters.includes('allmap');
     const sourceMaps = searchAcrossAllMaps
       ? maps.filter((map) => map.archivedAt === undefined)
-      : maps.filter((map) => map.id === activeMapId && map.archivedAt === undefined);
+      : maps.filter((map) => map.id === effectiveMapId && map.archivedAt === undefined);
 
     const matches: SearchMapNoteMatch[] = [];
     for (const map of sourceMaps) {
@@ -119,7 +142,7 @@ export default function SearchBox({
       }
     }
     return matches.slice(0, 20);
-  }, [allowMapNoteSearch, activeTypeFilters, deferredQuery, maps, activeMapId]);
+  }, [allowMapNoteSearch, activeTypeFilters, deferredQuery, maps, effectiveMapId]);
 
   const mapResults = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
@@ -136,7 +159,7 @@ export default function SearchBox({
     const searchAcrossAllMaps = activeTypeFilters.includes('allmap');
     const sourceMaps = searchAcrossAllMaps
       ? maps.filter((map) => map.archivedAt === undefined)
-      : maps.filter((map) => map.id === activeMapId && map.archivedAt === undefined);
+      : maps.filter((map) => map.id === effectiveMapId && map.archivedAt === undefined);
 
     const primitiveTypeFilters = activeTypeFilters.filter(
       (filter): filter is Exclude<SearchTypeFilter, 'map' | 'allmap'> =>
@@ -204,7 +227,7 @@ export default function SearchBox({
     }
 
     return Array.from(grouped.values()).slice(0, 20);
-  }, [deferredQuery, activeTypeFilters, activeContentFilters, maps, activeMapId]);
+  }, [deferredQuery, activeTypeFilters, activeContentFilters, maps, effectiveMapId]);
 
   const dispatchOpenInSplit = (detail: {
     mapId: string;
@@ -220,6 +243,11 @@ export default function SearchBox({
       dispatchOpenInSplit({ mapId: hit.mapId });
       return;
     }
+    if (onSelectMapNoteOverride) {
+      onSelectMapNoteOverride({ mapId: hit.mapId, noteIndex: hit.noteIndex });
+      onRequestClose?.();
+      return;
+    }
     setPendingMapNoteFocus({ mapId: hit.mapId, noteIndex: hit.noteIndex });
     if (activeMapId !== hit.mapId) {
       await setActiveMap(hit.mapId);
@@ -230,21 +258,32 @@ export default function SearchBox({
 
   const handleSelect = async (group: SearchResultGroup) => {
     const sameMapAndPage =
-      activeMapId === group.mapId &&
+      effectiveMapId === group.mapId &&
       group.matches.some(
         (match) =>
-          match.primitive.id === selectedPrimitiveId &&
+          match.primitive.id === effectiveSelectedPrimitiveId &&
           match.pageIndex === group.pageIndex
       );
     const currentIndex = group.matches.findIndex(
-      (match) => match.primitive.id === selectedPrimitiveId
+      (match) => match.primitive.id === effectiveSelectedPrimitiveId
     );
     const nextIndex =
       group.matches.length > 1 && sameMapAndPage && currentIndex !== -1
-        ? (selectedOccurrenceIndex + 1) % group.matches.length
+        ? (effectiveSelectedOccurrenceIndex + 1) % group.matches.length
         : 0;
     const match = group.matches[nextIndex] ?? group.matches[0];
     if (!match) return;
+    if (onSelectPrimitiveOverride) {
+      onSelectMapOverride?.(match.mapId);
+      onSelectPrimitiveOverride({
+        mapId: match.mapId,
+        pageIndex: match.pageIndex,
+        primitive: match.primitive,
+      });
+      setLocalOccurrenceIndex(nextIndex);
+      onRequestClose?.();
+      return;
+    }
     if (activeMapId !== match.mapId) {
       await setActiveMap(match.mapId);
     }
@@ -266,9 +305,20 @@ export default function SearchBox({
     onRequestClose?.();
   };
 
+  const selectMap = async (mapId: string) => {
+    if (onSelectMapOverride) {
+      onSelectMapOverride(mapId);
+      onRequestClose?.();
+      return;
+    }
+    await handleMapSelect(mapId);
+  };
+
   const clearQuery = () => {
     setQuery('');
-    setSelectedPrimitiveId(null);
+    if (!onSelectPrimitiveOverride) {
+      setSelectedPrimitiveId(null);
+    }
   };
 
   const toggleTypeFilter = (key: SearchTypeFilter) => {
@@ -412,7 +462,7 @@ export default function SearchBox({
                     dispatchOpenInSplit({ mapId: map.id, pageIndex: map.pageIndex });
                     return;
                   }
-                  void handleMapSelect(map.id);
+                  void selectMap(map.id);
                 }}
                 title="Shift-click to open in split"
                 className="block w-full px-3 py-2.5 text-left transition hover:bg-gray-50"
@@ -420,13 +470,13 @@ export default function SearchBox({
                 <div className="flex items-center gap-2">
                   <span
                     className={`inline-block h-3 w-3 rounded-full ${
-                      map.id === activeMapId ? 'bg-sky-500' : 'bg-gray-300'
+                      map.id === effectiveMapId ? 'bg-sky-500' : 'bg-gray-300'
                     }`}
                   />
                   <span className="truncate text-sm font-medium text-gray-900">
                     {map.name}
                   </span>
-                  {map.id === activeMapId && (
+                  {map.id === effectiveMapId && (
                     <span className="ml-auto text-[11px] text-sky-600">active</span>
                   )}
                 </div>
@@ -494,9 +544,9 @@ export default function SearchBox({
                 <div className="ml-auto flex items-center gap-2">
                   {group.matches.length > 1 && (
                     <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
-                      {selectedPrimitiveId &&
-                      group.matches.some((match) => match.primitive.id === selectedPrimitiveId)
-                        ? `${(selectedOccurrenceIndex % group.matches.length) + 1}/${group.matches.length}`
+                      {effectiveSelectedPrimitiveId &&
+                      group.matches.some((match) => match.primitive.id === effectiveSelectedPrimitiveId)
+                        ? `${(effectiveSelectedOccurrenceIndex % group.matches.length) + 1}/${group.matches.length}`
                         : `${group.matches.length}`}
                     </span>
                   )}
