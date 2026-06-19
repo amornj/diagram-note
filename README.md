@@ -135,7 +135,8 @@ Filters include:
 - `Map`
 - `All map`
 
-`All map` searches across all available maps and shows the parent map name in results.
+`All map` searches map names, map notes, and primitives across all available maps,
+and shows the parent map name in primitive results.
 
 ### Split screen mode
 

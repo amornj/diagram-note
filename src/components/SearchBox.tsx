@@ -118,8 +118,8 @@ export default function SearchBox({
   const mapNoteResults = useMemo(() => {
     if (!allowMapNoteSearch) return [];
     const q = deferredQuery.trim().toLowerCase();
-    if (!q || activeTypeFilters.includes('map')) return [];
     const searchAcrossAllMaps = activeTypeFilters.includes('allmap');
+    if (!q || (activeTypeFilters.includes('map') && !searchAcrossAllMaps)) return [];
     const sourceMaps = searchAcrossAllMaps
       ? maps.filter((map) => map.archivedAt === undefined)
       : maps.filter((map) => map.id === effectiveMapId && map.archivedAt === undefined);
@@ -146,7 +146,9 @@ export default function SearchBox({
 
   const mapResults = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
-    if (!q || !activeTypeFilters.includes('map')) return [];
+    const searchMaps =
+      activeTypeFilters.includes('map') || activeTypeFilters.includes('allmap');
+    if (!q || !searchMaps) return [];
     return maps
       .filter((map) => map.archivedAt === undefined)
       .filter((map) => map.name.toLowerCase().includes(q))
@@ -155,8 +157,8 @@ export default function SearchBox({
 
   const results = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
-    if (!q || activeTypeFilters.includes('map')) return [];
     const searchAcrossAllMaps = activeTypeFilters.includes('allmap');
+    if (!q || (activeTypeFilters.includes('map') && !searchAcrossAllMaps)) return [];
     const sourceMaps = searchAcrossAllMaps
       ? maps.filter((map) => map.archivedAt === undefined)
       : maps.filter((map) => map.id === effectiveMapId && map.archivedAt === undefined);
