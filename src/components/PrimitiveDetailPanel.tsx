@@ -21,6 +21,7 @@ import {
   primitivePhotoPath,
   uploadPhoto,
 } from '../lib/cloudStorage';
+import PubChemSearchButton from './PubChemSearchButton';
 
 const KIND_LABELS: Record<Primitive['kind'], string> = {
   rectangle: 'Study box',
@@ -339,13 +340,16 @@ export default function PrimitiveDetailPanel({
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
-        <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-          <span>{KIND_LABELS[primitive.kind]}</span>
-          {paneLabel && (
-            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600">
-              {paneLabel}
-            </span>
-          )}
+        <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <span>{KIND_LABELS[primitive.kind]}</span>
+            {paneLabel && (
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600">
+                {paneLabel}
+              </span>
+            )}
+          </div>
+          <PubChemSearchButton query={primitive.name} />
         </div>
 
         <div>

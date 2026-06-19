@@ -10,6 +10,7 @@ import { resolveBacklinks, resolveSoftLinks } from '../lib/backlinks';
 import NoteCards from './NoteCards';
 import PhotoDropzone from './PhotoDropzone';
 import CopyDeepLinkButton from './CopyDeepLinkButton';
+import PubChemSearchButton from './PubChemSearchButton';
 
 export default function MapDetailPanel({
   map,
@@ -168,8 +169,11 @@ export default function MapDetailPanel({
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-          Map overview
+        <div className="flex items-center gap-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Map overview
+          </div>
+          <PubChemSearchButton query={map.name} />
         </div>
 
         <div>
