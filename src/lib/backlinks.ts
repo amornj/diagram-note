@@ -68,7 +68,6 @@ export function resolveBacklinks({
           : workspaceForMapPage(targetMap, pageIndex);
       const primitive = pageWorkspace.primitives.find((entry) => entry.id === target.id);
       if (!primitive) return null;
-      const sameFallbackMap = targetMap.id === fallbackMap?.id;
       return {
         key,
         target: {
@@ -83,10 +82,7 @@ export function resolveBacklinks({
         pageIndex,
         primitiveId: primitive.id,
         label: primitive.name,
-        detail:
-          sameFallbackMap && pageIndex === fallbackPageIndex
-            ? primitiveKindLabel(primitive)
-            : `${targetMap.name}${targetMap.pageCount > 1 ? ` · Page ${pageIndex + 1}` : ''}`,
+        detail: primitiveParentLabel(targetMap, pageIndex),
       };
     })
     .filter((entry): entry is ResolvedBacklink => entry !== null)
@@ -164,10 +160,7 @@ export function resolveSoftLinks({
           pageIndex,
           primitiveId: primitive.id,
           label: primitive.name,
-          detail:
-            source.kind === 'primitive' && map.id === source.map.id && pageIndex === source.pageIndex
-              ? primitiveKindLabel(primitive)
-              : `${map.name}${map.pageCount > 1 ? ` · Page ${pageIndex + 1}` : ''}`,
+          detail: primitiveParentLabel(map, pageIndex),
         });
       }
     }
@@ -201,15 +194,6 @@ function normalizeRelatedKey(key: string, fallbackMap: DiagramMap, fallbackPageI
   return `primitive:${mapId}:${pageIndex}:${target.id}`;
 }
 
-function primitiveKindLabel(primitive: Primitive) {
-  switch (primitive.kind) {
-    case 'rectangle':
-      return 'Study box';
-    case 'polygon':
-      return 'Region';
-    case 'customline':
-      return 'Polyline';
-    case 'group':
-      return 'Group';
-  }
+function primitiveParentLabel(map: DiagramMap, pageIndex: number) {
+  return `${map.name}${map.pageCount > 1 ? ` · Page ${pageIndex + 1}` : ''}`;
 }
