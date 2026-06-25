@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth, isFirebaseConfigured } from '../lib/firebase';
+import {
+  auth,
+  authPersistenceReady,
+  isFirebaseConfigured,
+} from '../lib/firebase';
 
 interface AuthContextValue {
   user: User | null;
@@ -14,21 +18,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(isFirebaseConfigured);
 
   useEffect(() => {
-    if (!auth) return;
-    const timeout = window.setTimeout(() => {
-      setLoading(false);
-    }, 4000);
-    const unsubscribe = onAuthStateChanged(auth, (next) => {
-      window.clearTimeout(timeout);
-      setUser(next);
-      setLoading(false);
-    }, () => {
-      window.clearTimeout(timeout);
-      setLoading(false);
+    const firebaseAuth = auth;
+    if (!firebaseAuth) return;
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    const timeout = window.setTimeout(() => setLoading(false), 4000);
+
+    void authPersistenceReady.then(() => {
+      if (cancelled) return;
+      unsubscribe = onAuthStateChanged(
+        firebaseAuth,
+        (next) => {
+          window.clearTimeout(timeout);
+          setUser(next);
+          setLoading(false);
+        },
+        () => {
+          window.clearTimeout(timeout);
+          setLoading(false);
+        }
+      );
     });
+
     return () => {
+      cancelled = true;
       window.clearTimeout(timeout);
-      unsubscribe();
+      unsubscribe?.();
     };
   }, []);
 

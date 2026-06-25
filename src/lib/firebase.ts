@@ -1,5 +1,10 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+import {
+  browserLocalPersistence,
+  getAuth,
+  setPersistence,
+  type Auth,
+} from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
@@ -12,6 +17,7 @@ export const isFirebaseConfigured = Boolean(apiKey && authDomain && projectId);
 let _auth: Auth | null = null;
 let _db: Firestore | null = null;
 let _storage: FirebaseStorage | null = null;
+let _authPersistenceReady: Promise<void> = Promise.resolve();
 
 if (isFirebaseConfigured) {
   const app: FirebaseApp = initializeApp({
@@ -23,10 +29,16 @@ if (isFirebaseConfigured) {
     appId: import.meta.env.VITE_FIREBASE_APP_ID as string | undefined,
   });
   _auth = getAuth(app);
+  _authPersistenceReady = setPersistence(_auth, browserLocalPersistence).catch(
+    (error: unknown) => {
+      console.warn('Unable to enable persistent Firebase authentication.', error);
+    }
+  );
   _db = getFirestore(app);
   _storage = getStorage(app);
 }
 
 export const auth = _auth;
+export const authPersistenceReady = _authPersistenceReady;
 export const db = _db;
 export const storage = _storage;

@@ -1,5 +1,9 @@
 import { signInWithPopup, signOut, GoogleAuthProvider } from 'firebase/auth';
-import { auth, isFirebaseConfigured } from '../lib/firebase';
+import {
+  auth,
+  authPersistenceReady,
+  isFirebaseConfigured,
+} from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useSyncStatus } from '../contexts/SyncStatusContext';
 
@@ -18,15 +22,21 @@ const STATUS_LABEL: Record<string, string> = {
   error: 'Sync error — check console',
 };
 
-export default function GoogleAuthButton() {
+export default function GoogleAuthButton({
+  placement = 'sidebar',
+}: {
+  placement?: 'sidebar' | 'landing';
+}) {
   const { user, loading } = useAuth();
   const syncStatus = useSyncStatus();
+  const isLanding = placement === 'landing';
 
   if (!isFirebaseConfigured) return null;
 
   const handleSignIn = async () => {
     if (!auth) return;
     try {
+      await authPersistenceReady;
       await signInWithPopup(auth, new GoogleAuthProvider());
     } catch {
       // user cancelled or popup blocked
@@ -43,6 +53,52 @@ export default function GoogleAuthButton() {
   };
 
   const dotClass = STATUS_DOT[syncStatus];
+
+  if (isLanding) {
+    if (loading) {
+      return (
+        <div className="mt-5 text-center text-sm text-slate-400">
+          Checking your Google account…
+        </div>
+      );
+    }
+
+    if (user) {
+      return (
+        <div className="mt-5 flex items-center justify-center gap-2 text-sm text-slate-600">
+          {user.photoURL && (
+            <img
+              src={user.photoURL}
+              referrerPolicy="no-referrer"
+              alt=""
+              className="h-6 w-6 rounded-full"
+            />
+          )}
+          <span className="max-w-56 truncate">
+            Signed in as {user.displayName ?? user.email}
+          </span>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="text-slate-400 underline-offset-2 hover:text-slate-700 hover:underline"
+          >
+            Sign out
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={handleSignIn}
+        className="mx-auto mt-5 flex items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+      >
+        <GoogleIcon className="h-4 w-4" />
+        Sign in with Google
+      </button>
+    );
+  }
 
   return (
     <div className="border-t border-gray-100">
@@ -92,7 +148,7 @@ export default function GoogleAuthButton() {
           onClick={handleSignIn}
           className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
         >
-          <GoogleIcon />
+          <GoogleIcon className="h-3.5 w-3.5" />
           Sign in with Google
         </button>
       )}
@@ -100,9 +156,9 @@ export default function GoogleAuthButton() {
   );
 }
 
-function GoogleIcon() {
+function GoogleIcon({ className }: { className: string }) {
   return (
-    <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className={`${className} shrink-0`} viewBox="0 0 24 24" aria-hidden="true">
       <path
         fill="#4285F4"
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

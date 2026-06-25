@@ -2,6 +2,7 @@ import { FilePlus2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { FIXED_RENDER_SCALE, useMapStore } from '../lib/mapStore';
 import { importDnote } from '../lib/bundle';
+import GoogleAuthButton from './GoogleAuthButton';
 
 export default function Landing() {
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -117,6 +118,8 @@ export default function Landing() {
             <Upload size={15} /> Open a .dnote
           </button>
         </div>
+
+        <GoogleAuthButton placement="landing" />
 
         <div className="mt-5 text-center text-xs text-slate-500">
           Maps load at a fixed 1.5× resolution for stable overlay alignment.
